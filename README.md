@@ -40,7 +40,7 @@ Your project relies on environment variables for configuration. To set up these 
 
    ```plaintext
    APP_NAME=YourAppName
-   APP_PORT=5575
+   APP_PORT=3000
    APP_ENV=development
    ```
    Note: configuration variables should be added based on config in the environment.js file.
