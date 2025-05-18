@@ -7,7 +7,7 @@ export class AppController {
   constructor(private readonly appService: AppService) {}
 
   @Public()
-  @Get('app')
+  @Get()
   async getAppInfo() {
     return await this.appService.getAppInfo();
   }
