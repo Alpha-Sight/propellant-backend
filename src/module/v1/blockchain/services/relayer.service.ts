@@ -27,6 +27,18 @@ export class RelayerService implements OnModuleInit {
     @InjectModel(Transaction.name) private transactionModel: Model<TransactionDocument>,
   ) {}
 
+  /**
+ * Get transactions for a specific user wallet address
+ * @param walletAddress The wallet address to fetch transactions for
+ */
+async getUserTransactions(walletAddress: string) {
+  // Query transactions where the user address matches the provided wallet address
+  const transactions = await this.transactionModel.find({
+    userAddress: walletAddress
+  }).sort({ createdAt: -1 }); // Most recent first
+  
+  return transactions;
+}
   async onModuleInit() {
     await this.initializeProvider();
     this.logger.log('Relayer service initialized');
@@ -283,7 +295,8 @@ export class RelayerService implements OnModuleInit {
     const callData = this.encodeExecuteCallData(target, value, data);
     
     // Estimate gas
-    const gasPrice = await this.provider.getGasPrice();
+    const feeData = await this.provider.getFeeData();
+    const gasPrice = feeData.gasPrice || feeData.maxFeePerGas || BigInt(30000000000); // fallback value
     const gasLimit = await this.estimateGas(sender, callData);
     
     // Create user operation
@@ -325,7 +338,7 @@ export class RelayerService implements OnModuleInit {
     // In production, this would include proper paymaster validation data
     // For now, we're using a simplified version
     return ethers.concat([
-      this.paymaster.target,
+      this.paymaster.target.toString(),
       '0x',
     ]);
   }
