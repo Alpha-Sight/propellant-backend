@@ -21,16 +21,13 @@ export class Credential {
   type: CredentialTypeEnum;
 
   @Prop({ required: true })
-  issuer: string; // e.g., institution, company, colleague
+  issuer: string;
 
-  @Prop({ required: true })
-  file: string; // IPFS link
-
-  @Prop({ required: true })
-  ipfsHash: string;
+  @Prop({ required: false })
+  ipfsHash?: string;
 
   @Prop({ enum: CredentialStatusEnum, default: CredentialStatusEnum.PENDING })
-  status: CredentialStatusEnum;
+  verificationStatus: CredentialStatusEnum;
 
   @Prop({ enum: VerificationLevelEnum, default: 'LOW' })
   verificationLevel: VerificationLevelEnum;
@@ -41,7 +38,7 @@ export class Credential {
   @Prop({ default: true })
   visibility: boolean;
 
-  @Prop({ default: '' })
+  @Prop({ default: null })
   rejectionReason: string;
 
   @Prop({ default: false })

@@ -13,26 +13,27 @@ import {
   CreateUserDto,
   CreateWalletUserDto,
   UpdatePasswordDto,
-  UpdateProfileDto,
+  // UpdateProfileDto,
   UserAvailabilityDto,
 } from '../dto/user.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { BaseHelper } from '../../../../common/utils/helper/helper.util';
 import { OtpTypeEnum } from '../../../../common/enums/otp.enum';
 import { OtpService } from '../../otp/services/otp.service';
-import { IAwsUploadFile } from '../../../../common/interfaces/aws.interface';
-import { uploadSingleFile } from '../../../../common/utils/aws.util';
 import {
   AuthSourceEnum,
   UserRoleEnum,
 } from '../../../../common/enums/user.enum';
 import { GoogleAuthDto } from '../../auth/dto/auth.dto';
+// import { PinataUploadFile } from 'src/common/interfaces/pinata.interface';
+// import { PinataService } from 'src/common/utils/pinata.util';
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private otpService: OtpService,
+    // private pinataService: PinataService,
   ) {}
 
   async createUser(
@@ -198,50 +199,49 @@ export class UserService {
     await this.updateQuery({ _id: user._id }, { password: hashedPassword });
   }
 
-  async updateProfile(
-    userId: string,
-    payload: UpdateProfileDto,
-    file?: Express.Multer.File,
-  ) {
-    const { username } = payload;
+  // async updateProfile(
+  //   userId: string,
+  //   payload: UpdateProfileDto,
+  //   file?: Express.Multer.File,
+  // ) {
+  //   const { username } = payload;
 
-    if (username) {
-      const userWithUsernameExist = await this.userModel.findOne({
-        username,
-        _id: { $ne: userId },
-      });
+  //   if (username) {
+  //     const userWithUsernameExist = await this.userModel.findOne({
+  //       username,
+  //       _id: { $ne: userId },
+  //     });
 
-      if (userWithUsernameExist) {
-        throw new UnprocessableEntityException(
-          'Username already used, try another name',
-        );
-      }
-    }
+  //     if (userWithUsernameExist) {
+  //       throw new UnprocessableEntityException(
+  //         'Username already used, try another name',
+  //       );
+  //     }
+  //   }
 
-    let imageUrl = null;
+  //   let imageUrl = null;
 
-    if (file) {
-      const { mimetype, buffer } = file;
+  //   if (file) {
+  //     const { mimetype, buffer } = file;
 
-      const awsFile: IAwsUploadFile = {
-        fileName: BaseHelper.generateFileName('user', mimetype),
-        mimetype,
-        buffer,
-      };
+  //     const pinataFile: PinataUploadFile = {
+  //       fileName: BaseHelper.generateFileName('user', mimetype),
+  //       mimetype,
+  //       buffer,
+  //     };
 
-      const { secureUrl } = await uploadSingleFile(awsFile);
-      imageUrl = secureUrl;
-    }
+  //     const uploadResult = await this.pinataService.uploadFile(pinataFile);
+  //     imageUrl = uploadResult.secretUrl.toString();
+  //   }
 
-    return await this.userModel.findByIdAndUpdate(
-      userId,
-      { ...payload, ...(imageUrl && { imageUrl }) },
-      {
-        new: true,
-      },
-    );
-  }
-
+  //   return await this.userModel.findByIdAndUpdate(
+  //     userId,
+  //     { ...payload, ...(imageUrl && { imageUrl }) },
+  //     {
+  //       new: true,
+  //     },
+  //   );
+  // }
   async findOneQuery(query: FilterQuery<UserDocument>) {
     return await this.userModel.findOne(query);
   }

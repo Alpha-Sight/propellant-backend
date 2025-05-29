@@ -22,13 +22,6 @@ export interface IEnvironment {
     USER: string;
     PASSWORD: string;
   };
-  AWS: {
-    REGION: string;
-    ACCESS_KEY: string;
-    SECRET: string;
-    BUCKET_NAME: string;
-    BUCKET_URL: string;
-  };
   REDIS: {
     URL: string;
   };
@@ -36,6 +29,18 @@ export interface IEnvironment {
     ACCOUNT_ID: string;
     AUTH_TOKEN: string;
     FROM: string;
+  };
+
+  // CLOUDINARY: {
+  //   CLOUDINARY_NAME: string;
+  //   CLOUDINARY_API_KEY: string;
+  //   CLOUDINARY_API_SECRET: string;
+  // };
+  PINATA: {
+    PINATA_API_KEY: string;
+    PINATA_API_SECRET: string;
+    PINATA_ACCESS_TOKEN: string;
+    PINATA_GATEWAY_KEY: string;
   };
 }
 
@@ -60,13 +65,6 @@ export const ENVIRONMENT: IEnvironment = {
     USER: process.env.SMTP_USER,
     PASSWORD: process.env.SMTP_PASSWORD,
   },
-  AWS: {
-    REGION: process.env.AWS_REGION,
-    ACCESS_KEY: process.env.AWS_ACCESS_KEY,
-    SECRET: process.env.AWS_SECRET,
-    BUCKET_NAME: process.env.AWS_BUCKET_NAME,
-    BUCKET_URL: process.env.AWS_BUCKET_URL,
-  },
   REDIS: {
     URL: process.env.REDIS_URL,
   },
@@ -74,6 +72,19 @@ export const ENVIRONMENT: IEnvironment = {
     ACCOUNT_ID: process.env.TWILLO_ACCOUNT_ID,
     AUTH_TOKEN: process.env.TWILLO_AUTH_TOKEN,
     FROM: process.env.TWILLO_FROM_NUMBER,
+  },
+
+  // CLOUDINARY: {
+  //   CLOUDINARY_NAME: configService.getOrThrow('CLOUDINARY_NAME'),
+  //   CLOUDINARY_API_KEY: configService.getOrThrow('CLOUDINARY_API_KEY'),
+  //   CLOUDINARY_API_SECRET: configService.getOrThrow('CLOUDINARY_API_SECRET'),
+  // },
+
+  PINATA: {
+    PINATA_API_KEY: process.env.PINATA_API_KEY,
+    PINATA_API_SECRET: process.env.PINATA_API_SECRET,
+    PINATA_ACCESS_TOKEN: process.env.PINATA_ACCESS_TOKEN,
+    PINATA_GATEWAY_KEY: process.env.PINATA_GATEWAY_KEY,
   },
 };
 

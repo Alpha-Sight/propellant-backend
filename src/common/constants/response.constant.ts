@@ -35,4 +35,8 @@ export const RESPONSE_CONSTANT = {
     Enrollment_RECEIPT_CONFIRMATION_SUCCESS:
       'Enrollment confirmed successfully, thanks for your purchase!',
   },
+  CREDENTIAL: {
+    UPLOAD_SUCCESS: 'Credential uploaded successfully',
+    GET_SUCCESS: 'Credential retrieved successfully',
+  },
 };
