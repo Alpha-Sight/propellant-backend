@@ -10,8 +10,8 @@ export const SETTINGS: ISettings = {
         ? 'https://staging.Propellant.ng'
         : 'https://Propellant.ng',
       coursesPage: isDevEnvironment
-        ? 'https://staging.Propellant.ng/course'
-        : 'https://Propellant.ng/course',
+        ? 'https://staging.Propellant.ng'
+        : 'https://Propellant.ng',
     },
   },
 };

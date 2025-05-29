@@ -54,19 +54,19 @@ export class UserController {
     return await this.userService.updatePassword(user, payload);
   }
 
-  @UseInterceptors(FileInterceptor('image'))
-  @Patch('profile')
-  async updateProfile(
-    @Body() payload: UpdateProfileDto,
-    @LoggedInUserDecorator() user: UserDocument,
-    @UploadedFile() file?: Express.Multer.File,
-  ) {
-    return await this.userService.updateProfile(
-      user._id.toString(),
-      payload,
-      file,
-    );
-  }
+  // @UseInterceptors(FileInterceptor('image'))
+  // @Patch('profile')
+  // async updateProfile(
+  //   @Body() payload: UpdateProfileDto,
+  //   @LoggedInUserDecorator() user: UserDocument,
+  //   @UploadedFile() file?: Express.Multer.File,
+  // ) {
+  //   return await this.userService.updateProfile(
+  //     user._id.toString(),
+  //     payload,
+  //     file,
+  //   );
+  // }
 
   @Public()
   @Get('check-email')

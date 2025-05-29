@@ -8,6 +8,7 @@ import { SettingModule } from './module/v1/setting/setting.module';
 import { DatabaseModule } from './module/v1/database/database.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { CredentialModule } from './module/v1/credential/credential.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { AppService } from './app.service';
     MailModule,
     OtpModule,
     SettingModule,
+    CredentialModule,
   ],
   controllers: [AppController],
   providers: [AppService],

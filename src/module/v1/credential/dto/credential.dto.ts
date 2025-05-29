@@ -1,17 +1,17 @@
 import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
-import { CredentialTypeEnum } from 'src/common/enums/credential.enum';
+import {
+  CredentialStatusEnum,
+  CredentialTypeEnum,
+  VerificationLevelEnum,
+} from 'src/common/enums/credential.enum';
 
 export class UploadCredentialDto {
   @IsEnum(CredentialTypeEnum)
-  credentialType: CredentialTypeEnum;
+  type: CredentialTypeEnum;
 
   @IsString()
   @IsNotEmpty()
   issuer: string;
-
-  @IsString()
-  @IsNotEmpty()
-  file: string;
 
   @IsString()
   @IsNotEmpty()
@@ -23,4 +23,18 @@ export class UploadCredentialDto {
   @IsOptional()
   @IsString()
   additionalInfo?: string;
+}
+
+export class UpdateCredentialStatusDto {
+  @IsNotEmpty()
+  @IsEnum(CredentialStatusEnum)
+  status: CredentialStatusEnum;
+
+  @IsOptional()
+  @IsEnum(VerificationLevelEnum)
+  verificationLevel?: VerificationLevelEnum;
+
+  @IsOptional()
+  @IsString()
+  rejectionReason?: string;
 }

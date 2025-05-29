@@ -34,7 +34,7 @@ export class BaseHelper {
     return Math.floor(Math.random() * (99999 - 10000 + 1)) + 10000;
   }
 
-  static readonly isValidFileNameAwsUpload = (fileName: string) => {
+  static readonly isValidFileNamePinataUpload = (fileName: string) => {
     const regex =
       /^[a-zA-Z0-9_\-/]+\/[a-zA-Z0-9_-]+(?:-\d+)?\.(jpg|png|jpeg|webp)$/;
     return regex.test(fileName);

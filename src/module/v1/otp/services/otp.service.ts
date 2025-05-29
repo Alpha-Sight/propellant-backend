@@ -102,10 +102,6 @@ export class OtpService {
           template = VerifyEmailTemplate({ code });
           subject = 'Verify Email';
           break;
-        case OtpTypeEnum.WITHDRAWAL_ACCOUNT:
-          template = VerifyEmailTemplate({ code });
-          subject = 'Verify Withdrawal Account';
-          break;
       }
     } else {
       template = VerifyPhoneTemplate({ code });
