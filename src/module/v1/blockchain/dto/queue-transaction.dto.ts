@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsNotEmpty } from 'class-validator';
+import { IsString, IsNumber, IsNotEmpty, IsBoolean, IsOptional } from 'class-validator';
 
 export class QueueTransactionDto {
   @IsString()
@@ -23,4 +23,8 @@ export class QueueTransactionDto {
   @IsString()
   @IsNotEmpty()
   description: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isAccountCreation?: boolean;
 }

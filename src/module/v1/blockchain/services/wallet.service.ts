@@ -56,34 +56,47 @@ export class WalletService {
       
       const data = this.encodeCreateAccountData(wallet.walletAddress, salt);
       
-      this.logger.log(`Creating wallet with salt ${salt} for address ${wallet.walletAddress}`);
-      
-      const transactionResult = await this.relayerService.queueTransaction({
-        userAddress: wallet.walletAddress,
-        target: this.configService.get<string>('ACCOUNT_FACTORY_ADDRESS'),
-        value: "0",
-        data,
-        operation: 0,
-        description: `Create account for wallet ${wallet.walletAddress}`,
-        isAccountCreation: true // Add this flag
-      });
-      
-      // Calculate the expected account address
-      let accountAddress;
+      // Queue transaction to create Smart Contract Account
       try {
-        accountAddress = await this.accountFactory.getAccountAddress(wallet.walletAddress, salt);
-        this.logger.log(`Predicted account address: ${accountAddress}`);
-      } catch (error) {
-        this.logger.error(`Failed to predict account address: ${error.message}`);
-        accountAddress = "0x0000000000000000000000000000000000000000";
+        const transactionResult = await this.relayerService.queueTransaction({
+          userAddress: wallet.walletAddress,
+          target: this.configService.get<string>('ACCOUNT_FACTORY_ADDRESS'),
+          value: "0",
+          data,
+          operation: 0,
+          description: `Create account for wallet ${wallet.walletAddress}`,
+          isAccountCreation: true
+        });
+        
+        // Predict the Smart Contract Account address
+        let accountAddress;
+        try {
+          accountAddress = await this.accountFactory.getAccountAddress(wallet.walletAddress, salt);
+          this.logger.log(`Predicted account address: ${accountAddress}`);
+        } catch (error) {
+          this.logger.error(`Failed to predict account address: ${error.message}`);
+          accountAddress = "0x0000000000000000000000000000000000000000";
+        }
+        
+        return {
+          walletAddress: wallet.walletAddress,
+          privateKey: wallet.privateKey,
+          accountAddress,
+          transactionId: transactionResult.transactionId,
+        };
+        
+      } catch (txError) {
+        this.logger.error(`Failed to queue account creation transaction: ${txError.message}`);
+        
+        // Return wallet info without transaction details
+        return {
+          walletAddress: wallet.walletAddress,
+          privateKey: wallet.privateKey,
+          accountAddress: "0x0000000000000000000000000000000000000000",
+          transactionId: null,
+        };
       }
       
-      return {
-        walletAddress: wallet.walletAddress,
-        privateKey: wallet.privateKey,
-        accountAddress,
-        transactionId: transactionResult.transactionId,
-      };
     } catch (error) {
       this.logger.error(`Failed to create wallet: ${error.message}`);
       throw error;

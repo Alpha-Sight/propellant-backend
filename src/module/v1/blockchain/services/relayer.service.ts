@@ -20,6 +20,7 @@ export class RelayerService implements OnModuleInit {
   private paymaster: ethers.Contract;
   private isProcessing = false;
   private pendingTransactions: Map<string, any> = new Map();
+  getAccountAddress: any;
 
   constructor(
     private configService: ConfigService,
@@ -139,6 +140,7 @@ async getUserTransactions(walletAddress: string) {
         status: 'PENDING',
         description,
         createdAt: new Date(),
+        isAccountCreation: isAccountCreation || false,
       });
       
       await transaction.save();
@@ -241,44 +243,113 @@ async getUserTransactions(walletAddress: string) {
    * Process a single transaction
    */
   private async processTransaction(transaction: TransactionDocument) {
-    const { transactionId, userAddress, accountAddress, target, value, data, operation } = transaction;
-    
-    // Create user operation
-    const userOp = await this.createUserOperation({
-      sender: accountAddress,
-      target,
-      value,
-      data,
-      operation,
-    });
-    
-    // Submit user operation
-    const transactionHash = await this.submitUserOperation(userOp);
-    
-    // Wait for transaction to be mined
-    const receipt = await this.provider.waitForTransaction(transactionHash);
-    
-    // Update transaction status
-    transaction.status = receipt.status === 1 ? 'SUCCESS' : 'FAILED';
-    transaction.transactionHash = transactionHash;
-    transaction.blockNumber = receipt.blockNumber;
-    transaction.gasUsed = receipt.gasUsed.toString();
-    transaction.updatedAt = new Date();
-    
-    await transaction.save();
-    
-    // Emit event
-    this.eventEmitter.emit('transaction.completed', {
-      transactionId,
-      userAddress,
-      status: transaction.status,
-      transactionHash,
-      blockNumber: receipt.blockNumber,
-    });
-    
-    this.logger.log(`Transaction ${transactionId} processed with status: ${transaction.status}`);
-    
-    return receipt;
+    try {
+      this.logger.log(`Processing transaction: ${transaction.transactionId}`);
+      
+      if (transaction.isAccountCreation) {
+        try {
+          // For account creation, fund the user's wallet first
+          const userWallet = new ethers.Wallet(
+            this.configService.get<string>('RELAYER_PRIVATE_KEY'),
+            this.provider
+          );
+          
+          // Transfer some ETH to the user's address for gas
+          const tx = await userWallet.sendTransaction({
+            to: transaction.userAddress,
+            value: ethers.parseEther("0.01") // Send 0.01 ETH for gas
+          });
+          await tx.wait();
+          
+          // For account creation, use the factory's create method directly
+          const accountFactoryWithSigner = this.accountFactory.connect(this.wallet);
+          
+          // Fix: Use type assertion to tell TypeScript about the method
+          const createTx = await (accountFactoryWithSigner as any).createAccount(
+            transaction.userAddress, // owner address 
+            Math.floor(Date.now() / 1000) // salt
+          );
+          
+          const receipt = await createTx.wait();
+          
+          // Update transaction status
+          transaction.status = 'SUCCESS';
+          transaction.transactionHash = receipt.hash;
+          transaction.blockNumber = receipt.blockNumber;
+          transaction.gasUsed = receipt.gasUsed?.toString();
+          transaction.updatedAt = new Date();
+          await transaction.save();
+        } catch (error) {
+          // Handle specific error for account creation
+          this.logger.error(`Failed to create account: ${error.message}`);
+          
+          // Even if there's an error, we'll still update the transaction status
+          transaction.status = 'FAILED';
+          transaction.error = error.message;
+          transaction.updatedAt = new Date();
+          await transaction.save();
+          
+          throw error; // Propagate the error
+        }
+      } else {
+        // For regular transactions, get account address first
+        const accountAddress = await this.getAccountAddress(transaction.userAddress);
+        
+        // Try to get nonce - use alternative method if getNonce doesn't exist
+        let nonce;
+        try {
+          nonce = await this.entryPoint.getNonce(accountAddress, 0);
+        } catch (error) {
+          // Fallback: use provider to get transaction count
+          nonce = await this.provider.getTransactionCount(accountAddress);
+        }
+        
+        // Create and submit UserOperation
+        const userOp = await this.createUserOperation({
+          sender: accountAddress,
+          target: transaction.target,
+          value: transaction.value,
+          data: transaction.data,
+          operation: transaction.operation,
+        });
+        
+        // Submit UserOperation
+        const tx = await this.entryPoint.handleOps([userOp], this.wallet.address);
+        const receipt = await tx.wait();
+        
+        // Update transaction status
+        transaction.status = 'SUCCESS';
+        transaction.transactionHash = receipt.hash;
+        transaction.blockNumber = receipt.blockNumber;
+        transaction.gasUsed = receipt.gasUsed?.toString();
+        transaction.updatedAt = new Date();
+        await transaction.save();
+      }
+      
+      // Emit success event
+      this.eventEmitter.emit('transaction.success', {
+        transactionId: transaction.transactionId,
+        userAddress: transaction.userAddress,
+      });
+      
+    } catch (error) {
+      this.logger.error(`Transaction processing failed: ${error.message}`);
+      
+      // Update transaction status if not already updated
+      if (transaction.status === 'PENDING') {
+        transaction.status = 'FAILED';
+        transaction.error = error.message;
+        transaction.updatedAt = new Date();
+        await transaction.save();
+      }
+      
+      // Emit failure event
+      this.eventEmitter.emit('transaction.failed', {
+        transactionId: transaction.transactionId,
+        userAddress: transaction.userAddress,
+        error: error.message,
+      });
+    }
   }
 
   /**

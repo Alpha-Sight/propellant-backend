@@ -49,6 +49,10 @@ export class Transaction {
 
   @Prop()
   updatedAt?: Date;
+
+  // Add this missing property
+  @Prop({ default: false })
+  isAccountCreation: boolean;
 }
 
 export const TransactionSchema = SchemaFactory.createForClass(Transaction);
