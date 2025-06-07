@@ -99,15 +99,24 @@ async getUserTransactions(walletAddress: string) {
     data: string;
     operation: number;
     description: string;
+    isAccountCreation?: boolean; // Add this flag
   }) {
     try {
-      const { userAddress, target, value, data, operation, description } = payload;
+      const { userAddress, target, value, data, operation, description, isAccountCreation } = payload;
       
-      // Get the user's account address
-      const accountAddress = await this.accountFactory.getAccount(userAddress);
-      
-      if (accountAddress === ethers.ZeroAddress) {
-        throw new Error(`No account found for user: ${userAddress}`);
+      // Skip account lookup for account creation transactions
+      let accountAddress;
+      if (isAccountCreation) {
+        // For account creation, we use the target as the factory address
+        accountAddress = target;
+        this.logger.log(`Processing account creation for wallet: ${userAddress}`);
+      } else {
+        // For regular transactions, get the user's account address
+        accountAddress = await this.accountFactory.getAccount(userAddress);
+        
+        if (accountAddress === ethers.ZeroAddress) {
+          throw new Error(`No account found for user: ${userAddress}`);
+        }
       }
       
       // Generate a unique transaction ID
