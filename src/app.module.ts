@@ -8,6 +8,7 @@ import { SettingModule } from './module/v1/setting/setting.module';
 import { DatabaseModule } from './module/v1/database/database.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { BlockchainModule } from './module/v1/blockchain/blockchain.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { AppService } from './app.service';
     MailModule,
     OtpModule,
     SettingModule,
+    BlockchainModule,
   ],
   controllers: [AppController],
   providers: [AppService],
