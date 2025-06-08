@@ -1,24 +1,31 @@
-import { Controller, Post, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
+import { Controller, Post, Body } from '@nestjs/common';
 import { WalletService } from '../services/wallet.service';
-import { LoggedInUserDecorator } from '../../../../common/decorators/logged-in-user.decorator';
-import { UserDocument } from '../../user/schemas/user.schema';
 import { ResponseMessage } from '../../../../common/decorators/response.decorator';
 
-@Controller('blockchain/wallet')
+@Controller('wallet')
 export class WalletController {
   constructor(private readonly walletService: WalletService) {}
 
   @Post('create')
-  @UseGuards(JwtAuthGuard)
-  @ResponseMessage('Wallet created successfully')
-  async createWallet(@LoggedInUserDecorator() user: UserDocument) {
-    const wallet = await this.walletService.createWallet(user._id.toString());
-    
-    return {
-      walletAddress: wallet.walletAddress,
-      accountAddress: wallet.accountAddress,
-      transactionId: wallet.transactionId
-    };
+  @ResponseMessage('Wallet creation initiated successfully')
+  async createWallet(@Body() createWalletDto: any) {
+    try {
+      const wallet = await this.walletService.createWallet(createWalletDto.userAddress);
+      
+      return {
+        success: true,
+        data: {
+          walletAddress: wallet.walletAddress,
+          accountAddress: wallet.accountAddress,
+          transactionId: wallet.transactionId
+        },
+        message: 'Wallet creation initiated successfully'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message
+      };
+    }
   }
 }

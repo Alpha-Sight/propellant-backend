@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import { ethers } from 'ethers';
-import { BaseHelper } from '../../../../common/utils/helper/helper.util';
-import { RelayerService } from './relayer.service';
+import { Wallet, WalletDocument } from '../schemas/wallet.schema';
 import * as AccountFactoryABI from '../abis/AccountFactory.json';
 
 @Injectable()
@@ -13,89 +14,51 @@ export class WalletService {
 
   constructor(
     private configService: ConfigService,
-    private relayerService: RelayerService,
+    @InjectModel(Wallet.name) private walletModel: Model<WalletDocument>,
   ) {
     this.initializeProvider();
   }
 
   private async initializeProvider() {
-    try {
-      const rpcUrl = this.configService.get<string>('BLOCKCHAIN_RPC_URL');
-      
-      if (!rpcUrl) {
-        throw new Error('Missing blockchain configuration');
-      }
-
-      this.provider = new ethers.JsonRpcProvider(rpcUrl);
-      
-      // Initialize contract
-      const accountFactoryAddress = this.configService.get<string>('ACCOUNT_FACTORY_ADDRESS');
-      
-      this.logger.log(`Initializing with Account Factory: ${accountFactoryAddress}`);
-      
-      // Use simple provider for read-only operations
-      this.accountFactory = new ethers.Contract(
-        accountFactoryAddress,
-        AccountFactoryABI.abi,
-        this.provider
-      );
-      
-    } catch (error) {
-      this.logger.error(`Failed to initialize wallet service: ${error.message}`);
-    }
+    const rpcUrl = this.configService.get<string>('BLOCKCHAIN_RPC_URL');
+    const accountFactoryAddress = this.configService.get<string>('ACCOUNT_FACTORY_ADDRESS');
+    
+    this.provider = new ethers.JsonRpcProvider(rpcUrl);
+    this.accountFactory = new ethers.Contract(
+      accountFactoryAddress,
+      AccountFactoryABI.abi,
+      this.provider,
+    );
   }
 
-  async createWallet(userId: string) {
+  /**
+   * Create a new wallet for a user
+   */
+  async createWallet(userAddress: string, salt: number = 0): Promise<WalletDocument> {
     try {
-      // Generate a new wallet
-      const wallet = BaseHelper.generateWallet();
-      this.logger.log(`Generated new wallet address: ${wallet.walletAddress}`);
-      
-      // Queue a transaction to create an account for this wallet
-      const salt = Math.floor(Date.now() / 1000); // Use timestamp as salt
-      
-      const data = this.encodeCreateAccountData(wallet.walletAddress, salt);
-      
-      // Queue transaction to create Smart Contract Account
-      try {
-        const transactionResult = await this.relayerService.queueTransaction({
-          userAddress: wallet.walletAddress,
-          target: this.configService.get<string>('ACCOUNT_FACTORY_ADDRESS'),
-          value: "0",
-          data,
-          operation: 0,
-          description: `Create account for wallet ${wallet.walletAddress}`,
-          isAccountCreation: true
-        });
-        
-        // Predict the Smart Contract Account address
-        let accountAddress;
-        try {
-          accountAddress = await this.accountFactory.getAccountAddress(wallet.walletAddress, salt);
-          this.logger.log(`Predicted account address: ${accountAddress}`);
-        } catch (error) {
-          this.logger.error(`Failed to predict account address: ${error.message}`);
-          accountAddress = "0x0000000000000000000000000000000000000000";
-        }
-        
-        return {
-          walletAddress: wallet.walletAddress,
-          privateKey: wallet.privateKey,
-          accountAddress,
-          transactionId: transactionResult.transactionId,
-        };
-        
-      } catch (txError) {
-        this.logger.error(`Failed to queue account creation transaction: ${txError.message}`);
-        
-        // Return wallet info without transaction details
-        return {
-          walletAddress: wallet.walletAddress,
-          privateKey: wallet.privateKey,
-          accountAddress: "0x0000000000000000000000000000000000000000",
-          transactionId: null,
-        };
+      // Check if wallet already exists
+      const existingWallet = await this.walletModel.findOne({ userAddress });
+      if (existingWallet) {
+        return existingWallet;
       }
+
+      // Predict account address
+      const accountAddress = await this.predictAccountAddress(userAddress, salt);
+      
+      // Create wallet record
+      const wallet = new this.walletModel({
+        userAddress,
+        walletAddress: userAddress, // For now, same as userAddress
+        accountAddress,
+        salt,
+        status: 'CREATED',
+        createdAt: new Date(),
+      });
+
+      await wallet.save();
+      this.logger.log(`Wallet created for user ${userAddress}: ${accountAddress}`);
+      
+      return wallet;
       
     } catch (error) {
       this.logger.error(`Failed to create wallet: ${error.message}`);
@@ -103,15 +66,40 @@ export class WalletService {
     }
   }
 
-  private encodeCreateAccountData(walletAddress: string, salt: number): string {
+  /**
+   * Get or create an account address for a given owner
+   */
+  async getOrCreateAccount(ownerAddress: string, salt: number = 0): Promise<string> {
     try {
-      const iface = new ethers.Interface([
-        'function createAccount(address owner, uint256 salt) returns (address)'
-      ]);
+      // First check if account already exists
+      const existingAccount = await this.accountFactory.getAccount(ownerAddress);
       
-      return iface.encodeFunctionData('createAccount', [walletAddress, salt]);
+      if (existingAccount !== ethers.ZeroAddress) {
+        return existingAccount;
+      }
+
+      // Predict the account address without creating it
+      const predictedAddress = await this.predictAccountAddress(ownerAddress, salt);
+      this.logger.log(`Predicted account address: ${predictedAddress}`);
+      
+      return predictedAddress;
+      
     } catch (error) {
-      this.logger.error(`Failed to encode account data: ${error.message}`);
+      this.logger.error(`Failed to get or create account: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Predict account address without creating it
+   */
+  async predictAccountAddress(ownerAddress: string, salt: number = 0): Promise<string> {
+    try {
+      const predictedAddress = await this.accountFactory.getAccountAddress(ownerAddress, salt);
+      this.logger.log(`Predicted account address: ${predictedAddress}`);
+      return predictedAddress;
+    } catch (error) {
+      this.logger.error(`Failed to predict account address: ${error.message}`);
       throw error;
     }
   }

@@ -1,31 +1,45 @@
-import { Module, forwardRef } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+
+// Import schemas
 import { Transaction, TransactionSchema } from './schemas/transaction.schema';
+import { Wallet, WalletSchema } from './schemas/wallet.schema';
+import { Credential, CredentialSchema } from './schemas/credential.schema';
+
+// Import services
 import { RelayerService } from './services/relayer.service';
-import { BlockchainController } from './controllers/blockchain.controller';
 import { WalletService } from './services/wallet.service';
-import { WalletController } from './controllers/wallet.controller';
 import { CredentialService } from './services/credential.service';
+
+// Import controllers
+import { WalletController } from './controllers/wallet.controller';
 import { CredentialController } from './controllers/credential.controller';
-import { UserModule } from '../user/user.module'; // If needed
 
 @Module({
   imports: [
     ConfigModule,
-    EventEmitterModule.forRoot(),
+    EventEmitterModule,
     MongooseModule.forFeature([
       { name: Transaction.name, schema: TransactionSchema },
+      { name: Wallet.name, schema: WalletSchema },
+      { name: Credential.name, schema: CredentialSchema },
     ]),
-    forwardRef(() => UserModule), // Use forwardRef if there's circular dependency
+  ],
+  providers: [
+    RelayerService,
+    WalletService,
+    CredentialService,
   ],
   controllers: [
-    BlockchainController, 
-    WalletController, 
-    CredentialController
+    WalletController,
+    CredentialController,
   ],
-  providers: [RelayerService, WalletService, CredentialService],
-  exports: [RelayerService, WalletService, CredentialService], // Export WalletService so AuthModule can use it
+  exports: [
+    RelayerService,
+    WalletService,
+    CredentialService,
+  ],
 })
 export class BlockchainModule {}

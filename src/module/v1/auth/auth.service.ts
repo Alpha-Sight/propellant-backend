@@ -55,7 +55,8 @@ export class AuthService {
 
     // Auto-generate wallet for the user
     try {
-      const wallet = await this.walletService.createWallet(user._id.toString());
+      const walletResult = await this.walletService.createWallet(user._id.toString());
+      const wallet = walletResult as unknown as { walletAddress?: string; accountAddress?: string } | null | undefined;
       
       if (wallet && wallet.walletAddress && wallet.accountAddress) {
         // Update user with wallet information

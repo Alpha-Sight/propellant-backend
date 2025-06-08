@@ -9,6 +9,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Transaction, TransactionDocument } from '../schemas/transaction.schema';
+import { WalletService } from './wallet.service';
 
 @Injectable()
 export class RelayerService implements OnModuleInit {
@@ -20,12 +21,12 @@ export class RelayerService implements OnModuleInit {
   private paymaster: ethers.Contract;
   private isProcessing = false;
   private pendingTransactions: Map<string, any> = new Map();
-  getAccountAddress: any;
 
   constructor(
     private configService: ConfigService,
     private eventEmitter: EventEmitter2,
     @InjectModel(Transaction.name) private transactionModel: Model<TransactionDocument>,
+    private readonly walletService: WalletService,
   ) {}
 
   /**
@@ -242,113 +243,40 @@ async getUserTransactions(walletAddress: string) {
   /**
    * Process a single transaction
    */
-  private async processTransaction(transaction: TransactionDocument) {
+  private async processTransaction(transaction: TransactionDocument): Promise<void> {
     try {
       this.logger.log(`Processing transaction: ${transaction.transactionId}`);
       
-      if (transaction.isAccountCreation) {
-        try {
-          // For account creation, fund the user's wallet first
-          const userWallet = new ethers.Wallet(
-            this.configService.get<string>('RELAYER_PRIVATE_KEY'),
-            this.provider
-          );
-          
-          // Transfer some ETH to the user's address for gas
-          const tx = await userWallet.sendTransaction({
-            to: transaction.userAddress,
-            value: ethers.parseEther("0.01") // Send 0.01 ETH for gas
-          });
-          await tx.wait();
-          
-          // For account creation, use the factory's create method directly
-          const accountFactoryWithSigner = this.accountFactory.connect(this.wallet);
-          
-          // Fix: Use type assertion to tell TypeScript about the method
-          const createTx = await (accountFactoryWithSigner as any).createAccount(
-            transaction.userAddress, // owner address 
-            Math.floor(Date.now() / 1000) // salt
-          );
-          
-          const receipt = await createTx.wait();
-          
-          // Update transaction status
-          transaction.status = 'SUCCESS';
-          transaction.transactionHash = receipt.hash;
-          transaction.blockNumber = receipt.blockNumber;
-          transaction.gasUsed = receipt.gasUsed?.toString();
-          transaction.updatedAt = new Date();
-          await transaction.save();
-        } catch (error) {
-          // Handle specific error for account creation
-          this.logger.error(`Failed to create account: ${error.message}`);
-          
-          // Even if there's an error, we'll still update the transaction status
-          transaction.status = 'FAILED';
-          transaction.error = error.message;
-          transaction.updatedAt = new Date();
-          await transaction.save();
-          
-          throw error; // Propagate the error
-        }
-      } else {
-        // For regular transactions, get account address first
-        const accountAddress = await this.getAccountAddress(transaction.userAddress);
-        
-        // Try to get nonce - use alternative method if getNonce doesn't exist
-        let nonce;
-        try {
-          nonce = await this.entryPoint.getNonce(accountAddress, 0);
-        } catch (error) {
-          // Fallback: use provider to get transaction count
-          nonce = await this.provider.getTransactionCount(accountAddress);
-        }
-        
-        // Create and submit UserOperation
-        const userOp = await this.createUserOperation({
-          sender: accountAddress,
-          target: transaction.target,
-          value: transaction.value,
-          data: transaction.data,
-          operation: transaction.operation,
-        });
-        
-        // Submit UserOperation
-        const tx = await this.entryPoint.handleOps([userOp], this.wallet.address);
-        const receipt = await tx.wait();
-        
-        // Update transaction status
-        transaction.status = 'SUCCESS';
-        transaction.transactionHash = receipt.hash;
-        transaction.blockNumber = receipt.blockNumber;
-        transaction.gasUsed = receipt.gasUsed?.toString();
-        transaction.updatedAt = new Date();
-        await transaction.save();
-      }
+      // Create user operation
+      const userOp = await this.createUserOperation({
+        sender: transaction.accountAddress,
+        target: transaction.target,
+        value: transaction.value,
+        data: transaction.data,
+        operation: transaction.operation,
+      });
+      
+      // Submit to blockchain
+      const txHash = await this.submitUserOperation(userOp);
+      
+      // Update transaction status
+      transaction.status = 'CONFIRMED';
+      transaction.transactionHash = txHash;
+      transaction.updatedAt = new Date();
+      await transaction.save();
+      
+      this.logger.log(`Transaction confirmed: ${transaction.transactionId} with hash: ${txHash}`);
       
       // Emit success event
-      this.eventEmitter.emit('transaction.success', {
+      this.eventEmitter.emit('transaction.confirmed', {
         transactionId: transaction.transactionId,
+        transactionHash: txHash,
         userAddress: transaction.userAddress,
       });
       
     } catch (error) {
       this.logger.error(`Transaction processing failed: ${error.message}`);
-      
-      // Update transaction status if not already updated
-      if (transaction.status === 'PENDING') {
-        transaction.status = 'FAILED';
-        transaction.error = error.message;
-        transaction.updatedAt = new Date();
-        await transaction.save();
-      }
-      
-      // Emit failure event
-      this.eventEmitter.emit('transaction.failed', {
-        transactionId: transaction.transactionId,
-        userAddress: transaction.userAddress,
-        error: error.message,
-      });
+      throw error;
     }
   }
 
