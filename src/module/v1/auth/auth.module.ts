@@ -5,8 +5,9 @@ import { AuthService } from './auth.service';
 import { UserModule } from '../user/user.module';
 import { OtpModule } from '../otp/otp.module';
 import { MailModule } from '../mail /mail.module';
-import { BlockchainModule } from '../blockchain/blockchain.module'; // Add this import
+import { BlockchainModule } from '../blockchain/blockchain.module';
 import { ENVIRONMENT } from '../../../common/configs/environment';
+import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
   imports: [
@@ -20,10 +21,10 @@ import { ENVIRONMENT } from '../../../common/configs/environment';
     UserModule,
     forwardRef(() => OtpModule),
     MailModule,
-    forwardRef(() => BlockchainModule), // Add this line
+    forwardRef(() => BlockchainModule),
   ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [AuthService, JwtStrategy],
   exports: [AuthService],
 })
 export class AuthModule {}
