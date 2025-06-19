@@ -16,11 +16,13 @@ export interface IEnvironment {
     SECRET: string;
   };
   SMTP: {
+    SERVICE?: string;
     HOST: string;
     PORT: string;
     EMAIL: string;
     USER: string;
     PASSWORD: string;
+    FROM: string;
   };
   AWS: {
     REGION: string;
@@ -64,11 +66,13 @@ export const ENVIRONMENT: IEnvironment = {
     SECRET: process.env.JWT_SECRET,
   },
   SMTP: {
+    SERVICE: process.env.SMTP_SERVICE,
     HOST: process.env.SMTP_HOST,
     PORT: process.env.SMTP_PORT,
     EMAIL: process.env.SMTP_EMAIL,
     USER: process.env.SMTP_USER,
     PASSWORD: process.env.SMTP_PASSWORD,
+    FROM: process.env.SMTP_FROM,
   },
   AWS: {
     REGION: process.env.AWS_REGION,

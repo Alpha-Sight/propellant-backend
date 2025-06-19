@@ -11,14 +11,21 @@ import { ENVIRONMENT } from 'src/common/configs/environment';
   imports: [
     MailerModule.forRoot({
       transport: {
-        service: ENVIRONMENT.SMTP.HOST,
+        ...(ENVIRONMENT.SMTP.SERVICE ? { service: ENVIRONMENT.SMTP.SERVICE } : {}), // Use service if provided
+        host: ENVIRONMENT.SMTP.HOST,
+        port: parseInt(ENVIRONMENT.SMTP.PORT as string) || 587, // Use port 587 by default
+        secure: false, // false for STARTTLS (port 587)
         auth: {
-          user: ENVIRONMENT.SMTP.EMAIL,
+          user: ENVIRONMENT.SMTP.USER,
           pass: ENVIRONMENT.SMTP.PASSWORD,
         },
+        tls: {
+          rejectUnauthorized: false, // Accept self-signed certificates
+        },
+        debug: process.env.NODE_ENV !== 'production', // Only enable debugging in non-production
       },
       defaults: {
-        from: `${ENVIRONMENT.SMTP.USER} <${ENVIRONMENT.SMTP.EMAIL}>`,
+        from: ENVIRONMENT.SMTP.FROM || `"${ENVIRONMENT.APP.NAME}" <${ENVIRONMENT.SMTP.EMAIL}>`,
       },
       template: {
         dir: join(__dirname, 'templates'),
