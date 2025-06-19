@@ -1,3 +1,5 @@
+import { WaitlistInterestEnum } from '../enums/waitlist.enum';
+
 export interface IWelcomeEmailTemplate {
   name: string;
 }
@@ -12,4 +14,10 @@ export interface IGenericOtpEmailTemplate {
   message: string;
   code: number;
   expirationTime: number;
+}
+
+export interface IWaitlistEmailTemplate {
+  fullName: string;
+  interest: WaitlistInterestEnum;
+  appName?: string;
 }

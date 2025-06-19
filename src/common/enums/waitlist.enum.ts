@@ -1,0 +1,7 @@
+export enum WaitlistInterestEnum {
+  TALENT = 'TALENT',
+  ORGANIZATION = 'ORGANIZATION',
+  INVEST = 'INVEST',
+  VOLUNTEER = 'VOLUNTEER',
+  BETA_TESTER = 'BETA_TESTER',
+}

@@ -21,6 +21,7 @@ export interface IEnvironment {
     EMAIL: string;
     USER: string;
     PASSWORD: string;
+    FROM: string;
   };
   REDIS: {
     URL: string;
@@ -64,6 +65,7 @@ export const ENVIRONMENT: IEnvironment = {
     EMAIL: process.env.SMTP_EMAIL,
     USER: process.env.SMTP_USER,
     PASSWORD: process.env.SMTP_PASSWORD,
+    FROM: process.env.SMTP_FROM,
   },
   REDIS: {
     URL: process.env.REDIS_URL,

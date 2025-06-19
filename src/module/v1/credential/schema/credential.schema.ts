@@ -26,6 +26,9 @@ export class Credential {
   @Prop({ required: false })
   ipfsHash?: string;
 
+  @Prop({ required: false })
+  publicId?: string;
+
   @Prop({ enum: CredentialStatusEnum, default: CredentialStatusEnum.PENDING })
   verificationStatus: CredentialStatusEnum;
 

@@ -44,13 +44,12 @@ export class AuthService {
   ) {}
 
   async register(payload: CreateUserDto, role?: UserRoleEnum) {
-    const user = await this.userService.createUser(payload, role);
-
     await this.otpService.sendOTP({
-      email: user.email,
+      email: payload.email,
       type: OtpTypeEnum.VERIFY_EMAIL,
     });
 
+    const user = await this.userService.createUser(payload, role);
     return user;
   }
 

@@ -1,6 +1,7 @@
 export const RESPONSE_CONSTANT = {
   AUTH: {
-    REGISTER_SUCCESS: 'Registration Successful',
+    REGISTER_SUCCESS:
+      'Registration Successful, check email for account verification code ',
     LOGIN_SUCCESS: 'Login Successful',
     EMAIL_VERIFICATION_SUCCESS: 'Email verified successfully',
     PHONE_VERIFICATION_SUCCESS: 'Phone verified successfully',

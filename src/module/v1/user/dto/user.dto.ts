@@ -34,7 +34,7 @@ export class CreateUserDto {
   @MaxLength(20)
   password: string;
 
-  @IsEnum([UserRoleEnum.TALENT, UserRoleEnum.ORGANIZATION])
+  @IsEnum(UserRoleEnum)
   @IsNotEmpty()
   role: UserRoleEnum;
 
