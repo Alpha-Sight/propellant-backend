@@ -16,7 +16,8 @@ export const CACHE_EXPIRY = {
 };
 
 export const CACHE_KEYS = {
-  appSettings: 'cardano:appSettings',
+  appSettings: 'propellant:appSettings',
+  ACTIVE_USERS: 'ACTIVE_USERS',
 };
 
 const cacheKeyPrefix = `${APP_CONSTANT.appName}:${isDevEnvironment}:`;

@@ -38,8 +38,8 @@ export class CredentialService {
 
       return await this.credentialModel.create({
         user: user._id,
-        ...payload,
         ipfsHash,
+        ...payload,
       });
     } catch (error) {
       throw new Error(

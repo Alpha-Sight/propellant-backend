@@ -3,7 +3,6 @@ import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
-  UnprocessableEntityException,
 } from '@nestjs/common';
 import { User, UserDocument } from '../schemas/user.schema';
 import { ClientSession, FilterQuery, Model, UpdateQuery } from 'mongoose';
@@ -197,6 +196,10 @@ export class UserService {
     const hashedPassword = await BaseHelper.hashData(newPassword);
 
     await this.updateQuery({ _id: user._id }, { password: hashedPassword });
+  }
+
+  async findOneById(userId: string) {
+    return this.userModel.findById(userId);
   }
 
   // async updateProfile(

@@ -9,6 +9,9 @@ import { logger } from '../logger';
 import { WALLET_CONSTANT } from 'src/common/constants/walletConstant';
 import { ethers } from 'ethers';
 import { v4 as uuidv4 } from 'uuid';
+import { MessageMediaTypeEnum } from 'src/common/enums/message.enum';
+import { Readable } from 'stream';
+// import * as ffmpeg from 'fluent-ffmpeg';
 
 // import { customAlphabet } from 'nanoid';
 
@@ -240,4 +243,54 @@ export class BaseHelper {
       mnemonic: wallet.mnemonic?.phrase || '',
     };
   }
+
+  static getFileTypeFromMimeType(mimeType: string) {
+    let type = MessageMediaTypeEnum.IMAGE;
+
+    switch (mimeType) {
+      case 'image/png':
+      case 'image/jpg':
+      case 'image/jpeg':
+        type = MessageMediaTypeEnum.IMAGE;
+        break;
+      case 'video/mp4':
+        type = MessageMediaTypeEnum.VIDEO;
+        break;
+      case 'audio/mp3':
+      case 'audio/mpeg':
+        type = MessageMediaTypeEnum.AUDIO;
+        break;
+      default:
+        type = MessageMediaTypeEnum.IMAGE;
+        break;
+    }
+
+    return type;
+  }
+
+  // static calculateAudioDuration(file: Express.Multer.File) {
+  //   return new Promise<string>((resolve, reject) => {
+  //     // Create a readable stream from the file buffer
+  //     ffmpeg()
+  //       .input(Readable.from(file.buffer))
+  //       .inputFormat(file.mimetype.split('/')[1])
+  //       .ffprobe((err, metadata) => {
+  //         if (err) return reject(err);
+
+  //         // Get the bit rate from the metadata,
+  //         const bitRate = metadata.format.bit_rate;
+  //         const fileSize = file.buffer.length;
+
+  //         // Calculate duration in seconds: (file size in bits) / (bits per second)
+  //         if (bitRate && fileSize) {
+  //           const durationInSeconds = Math.round((fileSize * 8) / bitRate);
+  //           const minutes = Math.floor(durationInSeconds / 60);
+  //           const seconds = durationInSeconds % 60;
+  //           resolve(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+  //         } else {
+  //           resolve('0:00');
+  //         }
+  //       });
+  //   });
+  // }
 }

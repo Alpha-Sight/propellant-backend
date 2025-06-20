@@ -47,7 +47,7 @@ export class AuthService {
     const user = await this.userService.createUser(payload, role);
 
     await this.otpService.sendOTP({
-      email: user.email,
+      email: payload.email,
       type: OtpTypeEnum.VERIFY_EMAIL,
     });
 
