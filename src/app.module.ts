@@ -9,6 +9,7 @@ import { DatabaseModule } from './module/v1/database/database.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CredentialModule } from './module/v1/credential/credential.module';
+import { BlockchainModule } from './module/v1/blockchain/blockchain.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { CredentialModule } from './module/v1/credential/credential.module';
     OtpModule,
     SettingModule,
     CredentialModule,
+    BlockchainModule,
   ],
   controllers: [AppController],
   providers: [AppService],
