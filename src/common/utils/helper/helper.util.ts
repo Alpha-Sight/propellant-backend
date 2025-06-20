@@ -221,7 +221,7 @@ export class BaseHelper {
   ): boolean => {
     try {
       // Verify the signature using ethers.js
-      const recoveredAddress = ethers.utils.verifyMessage(message, signature);
+      const recoveredAddress = ethers.verifyMessage(message, signature);
       console.log('recoveredAddress', recoveredAddress);
 
       // Compare the recovered address with the provided wallet address (case-insensitive)
