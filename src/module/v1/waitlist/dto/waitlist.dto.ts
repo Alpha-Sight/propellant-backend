@@ -18,11 +18,11 @@ export class JoinWaitlistDto {
   email: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   institution: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   skills: string;
 
   @IsArray()
@@ -30,6 +30,5 @@ export class JoinWaitlistDto {
     each: true,
     message: 'Please select valid interests',
   })
-  @IsOptional()
   interest: WaitlistInterestEnum[];
 }

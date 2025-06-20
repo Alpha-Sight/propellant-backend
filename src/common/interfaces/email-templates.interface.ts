@@ -18,6 +18,6 @@ export interface IGenericOtpEmailTemplate {
 
 export interface IWaitlistEmailTemplate {
   fullName: string;
-  interest: WaitlistInterestEnum;
+  interest: WaitlistInterestEnum | WaitlistInterestEnum[];
   appName?: string;
 }

@@ -30,7 +30,8 @@ export const RESPONSE_CONSTANT = {
     WATCHLIST_GET_SUCCESS: 'Watchlist retrieved successfully',
   },
   WAITLIST: {
-    JOIN_WAITLIST_SUCCESS: 'You have joined the waitlist successfully',
+    JOIN_WAITLIST_SUCCESS:
+      'You have joined the waitlist successfully. check email for confirmation',
   },
   Enrollment: {
     Enrollment_RECEIPT_CONFIRMATION_SUCCESS:

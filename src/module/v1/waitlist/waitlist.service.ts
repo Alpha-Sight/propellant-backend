@@ -8,7 +8,6 @@ import { PaginationDto } from '../repository/dto/repository.dto';
 import { EMAIL_CONSTANT } from '../../../common/constants/email.constant';
 import { MailService } from '../mail /mail.service';
 import { waitlistConfirmationEmailTemplate } from '../mail /templates/waitlist-confirmation.email';
-import { WaitlistInterestEnum } from 'src/common/enums/waitlist.enum';
 
 @Injectable()
 export class WaitlistService {
@@ -33,14 +32,15 @@ export class WaitlistService {
       ? payload.interest
       : [payload.interest];
 
-    await Promise.all(
-      interests.map((singleInterest: WaitlistInterestEnum) =>
-        waitlistConfirmationEmailTemplate({
-          fullName: payload.fullName,
-          interest: singleInterest,
-          appName: EMAIL_CONSTANT.appName,
-        }),
-      ),
+    // Send confirmation email
+    await this.mailService.sendEmail(
+      payload.email,
+      `Welcome to ${EMAIL_CONSTANT.appName} Waitlist`,
+      waitlistConfirmationEmailTemplate({
+        fullName: payload.fullName,
+        interest: interests,
+        appName: EMAIL_CONSTANT.appName,
+      }),
     );
 
     return waitlistEntry;

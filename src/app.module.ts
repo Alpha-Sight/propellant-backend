@@ -9,6 +9,7 @@ import { DatabaseModule } from './module/v1/database/database.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CredentialModule } from './module/v1/credential/credential.module';
+import { WaitlistModule } from './module/v1/waitlist/waitlist.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { CredentialModule } from './module/v1/credential/credential.module';
     OtpModule,
     SettingModule,
     CredentialModule,
+    WaitlistModule,
   ],
   controllers: [AppController],
   providers: [AppService],

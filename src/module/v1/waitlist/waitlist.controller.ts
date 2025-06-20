@@ -20,6 +20,7 @@ export class WaitlistController {
     return this.waitlistService.joinWaitlist(payload);
   }
 
+  @Public()
   @UseGuards(RoleGuard)
   @Roles(UserRoleEnum.ADMIN, UserRoleEnum.SUPER_ADMIN)
   @Get()
