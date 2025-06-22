@@ -318,12 +318,17 @@ async getUserTransactions(walletAddress: string) {
     operation: number;
   }) {
     try {
-      // Get the current nonce for this account
-      const nonce = await this.entryPoint.getNonce(sender, 0);
-      this.logger.log(`Current nonce for ${sender}: ${nonce}`);
+      console.log("Starting createUserOperation");
+      console.log("Arguments:", { sender, target, value, data: data.slice(0, 10) + "...", operation });
       
-      // Prepare calldata
+      // Log each step
+      console.log("Getting nonce");
+      const nonce = await this.entryPoint.getNonce(sender, 0);
+      console.log("Nonce received:", nonce);
+      
+      console.log("Encoding calldata");
       const callData = this.encodeExecuteCallData(target, value, data);
+      console.log("Calldata encoded");
       
       // Estimate gas
       const feeData = await this.provider.getFeeData();
@@ -347,13 +352,14 @@ async getUserTransactions(walletAddress: string) {
       
       return userOp;
     } catch (error) {
+      console.error("Error details:", error);
       this.logger.error(`Failed to create user operation: ${error.message}`);
       throw error;
     }
   }
-  getPaymasterData(): string | PromiseLike<string> {
-    throw new Error('Method not implemented.');
-  }
+ async getPaymasterData(): Promise<string> {
+  return this.encodePaymasterData();
+}
 
   /**
    * Encode execute call data for the account
