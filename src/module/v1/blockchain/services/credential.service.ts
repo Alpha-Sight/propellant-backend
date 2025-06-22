@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ethers } from 'ethers';
-import { RelayerService } from './relayer.service';
+import { RelayerService } from 'src/module/v1/blockchain/services/relayer.service';
+import { IssueCredentialDto } from '../dto/mint-credential.dto';
 import * as CredentialVerificationModuleABI from '../abis/CredentialVerificationModule.json';
-import { MintCredentialDto } from '../dto/mint-credential.dto';
+import { WalletService } from './wallet.service'; // Add this import
 
 @Injectable()
 export class CredentialService {
@@ -14,6 +15,7 @@ export class CredentialService {
   constructor(
     private configService: ConfigService,
     private relayerService: RelayerService,
+    private walletService: WalletService // Inject WalletService
   ) {
     this.initializeProvider();
   }
@@ -27,6 +29,14 @@ export class CredentialService {
       }
 
       this.provider = new ethers.JsonRpcProvider(rpcUrl);
+      
+      // Disable ENS resolution just like in WalletService
+      const originalGetNetwork = this.provider.getNetwork.bind(this.provider);
+      this.provider.getNetwork = async () => {
+        const network = await originalGetNetwork();
+        Object.defineProperty(network, 'ensAddress', { value: null });
+        return network;
+      };
       
       // Initialize contract
       const credentialModuleAddress = this.configService.get<string>('CREDENTIAL_VERIFICATION_MODULE_ADDRESS');
@@ -42,8 +52,11 @@ export class CredentialService {
     }
   }
 
-  async mintCredential(payload: MintCredentialDto, issuerId: string) {
+  async issueCredential(payload: IssueCredentialDto, issuerId: string) {
     try {
+      // Ensure subject has an on-chain account first
+      await this.ensureAccountExists(payload.subject);
+      
       const { subject, name, description, metadataURI, credentialType, validUntil, evidenceHash, revocable } = payload;
       
       // Encode the function call
@@ -69,11 +82,11 @@ export class CredentialService {
         value: "0",
         data,
         operation: 0,
-        description: `Mint credential "${name}" for ${subject}`,
+        description: `Issue credential "${name}" for ${subject}`,
         isAccountCreation: false
       });
       
-      this.logger.log(`Credential minting transaction queued with ID: ${transactionResult.transactionId}`);
+      this.logger.log(`Credential issuance transaction queued with ID: ${transactionResult.transactionId}`);
       
       return {
         transactionId: transactionResult.transactionId,
@@ -83,7 +96,7 @@ export class CredentialService {
         description
       };
     } catch (error) {
-      this.logger.error(`Failed to mint credential: ${error.message}`);
+      this.logger.error(`Failed to issue credential: ${error.message}`);
       throw error;
     }
   }
@@ -204,6 +217,16 @@ export class CredentialService {
     } catch (error) {
       this.logger.error(`Failed to revoke credential: ${error.message}`);
       throw error;
+    }
+  }
+
+  async ensureAccountExists(walletAddress: string): Promise<string> {
+    try {
+      // Use WalletService instead of creating our own contract instance
+      return await this.walletService.deployAccountOnChain(walletAddress);
+    } catch (error) {
+      this.logger.error(`Failed to ensure account exists: ${error.message}`);
+      throw new Error(`Could not create account for ${walletAddress}: ${error.message}`);
     }
   }
 

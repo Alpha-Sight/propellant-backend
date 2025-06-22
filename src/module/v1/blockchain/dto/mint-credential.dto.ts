@@ -10,7 +10,7 @@ export enum CredentialTypeEnum {
   OTHER = 6
 }
 
-export class MintCredentialDto {
+export class IssueCredentialDto {
   @IsString()
   subject: string;
 

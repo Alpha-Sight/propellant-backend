@@ -10,7 +10,7 @@ export class WalletController {
   @ResponseMessage('Wallet creation initiated successfully')
   async createWallet(@Body() createWalletDto: any) {
     try {
-      const wallet = await this.walletService.createWallet(createWalletDto.userAddress);
+      const wallet = await this.walletService.createWallet(createWalletDto.userAddress, createWalletDto.email);
       
       return {
         success: true,

@@ -53,9 +53,12 @@ export class AuthService {
     // Create user first
     const user = await this.userService.createUser(payload, role);
 
-    // Auto-generate wallet for the user
+    // Auto-generate wallet for the user using email
     try {
-      const walletResult = await this.walletService.createWallet(user._id.toString());
+      const walletResult = await this.walletService.createWallet(
+        user._id.toString(),
+        user.email, // Pass the email for deterministic generation
+      );
       const wallet = walletResult as unknown as { walletAddress?: string; accountAddress?: string } | null | undefined;
       
       if (wallet && wallet.walletAddress && wallet.accountAddress) {

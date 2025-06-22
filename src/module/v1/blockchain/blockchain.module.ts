@@ -20,7 +20,7 @@ import { CredentialController } from './controllers/credential.controller';
 @Module({
   imports: [
     ConfigModule,
-    EventEmitterModule,
+    EventEmitterModule.forRoot(), // Add forRoot() to properly configure the EventEmitterModule
     MongooseModule.forFeature([
       { name: Transaction.name, schema: TransactionSchema },
       { name: Wallet.name, schema: WalletSchema },

@@ -247,6 +247,11 @@ async getUserTransactions(walletAddress: string) {
     try {
       this.logger.log(`Processing transaction: ${transaction.transactionId}`);
       
+      // Ensure we have a valid account address
+      if (!transaction.accountAddress) {
+        throw new Error('Transaction missing account address');
+      }
+      
       // Create user operation
       const userOp = await this.createUserOperation({
         sender: transaction.accountAddress,
@@ -255,6 +260,8 @@ async getUserTransactions(walletAddress: string) {
         data: transaction.data,
         operation: transaction.operation,
       });
+      
+      this.logger.log(`Created user operation for ${transaction.transactionId}`);
       
       // Submit to blockchain
       const txHash = await this.submitUserOperation(userOp);
@@ -275,7 +282,21 @@ async getUserTransactions(walletAddress: string) {
       });
       
     } catch (error) {
-      this.logger.error(`Transaction processing failed: ${error.message}`);
+      this.logger.error(`Transaction processing failed for ${transaction.transactionId}: ${error.message}`);
+      
+      // Update transaction status to failed
+      transaction.status = 'FAILED';
+      transaction.error = error.message;
+      transaction.updatedAt = new Date();
+      await transaction.save();
+      
+      // Emit failure event
+      this.eventEmitter.emit('transaction.failed', {
+        transactionId: transaction.transactionId,
+        error: error.message,
+        userAddress: transaction.userAddress,
+      });
+      
       throw error;
     }
   }
@@ -296,36 +317,42 @@ async getUserTransactions(walletAddress: string) {
     data: string;
     operation: number;
   }) {
-    // Get the current nonce for this account
-    const nonce = await this.entryPoint.getNonce(sender, 0);
-    
-    // Prepare calldata
-    const callData = this.encodeExecuteCallData(target, value, data);
-    
-    // Estimate gas
-    const feeData = await this.provider.getFeeData();
-    const gasPrice = feeData.gasPrice || feeData.maxFeePerGas || BigInt(30000000000); // fallback value
-    const gasLimit = await this.estimateGas(sender, callData);
-    
-    // Create user operation
-    const userOp: UserOperationStruct = {
-      sender,
-      nonce: nonce.toString(),
-      initCode: '0x',
-      callData,
-      callGasLimit: gasLimit.toString(),
-      verificationGasLimit: '200000',
-      preVerificationGas: '50000',
-      maxFeePerGas: gasPrice.toString(),
-      maxPriorityFeePerGas: (gasPrice / BigInt(2)).toString(),
-      paymasterAndData: this.encodePaymasterData(),
-      signature: '0x',
-    };
-    
-    // Sign the user operation
-    userOp.signature = await this.signUserOp(userOp);
-    
-    return userOp;
+    try {
+      // Get the current nonce for this account
+      const nonce = await this.entryPoint.getNonce(sender, 0);
+      this.logger.log(`Current nonce for ${sender}: ${nonce}`);
+      
+      // Prepare calldata
+      const callData = this.encodeExecuteCallData(target, value, data);
+      
+      // Estimate gas
+      const feeData = await this.provider.getFeeData();
+      const gasPrice = feeData.gasPrice || feeData.maxFeePerGas || BigInt(30000000000); // fallback value
+      const gasLimit = await this.estimateGas(sender, callData);
+      
+      // Create user operation
+      const userOp: UserOperationStruct = {
+        sender,
+        nonce: nonce.toString(),
+        initCode: '0x', // Empty for existing accounts
+        callData,
+        callGasLimit: gasLimit.toString(),
+        verificationGasLimit: '150000',
+        preVerificationGas: '21000',
+        maxFeePerGas: gasPrice.toString(),
+        maxPriorityFeePerGas: gasPrice.toString(),
+        paymasterAndData: await this.getPaymasterData(),
+        signature: '0x', // Will be filled later
+      };
+      
+      return userOp;
+    } catch (error) {
+      this.logger.error(`Failed to create user operation: ${error.message}`);
+      throw error;
+    }
+  }
+  getPaymasterData(): string | PromiseLike<string> {
+    throw new Error('Method not implemented.');
   }
 
   /**
