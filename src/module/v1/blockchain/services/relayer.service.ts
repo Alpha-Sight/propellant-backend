@@ -11,6 +11,13 @@ import { Model } from 'mongoose';
 import { Transaction, TransactionDocument } from '../schemas/transaction.schema';
 import { WalletService } from './wallet.service';
 
+// Define transaction status enum
+enum TransactionStatus {
+  PENDING = 'PENDING',
+  CONFIRMED = 'CONFIRMED',
+  FAILED = 'FAILED'
+}
+
 @Injectable()
 export class RelayerService implements OnModuleInit {
   private readonly logger = new Logger(RelayerService.name);
@@ -210,33 +217,45 @@ async getUserTransactions(walletAddress: string) {
    * Process pending transactions
    */
   private async processPendingTransactions() {
-    const pendingTransactions = await this.transactionModel.find({
-      status: 'PENDING',
-    }).sort({ createdAt: 1 }).limit(10);
-    
-    if (pendingTransactions.length === 0) return;
-    
-    this.logger.log(`Processing ${pendingTransactions.length} pending transactions`);
-    
-    for (const transaction of pendingTransactions) {
-      try {
-        await this.processTransaction(transaction);
-      } catch (error) {
-        this.logger.error(`Failed to process transaction ${transaction.transactionId}: ${error.message}`);
-        
-        // Update transaction status
-        transaction.status = 'FAILED';
-        transaction.error = error.message;
-        transaction.updatedAt = new Date();
-        await transaction.save();
-        
-        // Emit event
-        this.eventEmitter.emit('transaction.failed', {
-          transactionId: transaction.transactionId,
-          userAddress: transaction.userAddress,
-          error: error.message,
-        });
+    try {
+      // Check for pending transactions
+      const pendingTransactions = await this.transactionModel.find({
+        status: TransactionStatus.PENDING,
+        createdAt: { $gt: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Only process transactions less than 24 hours old
+      }).limit(5);
+      
+      if (pendingTransactions.length === 0) {
+        return;
       }
+      
+      this.logger.log(`Processing ${pendingTransactions.length} pending transactions`);
+      
+      for (const transaction of pendingTransactions) {
+        // Skip if this transaction hash already exists on-chain
+        if (transaction.transactionHash) {
+          try {
+            const receipt = await this.provider.getTransactionReceipt(transaction.transactionHash);
+            if (receipt) {
+              // Transaction already confirmed, update status without reprocessing
+              await this.transactionModel.updateOne(
+                { transactionId: transaction.transactionId },
+                { status: TransactionStatus.CONFIRMED }
+              );
+              continue;
+            }
+          } catch (e) {
+            // Ignore errors checking receipt, continue with processing
+          }
+        }
+        
+        try {
+          await this.processTransaction(transaction);
+        } catch (error) {
+          this.logger.error(`Failed to process transaction ${transaction.transactionId}: ${error.message}`);
+        }
+      }
+    } catch (error) {
+      this.logger.error(`Error processing transactions: ${error.message}`);
     }
   }
 
@@ -263,40 +282,42 @@ async getUserTransactions(walletAddress: string) {
       
       this.logger.log(`Created user operation for ${transaction.transactionId}`);
       
-      // Submit to blockchain
-      const txHash = await this.submitUserOperation(userOp);
+      // Submit the user operation
+      const receipt = await this.submitUserOperation(userOp);
       
-      // Update transaction status
-      transaction.status = 'CONFIRMED';
-      transaction.transactionHash = txHash;
-      transaction.updatedAt = new Date();
-      await transaction.save();
+      // Update transaction with just the hash string, not the entire receipt object
+      await this.transactionModel.updateOne(
+        { transactionId: transaction.transactionId },
+        {
+          status: TransactionStatus.CONFIRMED,
+          blockNumber: receipt.blockNumber.toString(), // Convert BigInt to string if needed
+          transactionHash: receipt.hash, // Just the hash string, not the whole receipt
+        },
+      );
       
-      this.logger.log(`Transaction confirmed: ${transaction.transactionId} with hash: ${txHash}`);
-      
-      // Emit success event
-      this.eventEmitter.emit('transaction.confirmed', {
-        transactionId: transaction.transactionId,
-        transactionHash: txHash,
-        userAddress: transaction.userAddress,
+      // Emit transaction confirmation event
+      this.eventEmitter.emit('transaction.confirmed', { 
+        transactionId: transaction.transactionId, 
+        blockNumber: receipt.blockNumber, 
+        transactionHash: receipt.hash 
       });
       
+      return receipt;
     } catch (error) {
+      // Add safeguard: Mark transaction as FAILED so it won't be processed again
+      await this.transactionModel.updateOne(
+        { transactionId: transaction.transactionId },
+        {
+          status: TransactionStatus.FAILED,
+          error: {
+            message: error.message || 'Unknown error',
+            type: error.code || 'UNKNOWN',
+            details: JSON.stringify(error, Object.getOwnPropertyNames(error))
+          },
+        },
+      );
+      
       this.logger.error(`Transaction processing failed for ${transaction.transactionId}: ${error.message}`);
-      
-      // Update transaction status to failed
-      transaction.status = 'FAILED';
-      transaction.error = error.message;
-      transaction.updatedAt = new Date();
-      await transaction.save();
-      
-      // Emit failure event
-      this.eventEmitter.emit('transaction.failed', {
-        transactionId: transaction.transactionId,
-        error: error.message,
-        userAddress: transaction.userAddress,
-      });
-      
       throw error;
     }
   }
@@ -405,19 +426,214 @@ async getUserTransactions(walletAddress: string) {
   }
 
   /**
-   * Sign a user operation according to ERC-4337
-   */
-  private async signUserOp(userOp: UserOperationStruct) {
-    const userOpHash = await this.entryPoint.getUserOpHash(userOp);
-    const signature = await this.wallet.signMessage(ethers.getBytes(userOpHash));
-    return signature;
-  }
-
-  /**
    * Submit a user operation to the entrypoint
    */
   private async submitUserOperation(userOp: UserOperationStruct) {
-    const tx = await this.entryPoint.handleOps([userOp], this.wallet.address);
-    return tx.hash;
+    try {
+      // Log the full user operation object
+      console.log("Submitting user operation:", {
+        sender: userOp.sender,
+        nonce: userOp.nonce.toString(),
+        callDataLength: userOp.callData.length,
+        callGasLimit: userOp.callGasLimit.toString(),
+        verificationGasLimit: userOp.verificationGasLimit.toString(),
+        preVerificationGas: userOp.preVerificationGas.toString(),
+        maxFeePerGas: userOp.maxFeePerGas.toString(),
+        maxPriorityFeePerGas: userOp.maxPriorityFeePerGas.toString(),
+        paymasterAndDataLength: userOp.paymasterAndData.length,
+        signatureLength: userOp.signature.length
+      });
+      
+      // Check if account has a deposit in EntryPoint
+      console.log("Checking EntryPoint deposit for account:", userOp.sender);
+      const depositInfo = await this.entryPoint.getDepositInfo(userOp.sender);
+      console.log("Deposit info:", {
+        amount: depositInfo.amount.toString(),
+        staked: depositInfo.staked
+      });
+      
+      // If account doesn't have a deposit, deposit funds from the relayer
+      if (depositInfo.amount < ethers.parseEther("0.001")) {
+        console.log("Account has insufficient deposit, depositing funds...");
+        try {
+          const depositTx = await this.entryPoint.depositTo(userOp.sender, {
+            value: ethers.parseEther("0.01") 
+          });
+          const depositReceipt = await depositTx.wait();
+          console.log("Deposit successful:", depositReceipt.hash);
+        } catch (depositError) {
+          console.error("Failed to deposit to EntryPoint:", depositError);
+        }
+      }
+
+      // Check if the paymaster has a deposit in EntryPoint
+      if (this.paymaster) {
+        console.log("Checking EntryPoint deposit for paymaster:", this.paymaster.target);
+        const paymasterDeposit = await this.entryPoint.getDepositInfo(this.paymaster.target);
+        console.log("Paymaster deposit info:", {
+          amount: paymasterDeposit.amount.toString(),
+          staked: paymasterDeposit.staked
+        });
+
+        // If paymaster doesn't have a deposit, warn about it
+        if (paymasterDeposit.amount < ethers.parseEther("0.001")) {
+          console.warn("WARNING: Paymaster has insufficient funds in EntryPoint");
+        }
+      }
+
+      // Log that we're signing the operation
+      console.log("Signing user operation...");
+      const signature = await this.signUserOp(userOp);
+      userOp.signature = signature;
+      console.log("Operation signed, signature length:", userOp.signature.length);
+
+      // Check if the EntryPoint contract has the handleOps method
+      console.log("EntryPoint contract methods:", 
+        Object.keys(this.entryPoint.interface.fragments)
+          .filter(key => typeof key === 'string' && !key.includes('('))
+          .join(", ")
+      );
+      
+      console.log("EntryPoint address:", this.entryPoint.target);
+      console.log("Beneficiary address:", this.wallet.address);
+      
+      // Try to estimate gas for the operation first
+      try {
+        console.log("Estimating gas for handleOps...");
+        const gasEstimate = await this.entryPoint.handleOps.estimateGas(
+          [userOp],
+          this.wallet.address
+        );
+        console.log("Gas estimation successful:", gasEstimate.toString());
+      } catch (estimateError) {
+        console.error("Gas estimation failed with error:", estimateError);
+        
+        // Try to get more specific error details
+        console.log("Trying to decode error...");
+        try {
+          const errorData = estimateError.data;
+          if (errorData) {
+            console.log("Error data:", errorData);
+          }
+        } catch (decodeError) {
+          console.log("Could not decode error data");
+        }
+      }
+      
+      // Submit the user operation with extra gas
+      console.log("Submitting handleOps transaction...");
+      const tx = await this.entryPoint.handleOps(
+        [userOp],
+        this.wallet.address,
+        { gasLimit: 1000000 } // Use a higher gas limit for safety
+      );
+      
+      console.log("Transaction submitted:", tx.hash);
+      const receipt = await tx.wait();
+      console.log("Transaction confirmed in block:", receipt.blockNumber);
+      
+      return receipt;
+    } catch (error) {
+      console.log("Full submit error:", error);
+      if (error.reason) {
+        console.error("Error reason:", error.reason);
+      }
+      if (error.code) {
+        console.error("Error code:", error.code);
+      }
+      if (error.data) {
+        console.error("Error data:", error.data);
+      }
+      if (error.transaction) {
+        console.error("Failed transaction to:", error.transaction.to);
+        console.error("Failed transaction data (first 100 chars):", 
+          error.transaction.data.substring(0, 100) + "...");
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Sign a user operation according to ERC-4337
+   */
+  private async signUserOp(userOp: UserOperationStruct) {
+    try {
+      console.log("Preparing to sign user operation");
+      
+      // Get the chain ID
+      const network = await this.provider.getNetwork();
+      const chainId = network.chainId;
+      console.log("Chain ID:", chainId.toString());
+      
+      // Get the EntryPoint address
+      const entryPointAddress = this.entryPoint.target;
+      console.log("EntryPoint address:", entryPointAddress);
+      
+      // Calculate the user op hash locally instead of calling the contract
+      console.log("Calculating user op hash...");
+      const userOpHash = this.calculateUserOpHash(userOp);
+      console.log("User op hash:", userOpHash);
+      
+      // Sign the hash
+      console.log("Signing user op hash...");
+      const signature = await this.wallet.signMessage(ethers.getBytes(userOpHash));
+      console.log("Signature generated, length:", signature.length);
+      
+      return signature;
+    } catch (error) {
+      console.error("Error signing user operation:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Calculate the user operation hash locally, since our EntryPoint contract
+   * doesn't expose a public getUserOpHash function
+   */
+  private calculateUserOpHash(userOp: UserOperationStruct): string {
+    try {
+      // This calculation must match the contract's _getUserOpHash implementation
+      const packed = ethers.AbiCoder.defaultAbiCoder().encode(
+        [
+          'address', // sender
+          'uint256', // nonce
+          'bytes32', // initCodeHash
+          'bytes32', // callDataHash
+          'uint256', // callGasLimit
+          'uint256', // verificationGasLimit
+          'uint256', // preVerificationGas
+          'uint256', // maxFeePerGas
+          'uint256', // maxPriorityFeePerGas
+          'bytes32', // paymasterAndDataHash
+        ],
+        [
+          userOp.sender,
+          userOp.nonce,
+          ethers.keccak256(userOp.initCode || '0x'),
+          ethers.keccak256(userOp.callData),
+          userOp.callGasLimit,
+          userOp.verificationGasLimit, 
+          userOp.preVerificationGas,
+          userOp.maxFeePerGas,
+          userOp.maxPriorityFeePerGas,
+          ethers.keccak256(userOp.paymasterAndData || '0x'),
+        ]
+      );
+      
+      // Include chain ID and EntryPoint address in the final hash
+      const chainId = this.provider._network.chainId;
+      const hash = ethers.keccak256(
+        ethers.solidityPacked(
+          ['bytes', 'uint256', 'address'],
+          [packed, chainId, this.entryPoint.target]
+        )
+      );
+      
+      console.log("Calculated user op hash:", hash);
+      return hash;
+    } catch (error) {
+      console.error("Error calculating user op hash:", error);
+      throw error;
+    }
   }
 }
