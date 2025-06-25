@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsBoolean, IsOptional, IsEnum } from 'class-validator';
+import { IsString, IsNumber, IsBoolean, IsOptional, IsEnum, Matches } from 'class-validator';
 
 export enum CredentialTypeEnum {
   EDUCATION = 0,
@@ -31,7 +31,7 @@ export class IssueCredentialDto {
   validUntil?: number; // Timestamp, 0 for no expiration
 
   @IsString()
-  evidenceHash: string;
+  evidenceHash: string; // Can be hex string (0x...) or plain text that will be hashed
 
   @IsBoolean()
   revocable: boolean;

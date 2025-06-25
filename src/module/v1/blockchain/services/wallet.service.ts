@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -6,18 +6,27 @@ import { ethers } from 'ethers';
 import { Wallet, WalletDocument } from '../schemas/wallet.schema';
 import * as AccountFactoryABI from '../abis/AccountFactory.json';
 import { createHash } from 'crypto';
+import { RelayerService } from './relayer.service';
+import { Credential, CredentialDocument } from '../schemas/credential.schema';
 
 @Injectable()
 export class WalletService {
+  getProvider(): ethers.JsonRpcProvider {
+    return this.provider;
+  }
   private readonly logger = new Logger(WalletService.name);
   private provider: ethers.JsonRpcProvider;
   private accountFactory: ethers.Contract;
+  private credentialContract: ethers.Contract;
 
   constructor(
     private configService: ConfigService,
     @InjectModel(Wallet.name) private walletModel: Model<WalletDocument>,
+    @InjectModel(Credential.name) private credentialModel: Model<CredentialDocument>,
+    @Inject(forwardRef(() => RelayerService)) private relayerService: RelayerService,
   ) {
     this.initializeProvider();
+    this.initializeContract();
   }
 
   private async initializeProvider() {
@@ -39,6 +48,40 @@ export class WalletService {
       AccountFactoryABI.abi,
       this.provider,
     );
+  }
+
+  private async initializeContract() {
+    const rpcUrl = this.configService.get<string>('BLOCKCHAIN_RPC_URL');
+    const contractAddress = this.configService.get<string>('CREDENTIAL_VERIFICATION_MODULE_ADDRESS');
+    
+    // Add validation
+    if (!contractAddress) {
+      throw new Error('CREDENTIAL_VERIFICATION_MODULE_ADDRESS not configured');
+    }
+    if (!rpcUrl) {
+      throw new Error('BLOCKCHAIN_RPC_URL not configured');
+    }
+    
+    this.provider = new ethers.JsonRpcProvider(rpcUrl);
+    
+    // Load the contract ABI
+    const contractABI = [
+      'function issueCredential(address subject, string name, string description, string metadataURI, uint8 credentialType, uint256 validUntil, bytes32 evidenceHash, bool revocable) returns (uint256)',
+      'function verifyCredential(uint256 credentialId)',
+      'function getCredential(uint256 credentialId) view returns (tuple)',
+      'function getUserCredentials(address user) view returns (uint256[])',
+      'function getPendingCredentials(address user) view returns (uint256[])',
+      'event CredentialSubmitted(uint256 indexed credentialId, address indexed issuer, address indexed subject)',
+      'event CredentialVerified(uint256 indexed credentialId, address indexed verifier)'
+    ];
+    
+    this.credentialContract = new ethers.Contract(
+      contractAddress,
+      contractABI,
+      this.provider
+    );
+    
+    this.logger.log(`Credential contract initialized at ${contractAddress}`);
   }
 
   /**

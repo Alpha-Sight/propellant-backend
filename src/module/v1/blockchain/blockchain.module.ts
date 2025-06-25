@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
-import { EventEmitterModule } from '@nestjs/event-emitter';
 
 // Import schemas
 import { Transaction, TransactionSchema } from './schemas/transaction.schema';
@@ -20,7 +19,6 @@ import { CredentialController } from './controllers/credential.controller';
 @Module({
   imports: [
     ConfigModule,
-    EventEmitterModule.forRoot(), // Add forRoot() to properly configure the EventEmitterModule
     MongooseModule.forFeature([
       { name: Transaction.name, schema: TransactionSchema },
       { name: Wallet.name, schema: WalletSchema },

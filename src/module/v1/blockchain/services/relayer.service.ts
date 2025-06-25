@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, forwardRef, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ethers } from 'ethers';
 import { UserOperationStruct } from '../interfaces/user-operation.interface';
@@ -33,7 +33,7 @@ export class RelayerService implements OnModuleInit {
     private configService: ConfigService,
     private eventEmitter: EventEmitter2,
     @InjectModel(Transaction.name) private transactionModel: Model<TransactionDocument>,
-    private readonly walletService: WalletService,
+    @Inject(forwardRef(() => WalletService)) private readonly walletService: WalletService,
   ) {}
 
   /**
