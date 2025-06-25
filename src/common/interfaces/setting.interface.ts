@@ -5,8 +5,11 @@ export interface ISettings {
 export interface App {
   name: string;
   supportEmail: string;
+  price: {
+    premiumPricing: number;
+  };
   urls: {
     webHomepage: string;
-    coursesPage: string;
+    waitlistPage: string;
   };
 }

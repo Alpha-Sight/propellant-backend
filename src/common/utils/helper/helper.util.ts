@@ -10,7 +10,6 @@ import { WALLET_CONSTANT } from 'src/common/constants/walletConstant';
 import { ethers } from 'ethers';
 import { v4 as uuidv4 } from 'uuid';
 import { MessageMediaTypeEnum } from 'src/common/enums/message.enum';
-import { Readable } from 'stream';
 // import * as ffmpeg from 'fluent-ffmpeg';
 
 // import { customAlphabet } from 'nanoid';

@@ -21,3 +21,11 @@ export interface IWaitlistEmailTemplate {
   interest: WaitlistInterestEnum | WaitlistInterestEnum[];
   appName?: string;
 }
+
+export interface PremiumEmailTemplateProps {
+  user: string[];
+  reference: string;
+  upgradeDate: string;
+  totalAmount: number;
+  currencySymbol?: string;
+}

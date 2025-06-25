@@ -53,6 +53,18 @@ export interface IEnvironment {
     CREDENTIAL_VERIFICATION_MODULE_ADDRESS: string;
     ROLE_MODULE_ADDRESS: string;
   };
+  FLUTTERWAVE: {
+    HOST: string;
+    WEBHOOK_SECRET: string;
+  };
+  PAYSTACK: {
+    HOST: string;
+    WEBHOOK_SECRET: string;
+  };
+  VPAY: {
+    HOST: string;
+    WEBHOOK_SECRET: string;
+  };
 }
 
 export const ENVIRONMENT: IEnvironment = {
@@ -108,6 +120,18 @@ export const ENVIRONMENT: IEnvironment = {
     CREDENTIAL_VERIFICATION_MODULE_ADDRESS:
       process.env.CREDENTIAL_VERIFICATION_MODULE_ADDRESS,
     ROLE_MODULE_ADDRESS: process.env.ROLE_MODULE_ADDRESS,
+  },
+  FLUTTERWAVE: {
+    HOST: process.env.FLUTTERWAVE_HOST,
+    WEBHOOK_SECRET: process.env.FLUTTERWAVE_WEBHOOK_SECRET,
+  },
+  PAYSTACK: {
+    HOST: process.env.PAYSTACK_HOST,
+    WEBHOOK_SECRET: process.env.PAYSTACK_WEBHOOK_SECRET,
+  },
+  VPAY: {
+    HOST: process.env.VPAY_HOST,
+    WEBHOOK_SECRET: process.env.VPAY_WEBHOOK_SECRET,
   },
 };
 

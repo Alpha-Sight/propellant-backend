@@ -4,6 +4,7 @@ import {
   AuthSourceEnum,
   UserRoleEnum,
 } from '../../../../common/enums/user.enum';
+import { PlanTypeEnum } from 'src/common/enums/premium.enum';
 
 export type UserDocument = User & Document;
 
@@ -86,6 +87,9 @@ export class User {
 
   @Prop({ default: 0 })
   totalReferrals: number;
+
+  @Prop({ enum: PlanTypeEnum })
+  plan: PlanTypeEnum;
 
   @Prop({ default: false })
   profileCompleted?: boolean;
