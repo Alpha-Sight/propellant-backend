@@ -11,7 +11,7 @@ import { AppService } from './app.service';
 import { CredentialModule } from './module/v1/credential/credential.module';
 import { WaitlistModule } from './module/v1/waitlist/waitlist.module';
 import { BlockchainModule } from './module/v1/blockchain/blockchain.module';
-
+import { CvModule } from './module/v1/cv/cv.module';
 
 @Module({
   imports: [
@@ -24,6 +24,7 @@ import { BlockchainModule } from './module/v1/blockchain/blockchain.module';
     SettingModule,
     CredentialModule,
     WaitlistModule,
+    CvModule,
     BlockchainModule,
   ],
   controllers: [AppController],

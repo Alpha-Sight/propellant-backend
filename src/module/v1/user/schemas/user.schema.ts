@@ -1,26 +1,11 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import mongoose, { Document } from 'mongoose';
 import {
   AuthSourceEnum,
   UserRoleEnum,
 } from '../../../../common/enums/user.enum';
 
 export type UserDocument = User & Document;
-
-@Schema()
-export class Socials {
-  @Prop({ default: '' })
-  twitter: string;
-
-  @Prop({ default: '' })
-  linkedin: string;
-
-  @Prop({ default: '' })
-  github: string;
-
-  @Prop({ default: '' })
-  instagram: string;
-}
 
 @Schema({ timestamps: true })
 export class User {
@@ -63,11 +48,47 @@ export class User {
   @Prop({ default: '' })
   location: string;
 
-  @Prop({ type: [String], default: [] })
-  skills: string[];
+  @Prop()
+  city?: string;
 
-  @Prop({})
-  socials: Socials;
+  @Prop()
+  country?: string;
+
+  @Prop()
+  postalCode?: string;
+
+  @Prop()
+  linkedin?: string;
+
+  @Prop()
+  github?: string;
+
+  @Prop()
+  portfolio?: string;
+
+  @Prop({ default: '' })
+  twitter: string;
+
+  @Prop({ default: '' })
+  instagram: string;
+
+  @Prop({ default: '' })
+  facebook?: string;
+
+  @Prop()
+  website?: string;
+
+  @Prop({ default: null, index: true })
+  referralCode: string;
+
+  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: User.name })
+  referredBy: UserDocument;
+
+  @Prop({ default: 0 })
+  totalReferrals: number;
+
+  @Prop({ default: false })
+  profileCompleted?: boolean;
 
   @Prop({ default: null })
   lastLoginAt: Date;
@@ -92,6 +113,14 @@ UserSchema.pre(/^find/, function (next) {
   const postConditions = this['_conditions'];
 
   this['_conditions'] = { ...preConditions, ...postConditions };
+
+  next();
+});
+
+UserSchema.pre('validate', async function (next) {
+  if (!this.referralCode && this.username) {
+    this.referralCode = this.username;
+  }
 
   next();
 });

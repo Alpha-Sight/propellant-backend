@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { User, UserDocument } from '../schemas/user.schema';
 import { ClientSession, FilterQuery, Model, UpdateQuery } from 'mongoose';
@@ -12,6 +13,7 @@ import {
   CreateUserDto,
   CreateWalletUserDto,
   UpdatePasswordDto,
+  UpdateProfileDto,
   // UpdateProfileDto,
   UserAvailabilityDto,
 } from '../dto/user.dto';
@@ -24,15 +26,14 @@ import {
   UserRoleEnum,
 } from '../../../../common/enums/user.enum';
 import { GoogleAuthDto } from '../../auth/dto/auth.dto';
-// import { PinataUploadFile } from 'src/common/interfaces/pinata.interface';
-// import { PinataService } from 'src/common/utils/pinata.util';
+import { PinataService } from 'src/common/utils/pinata.util';
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private otpService: OtpService,
-    // private pinataService: PinataService,
+    private pinataService: PinataService,
   ) {}
 
   async createUser(
@@ -40,14 +41,18 @@ export class UserService {
     role?: UserRoleEnum,
   ): Promise<UserDocument> {
     try {
+      const { referralCode } = payload;
+
       if (!payload.termsAndConditionsAccepted) {
         throw new BadRequestException('Please accept terms and conditions');
       }
 
-      const [userWithEmailExists, userWithPhoneExists] = await Promise.all([
-        this.userModel.exists({ email: payload.email }),
-        this.userModel.exists({ phone: payload.phone }),
-      ]);
+      const [userWithEmailExists, userWithPhoneExists, userWithUsernameExist] =
+        await Promise.all([
+          this.userModel.exists({ email: payload.email }),
+          this.userModel.exists({ phone: payload.phone }),
+          this.userModel.exists({ username: payload.username }),
+        ]);
 
       if (userWithEmailExists) {
         throw new BadRequestException('User with this email already exists');
@@ -55,6 +60,25 @@ export class UserService {
 
       if (userWithPhoneExists) {
         throw new BadRequestException('User with this phone already exists');
+      }
+
+      if (userWithUsernameExist) {
+        throw new UnprocessableEntityException(
+          'Username already used, try another name',
+        );
+      }
+
+      delete payload.referralCode; // delete the referral code to prevent persisting this as the new user referral code
+
+      let referralUserId: string;
+      if (referralCode) {
+        const referralUser = await this.userModel.findOne({ referralCode });
+
+        if (!referralUser) {
+          throw new BadRequestException('Referral code is invalid');
+        }
+
+        referralUserId = referralUser._id.toString();
       }
 
       const hashedPassword = await BaseHelper.hashData(payload.password);
@@ -68,7 +92,23 @@ export class UserService {
         ...payload,
         password: hashedPassword,
         role: userRole,
+        referredBy: referralUserId,
       });
+
+      // update referral user referral count
+      // TODO: award referral point
+      if (referralUserId) {
+        await this.userModel.updateOne(
+          { _id: referralUserId },
+          {
+            $inc: {
+              totalReferrals: 1,
+            },
+          },
+        );
+      }
+
+      // TODO: not important but we can send an email or push notification to notify user of new referral
 
       delete createdUser['_doc'].password;
       return createdUser;
@@ -202,49 +242,59 @@ export class UserService {
     return this.userModel.findById(userId);
   }
 
-  // async updateProfile(
-  //   userId: string,
-  //   payload: UpdateProfileDto,
-  //   file?: Express.Multer.File,
-  // ) {
-  //   const { username } = payload;
+  async updateProfile(
+    user: UserDocument,
+    payload: UpdateProfileDto,
+    file?: Express.Multer.File,
+  ) {
+    const { username } = payload;
 
-  //   if (username) {
-  //     const userWithUsernameExist = await this.userModel.findOne({
-  //       username,
-  //       _id: { $ne: userId },
-  //     });
+    if (username) {
+      const userWithUsernameExist = await this.userModel.findOne({
+        username,
+        _id: { $ne: user._id },
+      });
 
-  //     if (userWithUsernameExist) {
-  //       throw new UnprocessableEntityException(
-  //         'Username already used, try another name',
-  //       );
-  //     }
-  //   }
+      if (userWithUsernameExist) {
+        throw new UnprocessableEntityException(
+          'Username already used, try another name',
+        );
+      }
+    }
 
-  //   let imageUrl = null;
+    let imageUrl = null;
 
-  //   if (file) {
-  //     const { mimetype, buffer } = file;
+    if (file) {
+      // const { mimetype, buffer } = file;
 
-  //     const pinataFile: PinataUploadFile = {
-  //       fileName: BaseHelper.generateFileName('user', mimetype),
-  //       mimetype,
-  //       buffer,
-  //     };
+      // const pinataFile: PinataUploadFile = {
+      //   fileName: BaseHelper.generateFileName('profileImage', mimetype),
+      //   mimetype,
+      //   buffer,
+      // };
 
-  //     const uploadResult = await this.pinataService.uploadFile(pinataFile);
-  //     imageUrl = uploadResult.secretUrl.toString();
-  //   }
+      const uploadResult = await this.pinataService.uploadFile(file);
+      imageUrl = uploadResult;
+    }
 
-  //   return await this.userModel.findByIdAndUpdate(
-  //     userId,
-  //     { ...payload, ...(imageUrl && { imageUrl }) },
-  //     {
-  //       new: true,
-  //     },
-  //   );
-  // }
+    const updateData = {
+      ...payload,
+      ...(username && { referralCode: username }),
+    };
+
+    if (!user?.referralCode) {
+      updateData['referralCode'] = user?.username;
+    }
+
+    return await this.userModel.findByIdAndUpdate(
+      user._id,
+      { ...payload, ...(imageUrl && { imageUrl }), ...updateData },
+      {
+        new: true,
+      },
+    );
+  }
+
   async findOneQuery(query: FilterQuery<UserDocument>) {
     return await this.userModel.findOne(query);
   }
@@ -303,5 +353,28 @@ export class UserService {
     });
 
     return newUser;
+  }
+
+  async checkProfileCompletion(userData: any) {
+    const requiredBasicFields = [
+      'firstName',
+      'lastName',
+      'email',
+      'phone',
+      'professionalTitle',
+      'professionalSummary',
+    ];
+
+    const basicFieldsComplete = requiredBasicFields.every(
+      (field) => userData[field] && userData[field].toString().trim() !== '',
+    );
+
+    const hasExperience = userData.experience && userData.experience.length > 0;
+
+    const hasSkills = userData.skills && userData.skills.length > 0;
+
+    const hasEducation = userData.education && userData.education.length > 0;
+
+    return basicFieldsComplete && hasExperience && hasSkills && hasEducation;
   }
 }
