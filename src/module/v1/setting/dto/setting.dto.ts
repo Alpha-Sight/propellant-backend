@@ -1,9 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
-  IsBoolean,
   IsEmail,
-  IsEnum,
   IsNotEmpty,
   IsNumber,
   IsObject,
@@ -20,7 +18,7 @@ export class UrlsDto {
   webHomepage: string;
 
   @IsUrl()
-  coursesPage: string;
+  waitlistPage: string;
 }
 
 export class AppSettingsDto {
@@ -30,6 +28,10 @@ export class AppSettingsDto {
 
   @IsEmail()
   supportEmail: string;
+
+  @IsNumber()
+  @IsNotEmpty()
+  premiumPricing: number;
 
   @IsObject()
   @ValidateNested()

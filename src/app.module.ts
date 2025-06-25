@@ -12,6 +12,9 @@ import { CredentialModule } from './module/v1/credential/credential.module';
 import { WaitlistModule } from './module/v1/waitlist/waitlist.module';
 import { BlockchainModule } from './module/v1/blockchain/blockchain.module';
 import { CvModule } from './module/v1/cv/cv.module';
+import { PremiumModule } from './module/v1/premium/premium.module';
+import { PaymentModule } from './module/v1/payment/payment.module';
+import { TransactionModule } from './module/v1/transaction/transaction.module';
 
 @Module({
   imports: [
@@ -25,6 +28,9 @@ import { CvModule } from './module/v1/cv/cv.module';
     CredentialModule,
     WaitlistModule,
     CvModule,
+    PremiumModule,
+    PaymentModule,
+    TransactionModule,
     BlockchainModule,
   ],
   controllers: [AppController],
