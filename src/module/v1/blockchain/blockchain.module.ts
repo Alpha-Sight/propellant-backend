@@ -19,11 +19,7 @@ import { CredentialController } from './controllers/credential.controller';
     ]),
   ],
   providers: [RelayerService, WalletService, CredentialService],
-  controllers: [
-    BlockchainController, 
-    WalletController, 
-    CredentialController
-  ],
+  controllers: [BlockchainController, WalletController, CredentialController],
   exports: [RelayerService, WalletService, CredentialService],
 })
 export class BlockchainModule {}

@@ -8,6 +8,7 @@ import { AdminUserController } from './controllers/admin-user.controller';
 import { AdminUserService } from './services/admin-user.service';
 import { MailModule } from '../mail /mail.module';
 import { MongooseModule } from '@nestjs/mongoose';
+import { PinataService } from 'src/common/utils/pinata.util';
 
 @Module({
   imports: [
@@ -17,7 +18,7 @@ import { MongooseModule } from '@nestjs/mongoose';
     RepositoryModule,
   ],
   controllers: [UserController, AdminUserController],
-  providers: [UserService, AdminUserService],
-  exports: [UserService, AdminUserService],
+  providers: [UserService, AdminUserService, PinataService],
+  exports: [UserService, AdminUserService, PinataService],
 })
 export class UserModule {}
