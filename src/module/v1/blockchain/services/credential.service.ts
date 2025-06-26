@@ -143,60 +143,141 @@ export class CredentialService implements OnModuleInit {
 
   async getCredentialsForWallet(walletAddress: string): Promise<any[]> {
     try {
-      // First check if implementation is working
-      const implWorks = await this.checkImplementation();
-      if (!implWorks) {
-        this.logger.warn('Implementation check failed, returning empty credentials');
-        return [];
-      }
+      this.logger.log(`Getting all credentials for wallet: ${walletAddress}`);
       
-      const iface = new ethers.Interface([
-        'function getUserCredentials(address) external view returns (uint256[])'
-      ]);
+      // 1. Get database credentials (including pending ones)
+      const addresses = [walletAddress];
       
-      const data = iface.encodeFunctionData('getUserCredentials', [walletAddress]);
-      
-      this.logger.log(`Calling getUserCredentials for address: ${walletAddress}`);
-      
+      // Also try to get the smart account address
       try {
-        const result = await this.provider.call({
-          to: this.configService.get<string>('CREDENTIAL_VERIFICATION_MODULE_ADDRESS'),
-          data
-        });
-        
-        const decoded = iface.decodeFunctionResult('getUserCredentials', result);
-        const credentialIds = decoded[0];
-        
-        this.logger.log(`Found ${credentialIds.length} credentials for wallet ${walletAddress}`);
-        
-        if (credentialIds.length === 0) {
-          return [];
+        const accountAddress = await this.walletService.getOrCreateAccount(walletAddress);
+        if (accountAddress !== walletAddress) {
+          addresses.push(accountAddress);
         }
-        
-        // Fetch details for each credential
-        const credentials = [];
-        for (const id of credentialIds) {
-          try {
-            const credential = await this.getCredentialDetails(id.toString());
-            credentials.push(credential);
-          } catch (error) {
-            this.logger.warn(`Error fetching credential ${id}: ${error.message}`);
-          }
-        }
-        
-        return credentials;
       } catch (error) {
-        this.logger.warn(`Call to getUserCredentials failed: ${error.message}`);
-        // Try alternative approach - direct call to get all issued credentials
-        return await this.getAllCredentialsForAddress(walletAddress);
+        this.logger.warn(`Could not get account address for ${walletAddress}: ${error.message}`);
       }
+      
+      // Get all credentials from database (all statuses)
+      const dbCredentials = await this.credentialModel.find({
+        subject: { $in: addresses }
+      });
+      
+      this.logger.log(`Found ${dbCredentials.length} credentials in database`);
+      
+      // 2. Get blockchain credentials (only issued/verified ones)
+      let blockchainCredentials = [];
+      
+      // Check if implementation is working
+      const implWorks = await this.checkImplementation();
+      if (implWorks) {
+        try {
+          const iface = new ethers.Interface([
+            'function getUserCredentials(address) external view returns (uint256[])'
+          ]);
+          
+          const data = iface.encodeFunctionData('getUserCredentials', [walletAddress]);
+          
+          const result = await this.provider.call({
+            to: this.configService.get<string>('CREDENTIAL_VERIFICATION_MODULE_ADDRESS'),
+            data
+          });
+          
+          const decoded = iface.decodeFunctionResult('getUserCredentials', result);
+          const credentialIds = decoded[0];
+          
+          this.logger.log(`Found ${credentialIds.length} credentials on blockchain`);
+          
+          // Fetch details for each blockchain credential
+          for (const id of credentialIds) {
+            try {
+              const credential = await this.getCredentialDetails(id.toString());
+              blockchainCredentials.push({
+                ...credential,
+                source: 'blockchain'
+              });
+            } catch (error) {
+              this.logger.warn(`Error fetching blockchain credential ${id}: ${error.message}`);
+            }
+          }
+        } catch (error) {
+          this.logger.warn(`Blockchain credential lookup failed: ${error.message}`);
+        }
+      }
+      
+      // 3. Combine and deduplicate credentials
+      const combinedCredentials = [];
+      const seenCredentials = new Set();
+      
+      // Add database credentials
+      for (const dbCred of dbCredentials) {
+        const credentialData = {
+          id: dbCred.credentialId,
+          name: dbCred.name,
+          description: dbCred.description,
+          status: dbCred.status,
+          subject: dbCred.subject,
+          issuer: dbCred.issuer,
+          credentialType: dbCred.credentialType,
+          createdAt: dbCred.createdAt,
+          transactionId: dbCred.transactionId,
+          transactionHash: dbCred.transactionHash,
+          source: 'database'
+        };
+        
+        combinedCredentials.push(credentialData);
+        seenCredentials.add(dbCred.credentialId);
+      }
+      
+      // Add blockchain credentials that aren't already in database
+      for (const blockchainCred of blockchainCredentials) {
+        if (!seenCredentials.has(blockchainCred.id)) {
+          combinedCredentials.push(blockchainCred);
+        }
+      }
+      
+      this.logger.log(`Returning ${combinedCredentials.length} total credentials`);
+      
+      return combinedCredentials;
+      
     } catch (error) {
       this.logger.error(`Failed to get credentials for wallet: ${error.message}`);
       throw error;
     }
   }
-  getCredentialDetails(arg0: any) {
-    throw new Error('Method not implemented.');
+  async getCredentialDetails(credentialId: string): Promise<any> {
+    try {
+      const iface = new ethers.Interface([
+        'function getCredential(uint256) external view returns (tuple(address issuer, address subject, string name, string description, string metadataURI, uint8 credentialType, uint256 validUntil, bytes32 evidenceHash, bool revocable, uint8 status))'
+      ]);
+      
+      const data = iface.encodeFunctionData('getCredential', [credentialId]);
+      
+      const result = await this.provider.call({
+        to: this.configService.get<string>('CREDENTIAL_VERIFICATION_MODULE_ADDRESS'),
+        data
+      });
+      
+      const decoded = iface.decodeFunctionResult('getCredential', result);
+      const credentialData = decoded[0];
+      
+      return {
+        id: credentialId,
+        issuer: credentialData.issuer,
+        subject: credentialData.subject,
+        name: credentialData.name,
+        description: credentialData.description,
+        metadataURI: credentialData.metadataURI,
+        credentialType: credentialData.credentialType,
+        validUntil: credentialData.validUntil.toString(),
+        evidenceHash: credentialData.evidenceHash,
+        revocable: credentialData.revocable,
+        status: this.mapCredentialStatus(credentialData.status)
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get credential details for ID ${credentialId}: ${error.message}`);
+      throw error;
+    }
   }
 
   // Add a fallback method to get credentials when getUserCredentials fails

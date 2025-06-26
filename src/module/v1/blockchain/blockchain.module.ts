@@ -20,24 +20,24 @@ import { CredentialController } from './controllers/credential.controller';
   imports: [
     ConfigModule,
     MongooseModule.forFeature([
-      { name: Transaction.name, schema: TransactionSchema },
-      { name: Wallet.name, schema: WalletSchema },
       { name: Credential.name, schema: CredentialSchema },
+      { name: Wallet.name, schema: WalletSchema },
+      { name: Transaction.name, schema: TransactionSchema },
     ]),
   ],
   providers: [
-    RelayerService,
-    WalletService,
     CredentialService,
+    WalletService,
+    RelayerService,
   ],
   controllers: [
     WalletController,
     CredentialController,
   ],
   exports: [
-    RelayerService,
-    WalletService,
     CredentialService,
+    WalletService,
+    RelayerService,
   ],
 })
 export class BlockchainModule {}
