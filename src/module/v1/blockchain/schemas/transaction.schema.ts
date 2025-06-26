@@ -3,31 +3,37 @@ import { Document } from 'mongoose';
 
 export type TransactionDocument = Transaction & Document;
 
-@Schema()
+@Schema({ timestamps: true })
 export class Transaction {
-  @Prop({ required: true, index: true })
+  @Prop({ required: true, unique: true, index: true })
   transactionId: string;
 
-  @Prop({ required: true })
+  @Prop({ required: true, index: true })
   userAddress: string;
 
-  @Prop({ required: true })
+  @Prop({ required: true, index: true })
   accountAddress: string;
 
   @Prop({ required: true })
   target: string;
 
-  @Prop({ required: true })
+  @Prop({ required: true, default: '0' })
   value: string;
 
   @Prop({ required: true })
   data: string;
 
-  @Prop({ required: true })
+  @Prop({ required: true, default: 0 })
   operation: number;
 
-  @Prop({ required: true, enum: ['PENDING', 'SUCCESS', 'FAILED'] })
+  @Prop()
+  description?: string;
+
+  @Prop({ required: true, enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'], default: 'PENDING' })
   status: string;
+
+  @Prop({ default: 0 })
+  attempts: number;
 
   @Prop()
   transactionHash?: string;
@@ -39,20 +45,10 @@ export class Transaction {
   gasUsed?: string;
 
   @Prop()
-  error?: string;
-
-  @Prop({ required: true })
-  description: string;
-
-  @Prop({ required: true })
-  createdAt: Date;
+  lastError?: string;
 
   @Prop()
-  updatedAt?: Date;
-
-  // Add this missing property
-  @Prop({ default: false })
-  isAccountCreation: boolean;
+  processedAt?: Date;
 }
 
 export const TransactionSchema = SchemaFactory.createForClass(Transaction);

@@ -22,7 +22,12 @@ export class BlockchainController {
       throw new Error('Unauthorized: Can only submit transactions for your own wallet');
     }
     
-    return this.relayerService.queueTransaction(payload);
+    return this.relayerService.queueTransaction({
+      ...payload,
+      value: payload.value || '0',
+      operation: payload.operation || 0,
+      description: payload.description || 'User submitted transaction',
+    });
   }
 
   @Get('transactions/:id')

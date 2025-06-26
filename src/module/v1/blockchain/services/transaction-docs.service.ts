@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Transaction, TransactionDocument } from '../schemas/transaction.schema';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -30,18 +30,21 @@ export class TransactionDocsService {
     }
     
     // Format for CSV export
-    const data = transactions.map(tx => ({
-      transactionId: tx.transactionId,
-      userAddress: tx.userAddress,
-      accountAddress: tx.accountAddress,
-      target: tx.target,
-      description: tx.description,
-      transactionHash: tx.transactionHash,
-      blockNumber: tx.blockNumber,
-      gasUsed: tx.gasUsed,
-      createdAt: tx.createdAt.toISOString(),
-      completedAt: tx.updatedAt?.toISOString(),
-    }));
+    const data = transactions.map(tx => {
+      const txObj = tx.toObject();
+      return {
+        transactionId: txObj.transactionId,
+        userAddress: txObj.userAddress,
+        accountAddress: txObj.accountAddress,
+        target: txObj.target,
+        description: txObj.description,
+        transactionHash: txObj.transactionHash,
+        blockNumber: txObj.blockNumber,
+        gasUsed: txObj.gasUsed,
+        createdAt: txObj._id ? (txObj._id as unknown as Types.ObjectId).getTimestamp().toISOString() : new Date().toISOString(),
+        completedAt: txObj._id ? (txObj._id as unknown as Types.ObjectId).getTimestamp().toISOString() : new Date().toISOString(), // Using _id timestamp as fallback since updatedAt doesn't exist
+      };
+    });
     
     // Create directory if it doesn't exist
     const reportDir = path.join(process.cwd(), 'reports');

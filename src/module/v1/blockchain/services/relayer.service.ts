@@ -10,6 +10,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Transaction, TransactionDocument } from '../schemas/transaction.schema';
 import { WalletService } from './wallet.service';
+import { Credential, CredentialDocument } from '../schemas/credential.schema'; // Add this import
 
 // Define transaction status enum
 enum TransactionStatus {
@@ -33,6 +34,7 @@ export class RelayerService implements OnModuleInit {
     private configService: ConfigService,
     private eventEmitter: EventEmitter2,
     @InjectModel(Transaction.name) private transactionModel: Model<TransactionDocument>,
+    @InjectModel(Credential.name) private credentialModel: Model<CredentialDocument>, // Add this line
     @Inject(forwardRef(() => WalletService)) private readonly walletService: WalletService,
   ) {}
 
@@ -111,60 +113,59 @@ async getUserTransactions(walletAddress: string) {
     isAccountCreation?: boolean; // Add this flag
   }) {
     try {
-      const { userAddress, target, value, data, operation, description, isAccountCreation } = payload;
+      // Debug: Log the transaction details
+      this.logger.log(`Queuing transaction: ${JSON.stringify(payload)}`);
       
-      // Skip account lookup for account creation transactions
-      let accountAddress;
-      if (isAccountCreation) {
-        // For account creation, we use the target as the factory address
-        accountAddress = target;
-        this.logger.log(`Processing account creation for wallet: ${userAddress}`);
-      } else {
-        // For regular transactions, get the user's account address
-        accountAddress = await this.accountFactory.getAccount(userAddress);
-        
-        if (accountAddress === ethers.ZeroAddress) {
-          throw new Error(`No account found for user: ${userAddress}`);
-        }
+      // Validate required fields
+      if (!payload.target || !payload.data) {
+        throw new Error('Invalid transaction payload: missing target or data');
       }
       
       // Generate a unique transaction ID
       const transactionId = ethers.keccak256(
-        ethers.solidityPacked(
-          ['address', 'address', 'uint256', 'bytes', 'uint256', 'uint256'],
-          [accountAddress, target, value, data, operation, Date.now()]
+        ethers.toUtf8Bytes(
+          `${payload.userAddress}-${payload.target}-${Date.now()}-${Math.random()}`
         )
       );
       
-      // Store the transaction in database
+      // Get or determine the account address
+      let accountAddress = payload.userAddress;
+      
+      // If we have access to WalletService, try to get the smart account address
+      try {
+        if (this.walletService) {
+          accountAddress = await this.walletService.getOrCreateAccount(payload.userAddress);
+        }
+      } catch (error) {
+        this.logger.warn(`Could not get smart account address, using user address: ${error.message}`);
+        accountAddress = payload.userAddress;
+      }
+      
+      // Create transaction record with all required fields
       const transaction = new this.transactionModel({
-        transactionId,
-        userAddress,
-        accountAddress,
-        target,
-        value,
-        data,
-        operation,
+        transactionId: transactionId, // Add this required field
+        userAddress: payload.userAddress,
+        accountAddress: accountAddress, // Add this required field
+        target: payload.target,
+        value: payload.value || "0",
+        data: payload.data,
+        operation: payload.operation || 0,
+        description: payload.description,
         status: 'PENDING',
-        description,
         createdAt: new Date(),
-        isAccountCreation: isAccountCreation || false,
+        attempts: 0
       });
       
       await transaction.save();
-      
       this.logger.log(`Transaction queued with ID: ${transactionId}`);
       
-      // Emit event for real-time notifications
-      this.eventEmitter.emit('transaction.queued', {
-        transactionId,
-        userAddress,
-        status: 'PENDING',
-      });
+      // Process immediately for testing (remove in production)
+      // Uncomment the line below if you want immediate processing
+      // this.processTransaction(transaction._id.toString());
       
       return {
-        transactionId,
-        status: 'PENDING',
+        transactionId: transactionId, // Return the generated transaction ID
+        status: 'PENDING'
       };
     } catch (error) {
       this.logger.error(`Failed to queue transaction: ${error.message}`);
@@ -189,9 +190,9 @@ async getUserTransactions(walletAddress: string) {
       status: transaction.status,
       blockNumber: transaction.blockNumber,
       transactionHash: transaction.transactionHash,
-      error: transaction.error,
-      createdAt: transaction.createdAt,
-      updatedAt: transaction.updatedAt,
+      error: transaction.lastError,
+      createdAt: transaction['createdAt'],
+      updatedAt: transaction['updatedAt'],
     };
   }
 
@@ -249,9 +250,9 @@ async getUserTransactions(walletAddress: string) {
         }
         
         try {
-          await this.processTransaction(transaction);
+          await this.processTransaction(transaction._id.toString());
         } catch (error) {
-          this.logger.error(`Failed to process transaction ${transaction.transactionId}: ${error.message}`);
+          this.logger.error(`Failed to process transaction ${transaction._id}: ${error.message}`);
         }
       }
     } catch (error) {
@@ -262,63 +263,70 @@ async getUserTransactions(walletAddress: string) {
   /**
    * Process a single transaction
    */
-  private async processTransaction(transaction: TransactionDocument): Promise<void> {
+  private async processTransaction(transactionMongoId: string) {
     try {
-      this.logger.log(`Processing transaction: ${transaction.transactionId}`);
-      
-      // Ensure we have a valid account address
-      if (!transaction.accountAddress) {
-        throw new Error('Transaction missing account address');
+      const transaction = await this.transactionModel.findById(transactionMongoId);
+      if (!transaction) {
+        this.logger.warn(`Transaction not found by mongo ID: ${transactionMongoId}`);
+        return;
       }
-      
-      // Create user operation
-      const userOp = await this.createUserOperation({
-        sender: transaction.accountAddress,
-        target: transaction.target,
-        value: transaction.value,
+
+      this.logger.log(`Processing transaction ${transaction.transactionId}: ${transaction.description}`);
+
+      const relayerPrivateKey = this.configService.get<string>('RELAYER_PRIVATE_KEY');
+      if (!relayerPrivateKey) {
+        throw new Error('RELAYER_PRIVATE_KEY not configured');
+      }
+
+      const provider = new ethers.JsonRpcProvider(this.configService.get<string>('BLOCKCHAIN_RPC_URL'));
+      const relayerWallet = new ethers.Wallet(relayerPrivateKey, provider);
+
+      const tx = await relayerWallet.sendTransaction({
+        to: transaction.target,
         data: transaction.data,
-        operation: transaction.operation,
+        value: transaction.value || 0,
+        gasLimit: 500000,
       });
-      
-      this.logger.log(`Created user operation for ${transaction.transactionId}`);
-      
-      // Submit the user operation
-      const receipt = await this.submitUserOperation(userOp);
-      
-      // Update transaction with just the hash string, not the entire receipt object
+
+      this.logger.log(`Transaction sent: ${tx.hash}`);
+      const receipt = await tx.wait();
+      this.logger.log(`Transaction confirmed in block: ${receipt.blockNumber}`);
+
+      // Update the transaction document to COMPLETED
       await this.transactionModel.updateOne(
-        { transactionId: transaction.transactionId },
+        { _id: transactionMongoId },
         {
-          status: TransactionStatus.CONFIRMED,
-          blockNumber: receipt.blockNumber.toString(), // Convert BigInt to string if needed
-          transactionHash: receipt.hash, // Just the hash string, not the whole receipt
-        },
+          status: 'COMPLETED',
+          transactionHash: tx.hash,
+          blockNumber: receipt.blockNumber,
+          processedAt: new Date(),
+        }
       );
-      
-      // Emit transaction confirmation event
-      this.eventEmitter.emit('transaction.confirmed', { 
-        transactionId: transaction.transactionId, 
-        blockNumber: receipt.blockNumber, 
-        transactionHash: receipt.hash 
-      });
-      
-      return receipt;
+
+      // Find the associated credential using the transaction's unique hash ID
+      // and update its status to ISSUED
+      await this.credentialModel.updateOne(
+        { transactionId: transaction.transactionId }, // Use the correct ID for lookup
+        {
+          status: 'ISSUED',
+          transactionHash: tx.hash,
+          blockNumber: receipt.blockNumber,
+        }
+      );
+
+      this.logger.log(`Transaction ${transaction.transactionId} and associated credential updated successfully.`);
+
     } catch (error) {
-      // Add safeguard: Mark transaction as FAILED so it won't be processed again
+      this.logger.error(`Failed to process transaction with mongo ID ${transactionMongoId}: ${error.message}`);
       await this.transactionModel.updateOne(
-        { transactionId: transaction.transactionId },
+        { _id: transactionMongoId },
         {
-          status: TransactionStatus.FAILED,
-          error: {
-            message: error.message || 'Unknown error',
-            type: error.code || 'UNKNOWN',
-            details: JSON.stringify(error, Object.getOwnPropertyNames(error))
-          },
-        },
+          $inc: { attempts: 1 },
+          lastError: error.message,
+          status: 'FAILED',
+          updatedAt: new Date(),
+        }
       );
-      
-      this.logger.error(`Transaction processing failed for ${transaction.transactionId}: ${error.message}`);
-      throw error;
     }
   }
 
