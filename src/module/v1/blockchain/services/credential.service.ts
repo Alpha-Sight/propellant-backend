@@ -323,9 +323,13 @@ export class CredentialService implements OnModuleInit {
     }
   }
 
-  async verifyCredential(credentialId: string, verifierId: string) {
+  async verifyCredential(credentialId: string, verifierAddress: string) {
     try {
-      this.logger.log(`Verifying credential: ${credentialId}`);
+      this.logger.log(`Verifying credential: ${credentialId} by verifier: ${verifierAddress}`);
+
+      if (!ethers.isAddress(verifierAddress)) {
+        throw new Error(`Invalid verifier address format: ${verifierAddress}`);
+      }
       
       // Find the credential in database first
       const dbCredential = await this.credentialModel.findOne({
@@ -336,20 +340,19 @@ export class CredentialService implements OnModuleInit {
         throw new Error(`Credential not found: ${credentialId}`);
       }
       
-      // Check if credential is already issued on blockchain
-      if (dbCredential.status !== 'ISSUED') {
-        throw new Error(`Credential must be issued on blockchain before verification. Current status: ${dbCredential.status}`);
+      // Check if credential is in a valid state for verification
+      // FIX: Allow verification if status is ISSUED or if it's a retry on a VERIFYING status.
+      if (dbCredential.status !== 'ISSUED' && dbCredential.status !== 'VERIFYING') {
+        throw new Error(`Credential must be in ISSUED or VERIFYING state for verification. Current status: ${dbCredential.status}`);
       }
       
       // Get the blockchain credential ID from the transaction receipt
       let blockchainCredentialId: number;
       
       if (dbCredential.transactionHash) {
-        // Parse the transaction receipt to get the credential ID
         const receipt = await this.provider.getTransactionReceipt(dbCredential.transactionHash);
         
         if (receipt && receipt.logs.length > 0) {
-          // Parse the CredentialSubmitted event to get the credential ID
           const iface = new ethers.Interface([
             'event CredentialSubmitted(uint256 indexed credentialId, address indexed issuer, address indexed subject)'
           ]);
@@ -377,16 +380,23 @@ export class CredentialService implements OnModuleInit {
       
       this.logger.log(`Found blockchain credential ID: ${blockchainCredentialId}`);
       
-      // Now verify the credential on blockchain
+      // **FIXED**: Encode the function call with the correct signature and parameters
       const iface = new ethers.Interface([
-        'function verifyCredential(uint256 credentialId)'
+        'function verifyCredential(uint256 credentialId, uint8 status, string memory notes)'
       ]);
+
+      const verificationStatus = 1; // 1 = VERIFIED from your contract's enum
+      const verificationNotes = `Verified by ${verifierAddress} via PropellantBD`;
       
-      const data = iface.encodeFunctionData('verifyCredential', [blockchainCredentialId]);
+      const data = iface.encodeFunctionData('verifyCredential', [
+        blockchainCredentialId,
+        verificationStatus,
+        verificationNotes
+      ]);
       
       // Queue verification transaction
       const transactionResult = await this.relayerService.queueTransaction({
-        userAddress: this.configService.get<string>('RELAYER_ADDRESS'),
+        userAddress: verifierAddress, // **FIXED**: Use the verifier's wallet address
         target: this.configService.get<string>('CREDENTIAL_VERIFICATION_MODULE_ADDRESS'),
         value: "0",
         data,
