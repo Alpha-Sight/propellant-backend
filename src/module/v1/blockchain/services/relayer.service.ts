@@ -303,18 +303,24 @@ async getUserTransactions(walletAddress: string) {
         }
       );
 
-      // Find the associated credential using the transaction's unique hash ID
-      // and update its status to ISSUED
+      // **FIX**: Determine the correct status based on transaction type
+      let credentialStatus = 'ISSUED'; // Default for issuance transactions
+      
+      if (transaction.description && transaction.description.includes('Verify credential')) {
+        credentialStatus = 'VERIFIED'; // For verification transactions
+      }
+
+      // Update the associated credential
       await this.credentialModel.updateOne(
-        { transactionId: transaction.transactionId }, // Use the correct ID for lookup
+        { transactionId: transaction.transactionId },
         {
-          status: 'ISSUED',
+          status: credentialStatus, // Use the determined status
           transactionHash: tx.hash,
           blockNumber: receipt.blockNumber,
         }
       );
 
-      this.logger.log(`Transaction ${transaction.transactionId} and associated credential updated successfully.`);
+      this.logger.log(`Transaction ${transaction.transactionId} and associated credential updated to ${credentialStatus}.`);
 
     } catch (error) {
       this.logger.error(`Failed to process transaction with mongo ID ${transactionMongoId}: ${error.message}`);
