@@ -23,13 +23,7 @@ export class User {
   profilePhoto: string;
 
   @Prop({ required: false, default: null, trim: true, index: true })
-  firstName: string;
-
-  @Prop({ required: false, default: null, index: true })
-  lastName: string;
-
-  @Prop({ default: null, index: true })
-  username: string;
+  fullname: string;
 
   @Prop({ default: '' })
   bio: string;
@@ -47,37 +41,16 @@ export class User {
   authSource: AuthSourceEnum;
 
   @Prop({ default: '' })
-  location: string;
+  linkedin: string;
 
-  @Prop()
-  city?: string;
-
-  @Prop()
-  country?: string;
-
-  @Prop()
-  postalCode?: string;
-
-  @Prop()
-  linkedin?: string;
-
-  @Prop()
-  github?: string;
-
-  @Prop()
-  portfolio?: string;
+  @Prop({ default: '' })
+  github: string;
 
   @Prop({ default: '' })
   twitter: string;
 
   @Prop({ default: '' })
   instagram: string;
-
-  @Prop({ default: '' })
-  facebook?: string;
-
-  @Prop()
-  website?: string;
 
   @Prop({ default: null, index: true })
   referralCode: string;
@@ -121,10 +94,10 @@ UserSchema.pre(/^find/, function (next) {
   next();
 });
 
-UserSchema.pre('validate', async function (next) {
-  if (!this.referralCode && this.username) {
-    this.referralCode = this.username;
-  }
+// UserSchema.pre('validate', async function (next) {
+//   if (!this.referralCode) {
+//     this.referralCode = BaseHelper.generateReferenceCode();
+//   }
 
-  next();
-});
+//   next();
+// });

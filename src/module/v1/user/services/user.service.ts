@@ -3,7 +3,7 @@ import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
-  UnprocessableEntityException,
+  // UnprocessableEntityException,
 } from '@nestjs/common';
 import { User, UserDocument } from '../schemas/user.schema';
 import { ClientSession, FilterQuery, Model, UpdateQuery } from 'mongoose';
@@ -27,6 +27,8 @@ import {
 } from '../../../../common/enums/user.enum';
 import { GoogleAuthDto } from '../../auth/dto/auth.dto';
 import { PinataService } from 'src/common/utils/pinata.util';
+import { PaginationDto } from '../../repository/dto/repository.dto';
+import { RepositoryService } from '../../repository/repository.service';
 
 @Injectable()
 export class UserService {
@@ -34,6 +36,7 @@ export class UserService {
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private otpService: OtpService,
     private pinataService: PinataService,
+    private repositoryService: RepositoryService,
   ) {}
 
   async createUser(
@@ -47,12 +50,10 @@ export class UserService {
         throw new BadRequestException('Please accept terms and conditions');
       }
 
-      const [userWithEmailExists, userWithPhoneExists, userWithUsernameExist] =
-        await Promise.all([
-          this.userModel.exists({ email: payload.email }),
-          this.userModel.exists({ phone: payload.phone }),
-          this.userModel.exists({ username: payload.username }),
-        ]);
+      const [userWithEmailExists, userWithPhoneExists] = await Promise.all([
+        this.userModel.exists({ email: payload.email }),
+        this.userModel.exists({ phone: payload.phone }),
+      ]);
 
       if (userWithEmailExists) {
         throw new BadRequestException('User with this email already exists');
@@ -60,12 +61,6 @@ export class UserService {
 
       if (userWithPhoneExists) {
         throw new BadRequestException('User with this phone already exists');
-      }
-
-      if (userWithUsernameExist) {
-        throw new UnprocessableEntityException(
-          'Username already used, try another name',
-        );
       }
 
       delete payload.referralCode; // delete the referral code to prevent persisting this as the new user referral code
@@ -88,11 +83,15 @@ export class UserService {
         userRole = UserRoleEnum.ORGANIZATION;
       }
 
+      // Generate unique referral code for the new user
+      const userReferralCode = await BaseHelper.generateReferenceCode();
+
       const createdUser = await this.userModel.create({
         ...payload,
         password: hashedPassword,
         role: userRole,
         referredBy: referralUserId,
+        referralCode: userReferralCode,
       });
 
       // update referral user referral count
@@ -107,6 +106,7 @@ export class UserService {
           },
         );
       }
+      // update user referral code
 
       // TODO: not important but we can send an email or push notification to notify user of new referral
 
@@ -247,20 +247,20 @@ export class UserService {
     payload: UpdateProfileDto,
     file?: Express.Multer.File,
   ) {
-    const { username } = payload;
+    // const { username } = payload;
 
-    if (username) {
-      const userWithUsernameExist = await this.userModel.findOne({
-        username,
-        _id: { $ne: user._id },
-      });
+    // if (username) {
+    //   const userWithUsernameExist = await this.userModel.findOne({
+    //     username,
+    //     _id: { $ne: user._id },
+    //   });
 
-      if (userWithUsernameExist) {
-        throw new UnprocessableEntityException(
-          'Username already used, try another name',
-        );
-      }
-    }
+    //   if (userWithUsernameExist) {
+    //     throw new UnprocessableEntityException(
+    //       'Username already used, try another name',
+    //     );
+    //   }
+    // }
 
     let imageUrl = null;
 
@@ -279,12 +279,12 @@ export class UserService {
 
     const updateData = {
       ...payload,
-      ...(username && { referralCode: username }),
+      // ...(username && { referralCode: username }),
     };
 
-    if (!user?.referralCode) {
-      updateData['referralCode'] = user?.username;
-    }
+    // if (!user?.referralCode) {
+    //   updateData['referralCode'] = user?.username;
+    // }
 
     return await this.userModel.findByIdAndUpdate(
       user._id,
@@ -376,5 +376,16 @@ export class UserService {
     const hasEducation = userData.education && userData.education.length > 0;
 
     return basicFieldsComplete && hasExperience && hasSkills && hasEducation;
+  }
+
+  async showUserReferrals(user: UserDocument, query: PaginationDto) {
+    return this.repositoryService.paginate({
+      model: this.userModel,
+      query,
+      options: {
+        _id: { $ne: user._id },
+        referredBy: user._id,
+      },
+    });
   }
 }

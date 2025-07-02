@@ -17,24 +17,4 @@ export class PaginationDto {
   @IsOptional()
   @IsString()
   searchQuery?: string;
-
-  @IsOptional()
-  @IsString()
-  type?: string;
-
-  @IsOptional()
-  @IsString()
-  status?: string;
-
-  @IsOptional()
-  @IsString()
-  verificationLevel?: string;
-
-  @IsOptional()
-  @IsString()
-  issuer?: string;
-
-  @IsOptional()
-  @IsString()
-  visibility?: string;
 }

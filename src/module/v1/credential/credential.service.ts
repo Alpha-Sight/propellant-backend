@@ -11,7 +11,8 @@ import { CredentialDocument, Credential } from './schema/credential.schema';
 import { UserDocument } from '../user/schemas/user.schema';
 import {
   UploadCredentialDto,
-  UpdateCredentialStatusDto,
+  GetAllCredentialsDto,
+  UpdateCredentialDto,
 } from './dto/credential.dto';
 import { PaginationDto } from '../repository/dto/repository.dto';
 import { PinataService } from 'src/common/utils/pinata.util';
@@ -48,12 +49,12 @@ export class CredentialService {
     }
   }
 
-  async adminGetAllCredentials(query: PaginationDto) {
+  async adminGetAllCredentials(query: GetAllCredentialsDto) {
     const {
       type,
-      status,
+      verificationStatus,
       verificationLevel,
-      issuer,
+      category,
       visibility,
       ...paginationQuery
     } = query;
@@ -64,29 +65,47 @@ export class CredentialService {
       options: {
         isDeleted: { $ne: true },
         ...(type && { type }),
-        ...(status && { status }),
+        ...(verificationStatus && { verificationStatus }),
         ...(verificationLevel && { verificationLevel }),
-        ...(issuer && { issuer: { $regex: issuer, $options: 'i' } }),
+        ...(category && { category: { $regex: category, $options: 'i' } }),
         ...(visibility !== undefined && { visibility }),
       },
     });
   }
 
-  async updateCredentialStatus(
-    credentialId: string,
-    payload: UpdateCredentialStatusDto,
+  async updateCredential(
+    user: UserDocument,
+    payload: UpdateCredentialDto,
+    file?: Express.Multer.File,
   ): Promise<CredentialDocument> {
-    const credential = await this.credentialModel.findByIdAndUpdate(
-      credentialId,
-      { verificationStatus: payload.status },
-      { new: true },
-    );
+    const { credentialId, ...updateFields } = payload;
 
-    if (!credential) {
+    const existingCredential = await this.credentialModel.findOne({
+      _id: credentialId,
+      user: user._id,
+    });
+
+    if (!existingCredential) {
       throw new NotFoundException('No Credential Found');
     }
 
-    return credential;
+    // If a new file is provided, unpin the old one and upload the new file
+    if (file) {
+      if (existingCredential.ipfsHash) {
+        await this.pinataService.unpinFile(existingCredential.ipfsHash);
+      }
+
+      const newIpfsHash = await this.pinataService.uploadFile(file);
+      existingCredential.ipfsHash = newIpfsHash;
+    }
+
+    const updatedCredential = await this.credentialModel.findByIdAndUpdate(
+      credentialId,
+      { ...updateFields },
+      { new: true },
+    );
+
+    return updatedCredential;
   }
 
   async getCredentialById(credentialId: string): Promise<CredentialDocument> {
@@ -112,12 +131,22 @@ export class CredentialService {
         user: user._id,
       });
 
-      if (credential && credential.ipfsHash) {
-        await this.credentialModel.deleteOne({ _id: credentialId });
-        await this.pinataService.unpinFile(credential.ipfsHash);
+      if (!credential) {
+        throw new NotFoundException(
+          'Credential not found or it does not belong to this user',
+        );
       }
 
-      throw new NotFoundException('Credential not found');
+      // Soft delete the credential
+      await this.credentialModel.findOneAndUpdate(
+        { _id: credentialId },
+        { isDeleted: true },
+      );
+
+      // Unpin from IPFS if it exists
+      if (credential.ipfsHash) {
+        await this.pinataService.unpinFile(credential.ipfsHash);
+      }
     } catch (error) {
       console.error('Delete credential error:', error);
       if (error instanceof NotFoundException) throw error;
@@ -138,12 +167,15 @@ export class CredentialService {
     });
   }
 
-  async getSingleUserCredentials(user: UserDocument, query: PaginationDto) {
+  async getSingleUserCredentials(
+    user: UserDocument,
+    query: GetAllCredentialsDto,
+  ) {
     const {
       type,
-      status,
+      verificationStatus,
       verificationLevel,
-      issuer,
+      category,
       visibility,
       ...paginationQuery
     } = query;
@@ -155,9 +187,9 @@ export class CredentialService {
         user: user._id,
         isDeleted: { $ne: true },
         ...(type && { type }),
-        ...(status && { status }),
+        ...(verificationStatus && { verificationStatus }),
         ...(verificationLevel && { verificationLevel }),
-        ...(issuer && { issuer: { $regex: issuer, $options: 'i' } }),
+        ...(category && { category: { $regex: category, $options: 'i' } }),
         ...(visibility !== undefined && { visibility }),
       },
       populateFields: [{ path: 'user', select: 'username email' }],

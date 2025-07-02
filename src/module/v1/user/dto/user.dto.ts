@@ -33,10 +33,6 @@ export class CreateUserDto {
 
   @IsString()
   @IsOptional()
-  username?: string;
-
-  @IsString()
-  @IsOptional()
   referralCode?: string;
 
   @IsEnum(UserRoleEnum)
@@ -97,44 +93,16 @@ export class UpdatePasswordDto {
 export class UpdateProfileDto {
   @IsOptional()
   @IsString()
-  username: string;
-
-  @IsOptional()
-  @IsString()
-  firstName: string;
-
-  @IsOptional()
-  @IsString()
-  lastName: string;
+  fullname?: string;
 
   @IsOptional()
   @IsString()
   @IsPhoneNumber()
-  phone: string;
+  phone?: string;
 
   @IsOptional()
   @IsString()
-  bio: string;
-
-  @IsOptional()
-  @IsString()
-  professionalTitle?: string;
-
-  @IsOptional()
-  @IsString()
-  address?: string;
-
-  @IsOptional()
-  @IsString()
-  city?: string;
-
-  @IsOptional()
-  @IsString()
-  country?: string;
-
-  @IsOptional()
-  @IsString()
-  postalCode?: string;
+  bio?: string;
 
   @IsOptional()
   @IsUrl()

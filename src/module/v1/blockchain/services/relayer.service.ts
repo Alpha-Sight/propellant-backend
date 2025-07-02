@@ -8,7 +8,10 @@ import * as PaymasterABI from '../abis/Paymaster.json';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Transaction, TransactionDocument } from '../schemas/transaction.schema';
+import {
+  Transaction,
+  TransactionDocument,
+} from '../schemas/transaction.schema';
 
 @Injectable()
 export class RelayerService implements OnModuleInit {
@@ -24,25 +27,28 @@ export class RelayerService implements OnModuleInit {
   constructor(
     private configService: ConfigService,
     private eventEmitter: EventEmitter2,
-    @InjectModel(Transaction.name) private transactionModel: Model<TransactionDocument>,
+    @InjectModel(Transaction.name)
+    private transactionModel: Model<TransactionDocument>,
   ) {}
 
   /**
- * Get transactions for a specific user wallet address
- * @param walletAddress The wallet address to fetch transactions for
- */
-async getUserTransactions(walletAddress: string) {
-  // Query transactions where the user address matches the provided wallet address
-  const transactions = await this.transactionModel.find({
-    userAddress: walletAddress
-  }).sort({ createdAt: -1 }); // Most recent first
-  
-  return transactions;
-}
+   * Get transactions for a specific user wallet address
+   * @param walletAddress The wallet address to fetch transactions for
+   */
+  async getUserTransactions(walletAddress: string) {
+    // Query transactions where the user address matches the provided wallet address
+    const transactions = await this.transactionModel
+      .find({
+        userAddress: walletAddress,
+      })
+      .sort({ createdAt: -1 }); // Most recent first
+
+    return transactions;
+  }
   async onModuleInit() {
     await this.initializeProvider();
     this.logger.log('Relayer service initialized');
-    
+
     // Start background processing of transactions
     this.startTransactionProcessing();
   }
@@ -51,33 +57,40 @@ async getUserTransactions(walletAddress: string) {
     try {
       const rpcUrl = this.configService.get<string>('BLOCKCHAIN_RPC_URL');
       const privateKey = this.configService.get<string>('RELAYER_PRIVATE_KEY');
-      
+
       if (!rpcUrl || !privateKey) {
         throw new Error('Missing blockchain configuration');
       }
 
       this.provider = new ethers.JsonRpcProvider(rpcUrl);
       this.wallet = new ethers.Wallet(privateKey, this.provider);
-      
-      this.logger.log(`Relayer initialized with address: ${this.wallet.address}`);
+
+      this.logger.log(
+        `Relayer initialized with address: ${this.wallet.address}`,
+      );
 
       // Initialize contracts
-      const entryPointAddress = this.configService.get<string>('ENTRY_POINT_ADDRESS');
-      const accountFactoryAddress = this.configService.get<string>('ACCOUNT_FACTORY_ADDRESS');
-      const paymasterAddress = this.configService.get<string>('PAYMASTER_ADDRESS');
-      
+      const entryPointAddress = this.configService.get<string>(
+        'ENTRY_POINT_ADDRESS',
+      );
+      const accountFactoryAddress = this.configService.get<string>(
+        'ACCOUNT_FACTORY_ADDRESS',
+      );
+      const paymasterAddress =
+        this.configService.get<string>('PAYMASTER_ADDRESS');
+
       this.entryPoint = new ethers.Contract(
         entryPointAddress,
         EntryPointABI.abi,
         this.wallet,
       );
-      
+
       this.accountFactory = new ethers.Contract(
         accountFactoryAddress,
         AccountFactoryABI.abi,
         this.wallet,
       );
-      
+
       this.paymaster = new ethers.Contract(
         paymasterAddress,
         PaymasterABI.abi,
@@ -102,31 +115,41 @@ async getUserTransactions(walletAddress: string) {
     isAccountCreation?: boolean; // Add this flag
   }) {
     try {
-      const { userAddress, target, value, data, operation, description, isAccountCreation } = payload;
-      
+      const {
+        userAddress,
+        target,
+        value,
+        data,
+        operation,
+        description,
+        isAccountCreation,
+      } = payload;
+
       // Skip account lookup for account creation transactions
       let accountAddress;
       if (isAccountCreation) {
         // For account creation, we use the target as the factory address
         accountAddress = target;
-        this.logger.log(`Processing account creation for wallet: ${userAddress}`);
+        this.logger.log(
+          `Processing account creation for wallet: ${userAddress}`,
+        );
       } else {
         // For regular transactions, get the user's account address
         accountAddress = await this.accountFactory.getAccount(userAddress);
-        
+
         if (accountAddress === ethers.ZeroAddress) {
           throw new Error(`No account found for user: ${userAddress}`);
         }
       }
-      
+
       // Generate a unique transaction ID
       const transactionId = ethers.keccak256(
         ethers.solidityPacked(
           ['address', 'address', 'uint256', 'bytes', 'uint256', 'uint256'],
-          [accountAddress, target, value, data, operation, Date.now()]
-        )
+          [accountAddress, target, value, data, operation, Date.now()],
+        ),
       );
-      
+
       // Store the transaction in database
       const transaction = new this.transactionModel({
         transactionId,
@@ -140,18 +163,18 @@ async getUserTransactions(walletAddress: string) {
         description,
         createdAt: new Date(),
       });
-      
+
       await transaction.save();
-      
+
       this.logger.log(`Transaction queued with ID: ${transactionId}`);
-      
+
       // Emit event for real-time notifications
       this.eventEmitter.emit('transaction.queued', {
         transactionId,
         userAddress,
         status: 'PENDING',
       });
-      
+
       return {
         transactionId,
         status: 'PENDING',
@@ -169,11 +192,11 @@ async getUserTransactions(walletAddress: string) {
     const transaction = await this.transactionModel.findOne({
       transactionId,
     });
-    
+
     if (!transaction) {
       throw new Error(`Transaction not found: ${transactionId}`);
     }
-    
+
     return {
       transactionId,
       status: transaction.status,
@@ -191,7 +214,7 @@ async getUserTransactions(walletAddress: string) {
   private startTransactionProcessing() {
     setInterval(async () => {
       if (this.isProcessing) return;
-      
+
       try {
         this.isProcessing = true;
         await this.processPendingTransactions();
@@ -207,26 +230,33 @@ async getUserTransactions(walletAddress: string) {
    * Process pending transactions
    */
   private async processPendingTransactions() {
-    const pendingTransactions = await this.transactionModel.find({
-      status: 'PENDING',
-    }).sort({ createdAt: 1 }).limit(10);
-    
+    const pendingTransactions = await this.transactionModel
+      .find({
+        status: 'PENDING',
+      })
+      .sort({ createdAt: 1 })
+      .limit(10);
+
     if (pendingTransactions.length === 0) return;
-    
-    this.logger.log(`Processing ${pendingTransactions.length} pending transactions`);
-    
+
+    this.logger.log(
+      `Processing ${pendingTransactions.length} pending transactions`,
+    );
+
     for (const transaction of pendingTransactions) {
       try {
         await this.processTransaction(transaction);
       } catch (error) {
-        this.logger.error(`Failed to process transaction ${transaction.transactionId}: ${error.message}`);
-        
+        this.logger.error(
+          `Failed to process transaction ${transaction.transactionId}: ${error.message}`,
+        );
+
         // Update transaction status
         transaction.status = 'FAILED';
         transaction.error = error.message;
         transaction.updatedAt = new Date();
         await transaction.save();
-        
+
         // Emit event
         this.eventEmitter.emit('transaction.failed', {
           transactionId: transaction.transactionId,
@@ -241,8 +271,16 @@ async getUserTransactions(walletAddress: string) {
    * Process a single transaction
    */
   private async processTransaction(transaction: TransactionDocument) {
-    const { transactionId, userAddress, accountAddress, target, value, data, operation } = transaction;
-    
+    const {
+      transactionId,
+      userAddress,
+      accountAddress,
+      target,
+      value,
+      data,
+      operation,
+    } = transaction;
+
     // Create user operation
     const userOp = await this.createUserOperation({
       sender: accountAddress,
@@ -251,22 +289,22 @@ async getUserTransactions(walletAddress: string) {
       data,
       operation,
     });
-    
+
     // Submit user operation
     const transactionHash = await this.submitUserOperation(userOp);
-    
+
     // Wait for transaction to be mined
     const receipt = await this.provider.waitForTransaction(transactionHash);
-    
+
     // Update transaction status
     transaction.status = receipt.status === 1 ? 'SUCCESS' : 'FAILED';
     transaction.transactionHash = transactionHash;
     transaction.blockNumber = receipt.blockNumber;
     transaction.gasUsed = receipt.gasUsed.toString();
     transaction.updatedAt = new Date();
-    
+
     await transaction.save();
-    
+
     // Emit event
     this.eventEmitter.emit('transaction.completed', {
       transactionId,
@@ -275,9 +313,11 @@ async getUserTransactions(walletAddress: string) {
       transactionHash,
       blockNumber: receipt.blockNumber,
     });
-    
-    this.logger.log(`Transaction ${transactionId} processed with status: ${transaction.status}`);
-    
+
+    this.logger.log(
+      `Transaction ${transactionId} processed with status: ${transaction.status}`,
+    );
+
     return receipt;
   }
 
@@ -299,15 +339,16 @@ async getUserTransactions(walletAddress: string) {
   }) {
     // Get the current nonce for this account
     const nonce = await this.entryPoint.getNonce(sender, 0);
-    
+
     // Prepare calldata
     const callData = this.encodeExecuteCallData(target, value, data);
-    
+
     // Estimate gas
     const feeData = await this.provider.getFeeData();
-    const gasPrice = feeData.gasPrice || feeData.maxFeePerGas || BigInt(30000000000); // fallback value
+    const gasPrice =
+      feeData.gasPrice || feeData.maxFeePerGas || BigInt(30000000000); // fallback value
     const gasLimit = await this.estimateGas(sender, callData);
-    
+
     // Create user operation
     const userOp: UserOperationStruct = {
       sender,
@@ -322,10 +363,10 @@ async getUserTransactions(walletAddress: string) {
       paymasterAndData: this.encodePaymasterData(),
       signature: '0x',
     };
-    
+
     // Sign the user operation
     userOp.signature = await this.signUserOp(userOp);
-    
+
     return userOp;
   }
 
@@ -336,8 +377,12 @@ async getUserTransactions(walletAddress: string) {
     const executeInterface = new ethers.Interface([
       'function execute(address target, uint256 value, bytes data) returns (bytes)',
     ]);
-    
-    return executeInterface.encodeFunctionData('execute', [target, value, data]);
+
+    return executeInterface.encodeFunctionData('execute', [
+      target,
+      value,
+      data,
+    ]);
   }
 
   /**
@@ -346,10 +391,7 @@ async getUserTransactions(walletAddress: string) {
   private encodePaymasterData() {
     // In production, this would include proper paymaster validation data
     // For now, we're using a simplified version
-    return ethers.concat([
-      this.paymaster.target.toString(),
-      '0x',
-    ]);
+    return ethers.concat([this.paymaster.target.toString(), '0x']);
   }
 
   /**
@@ -364,9 +406,9 @@ async getUserTransactions(walletAddress: string) {
         to: sender,
         data: callData,
       });
-      
+
       // Add buffer for safety
-      return gasEstimate * BigInt(120) / BigInt(100);
+      return (gasEstimate * BigInt(120)) / BigInt(100);
     } catch (error) {
       return BigInt(1000000); // Default fallback
     }
@@ -377,7 +419,9 @@ async getUserTransactions(walletAddress: string) {
    */
   private async signUserOp(userOp: UserOperationStruct) {
     const userOpHash = await this.entryPoint.getUserOpHash(userOp);
-    const signature = await this.wallet.signMessage(ethers.getBytes(userOpHash));
+    const signature = await this.wallet.signMessage(
+      ethers.getBytes(userOpHash),
+    );
     return signature;
   }
 
