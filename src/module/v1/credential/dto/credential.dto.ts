@@ -1,28 +1,68 @@
 import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import {
+  CredentialCategoryEnum,
   CredentialStatusEnum,
   CredentialTypeEnum,
   VerificationLevelEnum,
 } from 'src/common/enums/credential.enum';
+import { PaginationDto } from '../../repository/dto/repository.dto';
 
 export class UploadCredentialDto {
+  @IsString()
+  @IsNotEmpty()
+  title: string;
+
   @IsEnum(CredentialTypeEnum)
+  @IsNotEmpty()
   type: CredentialTypeEnum;
 
-  @IsString()
+  @IsEnum(CredentialCategoryEnum)
   @IsNotEmpty()
-  issuer: string;
+  category: CredentialCategoryEnum;
 
   @IsString()
-  @IsNotEmpty()
-  verificationReference: string;
+  @IsOptional()
+  url: string;
 
   @IsOptional()
   visibility?: boolean;
 
   @IsOptional()
   @IsString()
-  additionalInfo?: string;
+  description?: string;
+
+  @IsOptional()
+  @IsString()
+  file?: string;
+}
+
+export class UpdateCredentialDto {
+  @IsNotEmpty()
+  @IsString()
+  credentialId: string;
+
+  @IsString()
+  @IsOptional()
+  title?: string;
+
+  @IsEnum(CredentialTypeEnum)
+  @IsOptional()
+  type?: CredentialTypeEnum;
+
+  @IsEnum(CredentialCategoryEnum)
+  @IsOptional()
+  category?: CredentialCategoryEnum;
+
+  @IsString()
+  @IsOptional()
+  url?: string;
+
+  @IsOptional()
+  visibility?: boolean;
+
+  @IsOptional()
+  @IsString()
+  discription?: string;
 }
 
 export class UpdateCredentialStatusDto {
@@ -37,4 +77,26 @@ export class UpdateCredentialStatusDto {
   @IsOptional()
   @IsString()
   rejectionReason?: string;
+}
+
+export class GetAllCredentialsDto extends PaginationDto {
+  @IsOptional()
+  @IsString()
+  type?: string;
+
+  @IsOptional()
+  @IsString()
+  verificationStatus?: string;
+
+  @IsOptional()
+  @IsString()
+  verificationLevel?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsString()
+  visibility?: string;
 }

@@ -18,10 +18,12 @@ async function bootstrap() {
         'http://localhost:8081',
         'http://localhost:3000',
         'https://propellanthr.com',
+        'https://propellant-ls.vercel.app',
+        'https://propellant-hr.fly.dev',
       ],
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization'],
-      credentials: true,
+      // credentials: true,
     },
   });
 

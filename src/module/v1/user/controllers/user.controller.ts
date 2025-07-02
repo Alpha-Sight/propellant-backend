@@ -24,6 +24,7 @@ import { RESPONSE_CONSTANT } from '../../../../common/constants/response.constan
 import { ResponseMessage } from '../../../../common/decorators/response.decorator';
 import { LoggedInUserDecorator } from '../../../../common/decorators/logged-in-user.decorator';
 import { UserDocument } from '../schemas/user.schema';
+import { PaginationDto } from '../../repository/dto/repository.dto';
 
 @NoCache()
 @Controller('users')
@@ -61,16 +62,20 @@ export class UserController {
     @LoggedInUserDecorator() user: UserDocument,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return await this.userService.updateProfile(
-      user,
-      payload,
-      file,
-    );
+    return await this.userService.updateProfile(user, payload, file);
   }
 
   @Public()
   @Get('check-email')
   async checkPhoneOrEmailExists(@Query() query: UserAvailabilityDto) {
     return this.userService.checkPhoneOrEmailExists(query);
+  }
+
+  @Get('referrals')
+  async showUserReferrals(
+    @Query() payload: PaginationDto,
+    @LoggedInUserDecorator() user: UserDocument,
+  ) {
+    return await this.userService.showUserReferrals(user, payload);
   }
 }

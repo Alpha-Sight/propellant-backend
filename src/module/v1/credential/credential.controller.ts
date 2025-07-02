@@ -7,20 +7,17 @@ import {
   Body,
   UseInterceptors,
   UploadedFile,
-  UseGuards,
   Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { RoleGuard } from '../auth/guards/role.guard';
 import { LoggedInUserDecorator } from 'src/common/decorators/logged-in-user.decorator';
-import { UserRoleEnum } from 'src/common/enums/user.enum';
 import { UserDocument } from '../user/schemas/user.schema';
 import { CredentialService } from './credential.service';
 import { RESPONSE_CONSTANT } from 'src/common/constants/response.constant';
 import { ResponseMessage } from 'src/common/decorators/response.decorator';
-import { Roles } from 'src/common/decorators/role.decorator';
 import {
-  UpdateCredentialStatusDto,
+  GetAllCredentialsDto,
+  UpdateCredentialDto,
   UploadCredentialDto,
 } from './dto/credential.dto';
 import { PaginationDto } from '../repository/dto/repository.dto';
@@ -50,10 +47,10 @@ export class CredentialController {
   }
 
   @Get('all')
-  @UseGuards(RoleGuard)
-  @Roles(UserRoleEnum.ADMIN, UserRoleEnum.SUPER_ADMIN)
+  // @UseGuards(RoleGuard)
+  // @Roles(UserRoleEnum.ADMIN, UserRoleEnum.SUPER_ADMIN)
   @ResponseMessage(RESPONSE_CONSTANT.CREDENTIAL.GET_SUCCESS)
-  async getAllCredentials(@Query() query: PaginationDto) {
+  async getAllCredentials(@Query() query: GetAllCredentialsDto) {
     return await this.credentialService.adminGetAllCredentials(query);
   }
 
@@ -63,18 +60,18 @@ export class CredentialController {
     return await this.credentialService.getCredentialById(_id);
   }
 
-  @Patch(':credentialId/status')
-  @UseGuards(RoleGuard)
-  @Roles(UserRoleEnum.ADMIN, UserRoleEnum.SUPER_ADMIN)
-  //   @ResponseMessage(RESPONSE_CONSTANT.CREDENTIAL.STATUS_UPDATE_SUCCESS)
-  async updateCredentialStatus(
-    @Query('_id') _id: string,
-    @Body() payload: UpdateCredentialStatusDto,
+  @Patch()
+  @UseInterceptors(FileInterceptor('file'))
+  @ResponseMessage(RESPONSE_CONSTANT.CREDENTIAL.UPLOAD_SUCCESS)
+  async updateCredential(
+    @LoggedInUserDecorator() user: UserDocument,
+    @Body() payload: UpdateCredentialDto,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    return await this.credentialService.updateCredentialStatus(_id, payload);
+    return await this.credentialService.updateCredential(user, payload, file);
   }
 
-  @Delete(':credentialId')
+  @Delete()
   // @ResponseMessage(RESPONSE_CONSTANT.CREDENTIAL.DELETE_SUCCESS)
   async deleteCredential(
     @LoggedInUserDecorator() user: UserDocument,
