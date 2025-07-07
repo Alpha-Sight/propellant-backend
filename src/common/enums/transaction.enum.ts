@@ -5,3 +5,19 @@ export enum TransactionStatusEnum {
     FAILED = 'FAILED',
     RETRY = 'RETRY', // Optional: if you implement retries
   }
+//   Pending = 'Pending',
+//   Completed = 'Completed',
+//   Failed = 'Failed',
+// }
+
+export enum PaymentStatusEnum {
+  Pending = 'Pending',
+  Completed = 'Completed',
+  Failed = 'Failed',
+}
+
+export enum TransactionTypeEnum {
+  Premium = 'Premium',
+  AccountCreation = 'AccountCreation',
+}
+

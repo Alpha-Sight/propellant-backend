@@ -3,7 +3,7 @@ import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
-  UnprocessableEntityException,
+  // UnprocessableEntityException,
 } from '@nestjs/common';
 import { User, UserDocument } from '../schemas/user.schema';
 import { ClientSession, FilterQuery, Model, UpdateQuery } from 'mongoose';
@@ -14,32 +14,40 @@ import {
   CreateWalletUserDto,
   UpdatePasswordDto,
   UpdateProfileDto,
+  // UpdateProfileDto,
   UserAvailabilityDto,
 } from '../dto/user.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { BaseHelper } from '../../../../common/utils/helper/helper.util';
 import { OtpTypeEnum } from '../../../../common/enums/otp.enum';
 import { OtpService } from '../../otp/services/otp.service';
-import { IAwsUploadFile } from '../../../../common/interfaces/aws.interface';
-import { uploadSingleFile } from '../../../../common/utils/aws.util';
 import {
   AuthSourceEnum,
   UserRoleEnum,
 } from '../../../../common/enums/user.enum';
 import { GoogleAuthDto } from '../../auth/dto/auth.dto';
+import { PinataService } from 'src/common/utils/pinata.util';
+import { PaginationDto } from '../../repository/dto/repository.dto';
+import { RepositoryService } from '../../repository/repository.service';
+import { WalletService } from '../../blockchain/services/wallet.service';
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private otpService: OtpService,
+    private pinataService: PinataService,
+    private repositoryService: RepositoryService,
+    private walletService: WalletService,
   ) {}
 
   async createUser(
     payload: CreateUserDto | CreateOrganizationDto,
     role?: UserRoleEnum,
-  ): Promise<UserDocument> {
+  ) {
     try {
+      const { referralCode } = payload;
+
       if (!payload.termsAndConditionsAccepted) {
         throw new BadRequestException('Please accept terms and conditions');
       }
@@ -57,6 +65,19 @@ export class UserService {
         throw new BadRequestException('User with this phone already exists');
       }
 
+      delete payload.referralCode; // delete the referral code to prevent persisting this as the new user referral code
+
+      let referralUserId: string;
+      if (referralCode) {
+        const referralUser = await this.userModel.findOne({ referralCode });
+
+        if (!referralUser) {
+          throw new BadRequestException('Referral code is invalid');
+        }
+
+        referralUserId = referralUser._id.toString();
+      }
+
       const hashedPassword = await BaseHelper.hashData(payload.password);
 
       let userRole = role ?? UserRoleEnum.TALENT;
@@ -64,14 +85,47 @@ export class UserService {
         userRole = UserRoleEnum.ORGANIZATION;
       }
 
+      // Generate unique referral code for the new user
+      const userReferralCode = await BaseHelper.generateReferenceCode();
+
+      // this.logger.log(`Creating wallet for user`);
+      const createWallet = await this.walletService.createWallet();
+
       const createdUser = await this.userModel.create({
         ...payload,
         password: hashedPassword,
         role: userRole,
+        referredBy: referralUserId,
+        referralCode: userReferralCode,
+        walletAddress: createWallet.walletAddress,
       });
 
+      // update referral user referral count
+      // TODO: award referral point
+      if (referralUserId) {
+        await this.userModel.updateOne(
+          { _id: referralUserId },
+          {
+            $inc: {
+              totalReferrals: 1,
+            },
+          },
+        );
+      }
+      // update user referral code
+
+      // TODO: not important but we can send an email or push notification to notify user of new referral
+
       delete createdUser['_doc'].password;
-      return createdUser;
+      return {
+        user: createdUser,
+        walletDetails: {
+          walletAddress: createWallet.walletAddress,
+          privateKey: createWallet.privateKey,
+          accountAddress: createWallet.accountAddress,
+          transactionId: createWallet.transactionId,
+        },
+      };
     } catch (e) {
       console.error('Error while creating user', e);
       if (e.code === 11000) {
@@ -198,44 +252,57 @@ export class UserService {
     await this.updateQuery({ _id: user._id }, { password: hashedPassword });
   }
 
+  async findOneById(userId: string) {
+    return this.userModel.findById(userId);
+  }
+
   async updateProfile(
-    userId: string,
+    user: UserDocument,
     payload: UpdateProfileDto,
     file?: Express.Multer.File,
   ) {
-    const { username } = payload;
+    // const { username } = payload;
 
-    if (username) {
-      const userWithUsernameExist = await this.userModel.findOne({
-        username,
-        _id: { $ne: userId },
-      });
+    // if (username) {
+    //   const userWithUsernameExist = await this.userModel.findOne({
+    //     username,
+    //     _id: { $ne: user._id },
+    //   });
 
-      if (userWithUsernameExist) {
-        throw new UnprocessableEntityException(
-          'Username already used, try another name',
-        );
-      }
-    }
+    //   if (userWithUsernameExist) {
+    //     throw new UnprocessableEntityException(
+    //       'Username already used, try another name',
+    //     );
+    //   }
+    // }
 
     let imageUrl = null;
 
     if (file) {
-      const { mimetype, buffer } = file;
+      // const { mimetype, buffer } = file;
 
-      const awsFile: IAwsUploadFile = {
-        fileName: BaseHelper.generateFileName('user', mimetype),
-        mimetype,
-        buffer,
-      };
+      // const pinataFile: PinataUploadFile = {
+      //   fileName: BaseHelper.generateFileName('profileImage', mimetype),
+      //   mimetype,
+      //   buffer,
+      // };
 
-      const { secureUrl } = await uploadSingleFile(awsFile);
-      imageUrl = secureUrl;
+      const uploadResult = await this.pinataService.uploadFile(file);
+      imageUrl = uploadResult;
     }
 
+    const updateData = {
+      ...payload,
+      // ...(username && { referralCode: username }),
+    };
+
+    // if (!user?.referralCode) {
+    //   updateData['referralCode'] = user?.username;
+    // }
+
     return await this.userModel.findByIdAndUpdate(
-      userId,
-      { ...payload, ...(imageUrl && { imageUrl }) },
+      user._id,
+      { ...payload, ...(imageUrl && { imageUrl }), ...updateData },
       {
         new: true,
       },
@@ -300,5 +367,39 @@ export class UserService {
     });
 
     return newUser;
+  }
+
+  async checkProfileCompletion(userData: any) {
+    const requiredBasicFields = [
+      'firstName',
+      'lastName',
+      'email',
+      'phone',
+      'professionalTitle',
+      'professionalSummary',
+    ];
+
+    const basicFieldsComplete = requiredBasicFields.every(
+      (field) => userData[field] && userData[field].toString().trim() !== '',
+    );
+
+    const hasExperience = userData.experience && userData.experience.length > 0;
+
+    const hasSkills = userData.skills && userData.skills.length > 0;
+
+    const hasEducation = userData.education && userData.education.length > 0;
+
+    return basicFieldsComplete && hasExperience && hasSkills && hasEducation;
+  }
+
+  async showUserReferrals(user: UserDocument, query: PaginationDto) {
+    return this.repositoryService.paginate({
+      model: this.userModel,
+      query,
+      options: {
+        _id: { $ne: user._id },
+        referredBy: user._id,
+      },
+    });
   }
 }

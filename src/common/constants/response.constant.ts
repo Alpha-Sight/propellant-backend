@@ -1,6 +1,7 @@
 export const RESPONSE_CONSTANT = {
   AUTH: {
-    REGISTER_SUCCESS: 'Registration Successful',
+    REGISTER_SUCCESS:
+      'Registration Successful, check email for account verification code ',
     LOGIN_SUCCESS: 'Login Successful',
     EMAIL_VERIFICATION_SUCCESS: 'Email verified successfully',
     PHONE_VERIFICATION_SUCCESS: 'Phone verified successfully',
@@ -20,19 +21,26 @@ export const RESPONSE_CONSTANT = {
     PIN_CREATED_SUCCESS: 'Transaction pin set successfully',
     PIN_UPDATED_SUCCESS: 'Transaction pin updated successfully',
   },
-  PRODUCT: {
-    PRODUCT_CREATE_SUCCESS: 'Product created successfully',
-  },
   WATCHLIST: {
     WATCHLIST_ADD_SUCCESS: 'Watchlist created successfully',
     WATCHLIST_REMOVE_SUCCESS: 'Watchlist removed successfully',
     WATCHLIST_GET_SUCCESS: 'Watchlist retrieved successfully',
   },
   WAITLIST: {
-    JOIN_WAITLIST_SUCCESS: 'You have joined the waitlist successfully',
+    JOIN_WAITLIST_SUCCESS:
+      'You have joined the waitlist successfully. check email for confirmation',
   },
-  Enrollment: {
-    Enrollment_RECEIPT_CONFIRMATION_SUCCESS:
-      'Enrollment confirmed successfully, thanks for your purchase!',
+  CREDENTIAL: {
+    UPLOAD_SUCCESS: 'Credential uploaded successfully',
+    GET_SUCCESS: 'Credential retrieved successfully',
+  },
+  SETTINGS: {
+    SETTINGS_CREATED_SUCCESS: 'Settings created successfully',
+    SETTINGS_UPDATED_SUCCESS: 'Settings updated successfully',
+    SETTINGS_DELETED_SUCCESS: 'Settings deleted successfully',
+  },
+  PREMIUM: {
+    SELECT_PREMIUM_PLAN_SUCCESS: 'User plan selected successfully',
+    PROCESS_PREMIUM_PAYMENT_SUCCESS: 'User upgraded to premium successfully',
   },
 };

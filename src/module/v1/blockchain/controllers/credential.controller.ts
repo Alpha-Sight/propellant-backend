@@ -24,10 +24,19 @@ export class CredentialController {
   ) {
     // Only admins or approved issuers can issue credentials
     if (!user.role?.includes('ADMIN') && !user.role?.includes('ISSUER')) {
+
       throw new Error('Unauthorized: Only admins or approved issuers can issue credentials');
     }
     
     return this.credentialService.issueCredential(payload, user._id.toString());
+
+      throw new Error(
+        'Unauthorized: Only admins or approved issuers can mint credentials',
+      );
+    }
+
+    return this.credentialService.mintCredential(payload, user._id.toString());
+
   }
 
   @Get(':walletAddress')
@@ -39,6 +48,7 @@ export class CredentialController {
 
   @Post('verify/:id')
   @UseGuards(JwtAuthGuard)
+
   async verifyCredential(@Param('id') id: string, @LoggedInUserDecorator() user: UserDocument) {
     // The previous error was because `req.user.address` was undefined.
     // The fix is to use the LoggedInUserDecorator to get the full user document
@@ -48,6 +58,23 @@ export class CredentialController {
     const verifierAddress = user.walletAddress; 
 
     return this.credentialService.verifyCredential(id, verifierAddress); 
+
+  @ResponseMessage('Credential verification transaction queued successfully')
+  async verifyCredential(
+    @Param('credentialId') credentialId: string,
+    @LoggedInUserDecorator() user: UserDocument,
+  ) {
+    // Only admins or approved issuers can verify credentials
+    if (!user.role?.includes('ADMIN') && !user.role?.includes('ISSUER')) {
+      throw new Error(
+        'Unauthorized: Only admins or approved issuers can verify credentials',
+      );
+    }
+
+    return this.credentialService.verifyCredential(
+      credentialId,
+      user._id.toString(),
+    );
   }
 
   @Get('revoke/:credentialId')
@@ -59,11 +86,17 @@ export class CredentialController {
   ) {
     // Only admins or approved issuers can revoke credentials
     if (!user.role?.includes('ADMIN') && !user.role?.includes('ISSUER')) {
-      throw new Error('Unauthorized: Only admins or approved issuers can revoke credentials');
+      throw new Error(
+        'Unauthorized: Only admins or approved issuers can revoke credentials',
+      );
     }
-    
-    return this.credentialService.revokeCredential(credentialId, user._id.toString());
+
+    return this.credentialService.revokeCredential(
+      credentialId,
+      user._id.toString(),
+    );
   }
+
 
   @Get('pending/:walletAddress')
   @UseGuards(JwtAuthGuard)
@@ -78,3 +111,6 @@ export class CredentialController {
     }
   }
 }
+
+}
+

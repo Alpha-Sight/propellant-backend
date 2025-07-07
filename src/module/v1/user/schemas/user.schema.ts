@@ -1,26 +1,12 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import mongoose, { Document } from 'mongoose';
 import {
   AuthSourceEnum,
   UserRoleEnum,
 } from '../../../../common/enums/user.enum';
+import { PlanTypeEnum } from 'src/common/enums/premium.enum';
 
 export type UserDocument = User & Document;
-
-@Schema()
-export class Socials {
-  @Prop({ default: '' })
-  twitter: string;
-
-  @Prop({ default: '' })
-  linkedin: string;
-
-  @Prop({ default: '' })
-  github: string;
-
-  @Prop({ default: '' })
-  instagram: string;
-}
 
 @Schema({ timestamps: true })
 export class User {
@@ -33,17 +19,11 @@ export class User {
   @Prop({ select: false })
   password: string;
 
-  @Prop({ required: false, default: null })
+  @Prop({ required: false, default: '' })
   profilePhoto: string;
 
-  @Prop({ required: false, default: null, trim: true, index: true })
-  firstName: string;
-
-  @Prop({ required: false, default: null, index: true })
-  lastName: string;
-
-  @Prop({ default: null, index: true })
-  username: string;
+  @Prop({ required: false, default: '', trim: true, index: true })
+  fullname: string;
 
   @Prop({ default: '' })
   bio: string;
@@ -60,14 +40,32 @@ export class User {
   @Prop({ default: AuthSourceEnum.EMAIL, enum: AuthSourceEnum })
   authSource: AuthSourceEnum;
 
-  @Prop({ default: '' })
-  location: string;
+  @Prop({ required: false })
+  linkedin?: string;
 
-  @Prop({ type: [String], default: [] })
-  skills: string[];
+  @Prop({ required: false })
+  github?: string;
 
-  @Prop({})
-  socials: Socials;
+  @Prop({ required: false })
+  twitter?: string;
+
+  @Prop({ required: false })
+  instagram?: string;
+
+  @Prop({ default: null, index: true })
+  referralCode: string;
+
+  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: User.name })
+  referredBy: UserDocument;
+
+  @Prop({ default: 0 })
+  totalReferrals: number;
+
+  @Prop({ enum: PlanTypeEnum })
+  plan: PlanTypeEnum;
+
+  @Prop({ default: false })
+  profileCompleted?: boolean;
 
   @Prop({ default: null })
   lastLoginAt: Date;
@@ -95,3 +93,11 @@ UserSchema.pre(/^find/, function (next) {
 
   next();
 });
+
+// UserSchema.pre('validate', async function (next) {
+//   if (!this.referralCode) {
+//     this.referralCode = BaseHelper.generateReferenceCode();
+//   }
+
+//   next();
+// });

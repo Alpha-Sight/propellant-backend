@@ -31,6 +31,7 @@ export class CredentialService implements OnModuleInit {
 
   private async initializeProvider() {
     try {
+
       const credentialModuleAddress = this.configService.get<string>('CREDENTIAL_VERIFICATION_MODULE_ADDRESS');
       
       this.logger.log(`Credential Module Address from config: ${credentialModuleAddress}`);
@@ -52,20 +53,41 @@ export class CredentialService implements OnModuleInit {
       };
       
       // Initialize contract
+
+      const rpcUrl = this.configService.get<string>('BLOCKCHAIN_RPC_URL');
+
+      if (!rpcUrl) {
+        throw new Error('Missing blockchain configuration');
+      }
+
+      this.provider = new ethers.JsonRpcProvider(rpcUrl);
+
+      // Initialize contract
+      const credentialModuleAddress = this.configService.get<string>(
+        'CREDENTIAL_VERIFICATION_MODULE_ADDRESS',
+      );
+
+
       this.credentialModule = new ethers.Contract(
         credentialModuleAddress,
         CredentialVerificationModuleABI.abi,
-        this.provider
+        this.provider,
       );
-      
     } catch (error) {
+
       this.logger.error(`Failed to initialize provider in CredentialService: ${error.message}`);
       throw error;
+
+      this.logger.error(
+        `Failed to initialize credential service: ${error.message}`,
+      );
+
     }
   }
 
   async issueCredential(payload: IssueCredentialDto, issuerId: string) {
     try {
+
       // Ensure account exists
       await this.ensureAccountExists(payload.subject);
       
@@ -92,11 +114,26 @@ export class CredentialService implements OnModuleInit {
       this.logger.log(`Credential saved to database: ${credentialId}`);
       
       // Prepare blockchain transaction
+
+      const {
+        subject,
+        name,
+        description,
+        metadataURI,
+        credentialType,
+        validUntil,
+        evidenceHash,
+        revocable,
+      } = payload;
+
+      // Encode the function call
+
       const iface = new ethers.Interface([
-        'function issueCredential(address subject, string name, string description, string metadataURI, uint8 credentialType, uint256 validUntil, bytes32 evidenceHash, bool revocable) returns (uint256)'
+        'function issueCredential(address subject, string name, string description, string metadataURI, uint8 credentialType, uint256 validUntil, bytes32 evidenceHash, bool revocable) returns (uint256)',
       ]);
-      
+
       const data = iface.encodeFunctionData('issueCredential', [
+
         payload.subject,
         payload.name,
         payload.description,
@@ -137,6 +174,42 @@ export class CredentialService implements OnModuleInit {
         name: payload.name,
         description: payload.description,
         credentialId
+
+        subject,
+        name,
+        description,
+        metadataURI,
+        credentialType,
+        validUntil || 0,
+        evidenceHash,
+        revocable,
+      ]);
+
+      // Queue the transaction using the relayer
+      const transactionResult = await this.relayerService.queueTransaction({
+        userAddress:
+          this.configService.get<string>('RELAYER_ADDRESS') || subject,
+        target: this.configService.get<string>(
+          'CREDENTIAL_VERIFICATION_MODULE_ADDRESS',
+        ),
+        value: '0',
+        data,
+        operation: 0,
+        description: `Mint credential "${name}" for ${subject}`,
+        isAccountCreation: false,
+      });
+
+      this.logger.log(
+        `Credential minting transaction queued with ID: ${transactionResult.transactionId}`,
+      );
+
+      return {
+        transactionId: transactionResult.transactionId,
+        status: transactionResult.status,
+        subject,
+        name,
+        description,
+
       };
       
     } catch (error) {
@@ -159,6 +232,7 @@ export class CredentialService implements OnModuleInit {
           addresses.push(accountAddress);
         }
       } catch (error) {
+
         this.logger.warn(`Could not get account address for ${walletAddress}: ${error.message}`);
       }
       
@@ -300,9 +374,28 @@ export class CredentialService implements OnModuleInit {
       }
       
       // Extract credential IDs from events and get details
+
+        if (error.message.includes('implementation not set')) {
+          this.logger.warn(
+            `Contract at ${this.configService.get<string>('CREDENTIAL_VERIFICATION_MODULE_ADDRESS')} is not properly initialized`,
+          );
+          return []; // Return empty array instead of failing
+        }
+      }
+
+      const credentialIds =
+        await this.credentialModule.getCredentialsForSubject(walletAddress);
+
+      if (!credentialIds.length) {
+        return [];
+      }
+
+      // Get details for each credential
+
       const credentials = [];
       for (const event of events) {
         try {
+
           // Check if event is of type EventLog with args property
           if ('args' in event && event.args) {
             const id = event.args[0].toString();
@@ -313,12 +406,43 @@ export class CredentialService implements OnModuleInit {
           }
         } catch (error) {
           this.logger.warn(`Error fetching credential from event: ${error.message}`);
+          const credential = await this.credentialModule.getCredential(id);
+          credentials.push({
+            id: id.toString(),
+            issuer: credential.issuer,
+            subject: credential.subject,
+            name: credential.name,
+            description: credential.description,
+            metadataURI: credential.metadataURI,
+            credentialType: credential.credentialType,
+            status: this.mapCredentialStatus(credential.status),
+            issuedAt: new Date(
+              Number(credential.issuedAt) * 1000,
+            ).toISOString(),
+            validUntil:
+              credential.validUntil > 0
+                ? new Date(Number(credential.validUntil) * 1000).toISOString()
+                : null,
+          });
+        } catch (error) {
+          this.logger.error(
+            `Error fetching credential ${id}: ${error.message}`,
+          );
+
         }
       }
-      
+
       return credentials;
     } catch (error) {
+
       this.logger.error(`Failed in alternative credential lookup: ${error.message}`);
+
+      this.logger.error(
+        `Failed to get credentials for wallet: ${error.message}`,
+      );
+
+      // Return empty array for better user experience
+
       return [];
     }
   }
@@ -382,6 +506,7 @@ export class CredentialService implements OnModuleInit {
       
       // **FIXED**: Encode the function call with the correct signature and parameters
       const iface = new ethers.Interface([
+
         'function verifyCredential(uint256 credentialId, uint8 status, string memory notes)'
       ]);
 
@@ -419,6 +544,34 @@ export class CredentialService implements OnModuleInit {
         status: 'PENDING',
         credentialId: credentialId,
         blockchainCredentialId: blockchainCredentialId
+
+        'function verifyCredential(uint256 tokenId, uint8 status, string notes) returns (bool)',
+      ]);
+
+      const data = iface.encodeFunctionData('verifyCredential', [
+        credentialId,
+        1, // VERIFIED status
+        'Verified by PropellantBD administrator',
+      ]);
+
+      // Queue the transaction using the relayer
+      const transactionResult = await this.relayerService.queueTransaction({
+        userAddress: this.configService.get<string>('RELAYER_ADDRESS'),
+        target: this.configService.get<string>(
+          'CREDENTIAL_VERIFICATION_MODULE_ADDRESS',
+        ),
+        value: '0',
+        data,
+        operation: 0,
+        description: `Verify credential ID ${credentialId}`,
+        isAccountCreation: false,
+      });
+
+      return {
+        transactionId: transactionResult.transactionId,
+        status: transactionResult.status,
+        credentialId,
+
       };
       
     } catch (error) {
@@ -431,29 +584,31 @@ export class CredentialService implements OnModuleInit {
     try {
       // Encode the function call
       const iface = new ethers.Interface([
-        'function revokeCredential(uint256 tokenId, string reason) returns (bool)'
+        'function revokeCredential(uint256 tokenId, string reason) returns (bool)',
       ]);
-      
+
       const data = iface.encodeFunctionData('revokeCredential', [
         credentialId,
-        'Revoked by PropellantBD administrator'
+        'Revoked by PropellantBD administrator',
       ]);
-      
+
       // Queue the transaction using the relayer
       const transactionResult = await this.relayerService.queueTransaction({
         userAddress: this.configService.get<string>('RELAYER_ADDRESS'),
-        target: this.configService.get<string>('CREDENTIAL_VERIFICATION_MODULE_ADDRESS'),
-        value: "0",
+        target: this.configService.get<string>(
+          'CREDENTIAL_VERIFICATION_MODULE_ADDRESS',
+        ),
+        value: '0',
         data,
         operation: 0,
         description: `Revoke credential ID ${credentialId}`,
-        isAccountCreation: false
+        isAccountCreation: false,
       });
-      
+
       return {
         transactionId: transactionResult.transactionId,
         status: transactionResult.status,
-        credentialId
+        credentialId,
       };
     } catch (error) {
       this.logger.error(`Failed to revoke credential: ${error.message}`);
@@ -475,6 +630,7 @@ export class CredentialService implements OnModuleInit {
     const statuses = ['PENDING', 'VERIFIED', 'REJECTED', 'REVOKED'];
     return statuses[status] || 'UNKNOWN';
   }
+
 
   async checkImplementation(): Promise<boolean> {
     try {

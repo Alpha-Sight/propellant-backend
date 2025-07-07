@@ -19,6 +19,7 @@ export class QueueTransactionDto {
   operation?: number;
 
   @IsString()
+
   @IsOptional()
   description?: string;
 
@@ -26,3 +27,8 @@ export class QueueTransactionDto {
   @IsOptional()
   isAccountCreation?: boolean;
 }
+
+  @IsNotEmpty()
+  description: string;
+}
+

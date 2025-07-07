@@ -86,7 +86,7 @@ export class AuthService {
 
     // Send OTP as usual
     await this.otpService.sendOTP({
-      email: user.email,
+      email: payload.email,
       type: OtpTypeEnum.VERIFY_EMAIL,
     });
 
@@ -290,7 +290,7 @@ export class AuthService {
   async loginWithWallet(payload: WalletLoginDto) {
     // Verify nonce exists and hasn't expired
     const nonceKey = cacheKeys.walletNonce(payload.walletAddress);
-    const storedNonce = await CacheHelperUtil.getCache<string>(nonceKey);
+    await CacheHelperUtil.getCache<string>(nonceKey);
 
     // TODO: ENABLE NONCE CHECKING
     // if (!storedNonce) {

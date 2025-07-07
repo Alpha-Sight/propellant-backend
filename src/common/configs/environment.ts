@@ -21,13 +21,7 @@ export interface IEnvironment {
     EMAIL: string;
     USER: string;
     PASSWORD: string;
-  };
-  AWS: {
-    REGION: string;
-    ACCESS_KEY: string;
-    SECRET: string;
-    BUCKET_NAME: string;
-    BUCKET_URL: string;
+    FROM: string;
   };
   REDIS: {
     URL: string;
@@ -36,6 +30,18 @@ export interface IEnvironment {
     ACCOUNT_ID: string;
     AUTH_TOKEN: string;
     FROM: string;
+  };
+
+  // CLOUDINARY: {
+  //   CLOUDINARY_NAME: string;
+  //   CLOUDINARY_API_KEY: string;
+  //   CLOUDINARY_API_SECRET: string;
+  // };
+  PINATA: {
+    PINATA_API_KEY: string;
+    PINATA_API_SECRET: string;
+    PINATA_ACCESS_TOKEN: string;
+    PINATA_GATEWAY_KEY: string;
   };
   BLOCKCHAIN: {
     RPC_URL: string;
@@ -46,6 +52,18 @@ export interface IEnvironment {
     USER_PROFILE_MODULE_ADDRESS: string;
     CREDENTIAL_VERIFICATION_MODULE_ADDRESS: string;
     ROLE_MODULE_ADDRESS: string;
+  };
+  FLUTTERWAVE: {
+    HOST: string;
+    WEBHOOK_SECRET: string;
+  };
+  PAYSTACK: {
+    HOST: string;
+    WEBHOOK_SECRET: string;
+  };
+  VPAY: {
+    HOST: string;
+    WEBHOOK_SECRET: string;
   };
 }
 
@@ -69,13 +87,7 @@ export const ENVIRONMENT: IEnvironment = {
     EMAIL: process.env.SMTP_EMAIL,
     USER: process.env.SMTP_USER,
     PASSWORD: process.env.SMTP_PASSWORD,
-  },
-  AWS: {
-    REGION: process.env.AWS_REGION,
-    ACCESS_KEY: process.env.AWS_ACCESS_KEY,
-    SECRET: process.env.AWS_SECRET,
-    BUCKET_NAME: process.env.AWS_BUCKET_NAME,
-    BUCKET_URL: process.env.AWS_BUCKET_URL,
+    FROM: process.env.SMTP_FROM,
   },
   REDIS: {
     URL: process.env.REDIS_URL,
@@ -85,6 +97,19 @@ export const ENVIRONMENT: IEnvironment = {
     AUTH_TOKEN: process.env.TWILLO_AUTH_TOKEN,
     FROM: process.env.TWILLO_FROM_NUMBER,
   },
+
+  // CLOUDINARY: {
+  //   CLOUDINARY_NAME: configService.getOrThrow('CLOUDINARY_NAME'),
+  //   CLOUDINARY_API_KEY: configService.getOrThrow('CLOUDINARY_API_KEY'),
+  //   CLOUDINARY_API_SECRET: configService.getOrThrow('CLOUDINARY_API_SECRET'),
+  // },
+
+  PINATA: {
+    PINATA_API_KEY: process.env.PINATA_API_KEY,
+    PINATA_API_SECRET: process.env.PINATA_API_SECRET,
+    PINATA_ACCESS_TOKEN: process.env.PINATA_ACCESS_TOKEN,
+    PINATA_GATEWAY_KEY: process.env.PINATA_GATEWAY_KEY,
+  },
   BLOCKCHAIN: {
     RPC_URL: process.env.BLOCKCHAIN_RPC_URL,
     RELAYER_PRIVATE_KEY: process.env.RELAYER_PRIVATE_KEY,
@@ -92,8 +117,21 @@ export const ENVIRONMENT: IEnvironment = {
     ACCOUNT_FACTORY_ADDRESS: process.env.ACCOUNT_FACTORY_ADDRESS,
     PAYMASTER_ADDRESS: process.env.PAYMASTER_ADDRESS,
     USER_PROFILE_MODULE_ADDRESS: process.env.USER_PROFILE_MODULE_ADDRESS,
-    CREDENTIAL_VERIFICATION_MODULE_ADDRESS: process.env.CREDENTIAL_VERIFICATION_MODULE_ADDRESS,
+    CREDENTIAL_VERIFICATION_MODULE_ADDRESS:
+      process.env.CREDENTIAL_VERIFICATION_MODULE_ADDRESS,
     ROLE_MODULE_ADDRESS: process.env.ROLE_MODULE_ADDRESS,
+  },
+  FLUTTERWAVE: {
+    HOST: process.env.FLUTTERWAVE_HOST,
+    WEBHOOK_SECRET: process.env.FLUTTERWAVE_WEBHOOK_SECRET,
+  },
+  PAYSTACK: {
+    HOST: process.env.PAYSTACK_HOST,
+    WEBHOOK_SECRET: process.env.PAYSTACK_WEBHOOK_SECRET,
+  },
+  VPAY: {
+    HOST: process.env.VPAY_HOST,
+    WEBHOOK_SECRET: process.env.VPAY_WEBHOOK_SECRET,
   },
 };
 

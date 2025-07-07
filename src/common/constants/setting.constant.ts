@@ -3,15 +3,18 @@ import { isDevEnvironment } from '../configs/environment';
 
 export const SETTINGS: ISettings = {
   app: {
-    name: 'Propellant',
-    supportEmail: 'support@Propellant.com',
+    name: 'Propellant HR',
+    supportEmail: 'support@Propellanthr.com',
+    price: {
+      premiumPricing: 1000,
+    },
     urls: {
       webHomepage: isDevEnvironment
-        ? 'https://staging.Propellant.ng'
+        ? 'https://propellanthr.com'
         : 'https://Propellant.ng',
-      coursesPage: isDevEnvironment
-        ? 'https://staging.Propellant.ng/course'
-        : 'https://Propellant.ng/course',
+      waitlistPage: isDevEnvironment
+        ? 'https://propellanthr.com'
+        : 'https://Propellant.ng',
     },
   },
 };

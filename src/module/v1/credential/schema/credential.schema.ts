@@ -2,8 +2,8 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
 import {
   CredentialTypeEnum,
+  CredentialCategoryEnum,
   CredentialStatusEnum,
-  VerificationLevelEnum,
 } from 'src/common/enums/credential.enum';
 import { User, UserDocument } from '../../user/schemas/user.schema';
 
@@ -17,35 +17,44 @@ export class Credential {
   })
   user: UserDocument;
 
+  @Prop({ required: true })
+  title: string;
+
   @Prop({ enum: CredentialTypeEnum, required: true })
   type: CredentialTypeEnum;
 
-  @Prop({ required: true })
-  issuer: string; // e.g., institution, company, colleague
+  @Prop({ enum: CredentialCategoryEnum, required: true })
+  category: CredentialCategoryEnum;
 
-  @Prop({ required: true })
-  file: string; // IPFS link
+  @Prop({ required: false })
+  url: string;
 
-  @Prop({ required: true })
-  ipfsHash: string;
+  @Prop({ required: false })
+  ipfsHash?: string;
 
-  @Prop({ enum: CredentialStatusEnum, default: CredentialStatusEnum.PENDING })
-  status: CredentialStatusEnum;
-
-  @Prop({ enum: VerificationLevelEnum, default: 'LOW' })
-  verificationLevel: VerificationLevelEnum;
-
-  @Prop({ default: null })
-  verifiedAt?: Date;
+  @Prop({ required: false })
+  description: string;
 
   @Prop({ default: true })
   visibility: boolean;
 
-  @Prop({ default: '' })
-  rejectionReason: string;
+  @Prop({ enum: CredentialStatusEnum, default: CredentialStatusEnum.PENDING })
+  verificationStatus: CredentialStatusEnum;
 
   @Prop({ default: false })
   isDeleted: boolean;
+
+  // @Prop({ enum: CredentialStatusEnum, default: CredentialStatusEnum.PENDING })
+  // verificationStatus: CredentialStatusEnum;
+
+  // @Prop({ enum: VerificationLevelEnum, default: 'LOW' })
+  // verificationLevel: VerificationLevelEnum;
+
+  @Prop({ default: null })
+  verifiedAt?: Date;
+
+  @Prop({ default: null })
+  rejectionReason: string;
 }
 
 export const CredentialSchema = SchemaFactory.createForClass(Credential);

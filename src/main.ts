@@ -14,8 +14,16 @@ const serverPort = ENVIRONMENT.APP.PORT || 3000;
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     cors: {
-      origin: '*',
-      methods: '*',
+      origin: [
+        'http://localhost:8081',
+        'http://localhost:3000',
+        'https://propellanthr.com',
+        'https://propellant-ls.vercel.app',
+        'https://propellant-hr.fly.dev',
+      ],
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+      // credentials: true,
     },
   });
 

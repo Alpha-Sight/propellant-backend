@@ -3,11 +3,18 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
 
 // Import schemas
-import { Transaction, TransactionSchema } from './schemas/transaction.schema';
+// import { Transaction, TransactionSchema } from './schemas/transaction.schema';
 import { Wallet, WalletSchema } from './schemas/wallet.schema';
 import { Credential, CredentialSchema } from './schemas/credential.schema';
 
 // Import services
+
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import {
+  BlockchainTransaction,
+  BlockchainTransactionSchema,
+} from './schemas/transaction.schema';
+
 import { RelayerService } from './services/relayer.service';
 import { WalletService } from './services/wallet.service';
 import { CredentialService } from './services/credential.service';
@@ -20,9 +27,10 @@ import { CredentialController } from './controllers/credential.controller';
   imports: [
     ConfigModule,
     MongooseModule.forFeature([
+
       { name: Credential.name, schema: CredentialSchema },
       { name: Wallet.name, schema: WalletSchema },
-      { name: Transaction.name, schema: TransactionSchema },
+//       { name: Transaction.name, schema: TransactionSchema },
     ]),
   ],
   providers: [
@@ -39,5 +47,12 @@ import { CredentialController } from './controllers/credential.controller';
     WalletService,
     RelayerService,
   ],
+      { name: BlockchainTransaction.name, schema: BlockchainTransactionSchema },
+    ]),
+  ],
+  providers: [RelayerService, WalletService, CredentialService],
+  controllers: [BlockchainController, WalletController, CredentialController],
+  exports: [RelayerService, WalletService, CredentialService],
+
 })
 export class BlockchainModule {}

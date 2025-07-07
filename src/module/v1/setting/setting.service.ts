@@ -25,6 +25,11 @@ export class SettingService implements OnModuleInit {
     return await CacheHelperUtil.getCache(CACHE_KEYS.appSettings);
   }
 
+  async getSettings() {
+    const getSettings = await CacheHelperUtil.getCache(CACHE_KEYS.appSettings);
+    return getSettings;
+  }
+
   async updateSettings(payload: UpdateSettingsDto) {
     const prevSettings = (await CacheHelperUtil.getCache(
       CACHE_KEYS.appSettings,

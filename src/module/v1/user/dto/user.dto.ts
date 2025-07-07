@@ -9,6 +9,7 @@ import {
   IsOptional,
   IsPhoneNumber,
   IsString,
+  IsUrl,
   MaxLength,
   MinLength,
 } from 'class-validator';
@@ -16,10 +17,6 @@ import { PaginationDto } from '../../repository/dto/repository.dto';
 import { UserRoleEnum } from '../../../../common/enums/user.enum';
 
 export class CreateUserDto {
-  @IsNotEmpty()
-  @IsString()
-  name: string;
-
   @IsNotEmpty()
   @IsEmail()
   @Transform(({ value }) => value.toLowerCase())
@@ -34,7 +31,11 @@ export class CreateUserDto {
   @MaxLength(20)
   password: string;
 
-  @IsEnum([UserRoleEnum.TALENT, UserRoleEnum.ORGANIZATION])
+  @IsString()
+  @IsOptional()
+  referralCode?: string;
+
+  @IsEnum(UserRoleEnum)
   @IsNotEmpty()
   role: UserRoleEnum;
 
@@ -92,24 +93,45 @@ export class UpdatePasswordDto {
 export class UpdateProfileDto {
   @IsOptional()
   @IsString()
-  username: string;
-
-  @IsOptional()
-  @IsString()
-  firstName: string;
-
-  @IsOptional()
-  @IsString()
-  lastName: string;
+  fullname?: string;
 
   @IsOptional()
   @IsString()
   @IsPhoneNumber()
-  phone: string;
+  phone?: string;
 
   @IsOptional()
   @IsString()
-  bio: string;
+  bio?: string;
+
+  @IsOptional()
+  @IsUrl()
+  linkedin?: string;
+
+  @IsOptional()
+  @IsUrl()
+  github?: string;
+
+  @IsOptional()
+  @IsUrl()
+  portfolio?: string;
+
+  @IsOptional()
+  @IsUrl()
+  website?: string;
+
+  @IsOptional()
+  // @IsArray()
+  @IsString({ each: true })
+  languages?: string;
+
+  @IsOptional()
+  @IsString({ each: true })
+  hobbies?: string;
+
+  @IsOptional()
+  @IsString({ each: true })
+  achievements?: string;
 }
 
 export class CheckUsernameAvailableDto {
