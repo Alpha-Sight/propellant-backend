@@ -140,7 +140,7 @@ export class BaseHelper {
 
   static generateReferenceCode(refPrefix?: string): string {
     const REF_NUMBER_LENGTH = 8;
-    const REF_PREFIX = refPrefix || 'REF';
+    const REF_PREFIX = refPrefix || 'PPL';
     const REF_ALPHABET = '0123456789';
 
     const date = new Date();

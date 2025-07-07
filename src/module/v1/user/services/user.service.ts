@@ -29,6 +29,7 @@ import { GoogleAuthDto } from '../../auth/dto/auth.dto';
 import { PinataService } from 'src/common/utils/pinata.util';
 import { PaginationDto } from '../../repository/dto/repository.dto';
 import { RepositoryService } from '../../repository/repository.service';
+import { WalletService } from '../../blockchain/services/wallet.service';
 
 @Injectable()
 export class UserService {
@@ -37,12 +38,13 @@ export class UserService {
     private otpService: OtpService,
     private pinataService: PinataService,
     private repositoryService: RepositoryService,
+    private walletService: WalletService,
   ) {}
 
   async createUser(
     payload: CreateUserDto | CreateOrganizationDto,
     role?: UserRoleEnum,
-  ): Promise<UserDocument> {
+  ) {
     try {
       const { referralCode } = payload;
 
@@ -86,12 +88,16 @@ export class UserService {
       // Generate unique referral code for the new user
       const userReferralCode = await BaseHelper.generateReferenceCode();
 
+      // this.logger.log(`Creating wallet for user`);
+      const createWallet = await this.walletService.createWallet();
+
       const createdUser = await this.userModel.create({
         ...payload,
         password: hashedPassword,
         role: userRole,
         referredBy: referralUserId,
         referralCode: userReferralCode,
+        walletAddress: createWallet.walletAddress,
       });
 
       // update referral user referral count
@@ -111,7 +117,15 @@ export class UserService {
       // TODO: not important but we can send an email or push notification to notify user of new referral
 
       delete createdUser['_doc'].password;
-      return createdUser;
+      return {
+        user: createdUser,
+        walletDetails: {
+          walletAddress: createWallet.walletAddress,
+          privateKey: createWallet.privateKey,
+          accountAddress: createWallet.accountAddress,
+          transactionId: createWallet.transactionId,
+        },
+      };
     } catch (e) {
       console.error('Error while creating user', e);
       if (e.code === 11000) {

@@ -1,4 +1,10 @@
-import { IsString, IsNumber, IsBoolean, IsOptional, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsBoolean,
+  IsOptional,
+  IsEnum,
+} from 'class-validator';
 
 export enum CredentialTypeEnum {
   EDUCATION = 0,
@@ -7,7 +13,7 @@ export enum CredentialTypeEnum {
   SKILL = 3,
   ACHIEVEMENT = 4,
   REFERENCE = 5,
-  OTHER = 6
+  OTHER = 6,
 }
 
 export class MintCredentialDto {

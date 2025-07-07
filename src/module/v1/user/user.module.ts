@@ -9,6 +9,7 @@ import { AdminUserService } from './services/admin-user.service';
 import { MailModule } from '../mail /mail.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { PinataService } from 'src/common/utils/pinata.util';
+import { BlockchainModule } from '../blockchain/blockchain.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { PinataService } from 'src/common/utils/pinata.util';
     forwardRef(() => OtpModule),
     MailModule,
     RepositoryModule,
+    BlockchainModule,
   ],
   controllers: [UserController, AdminUserController],
   providers: [UserService, AdminUserService, PinataService],

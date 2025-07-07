@@ -54,7 +54,7 @@ export class CvService {
         hasWorkExperience: !!payload.workExperience?.length,
         hasSkills: !!payload.skills?.length,
         hasCertifications: !!payload.certifications?.length,
-        hasLanguages: !!payload.languages?.length,
+        // hasLanguages: !!payload.languages?.length,
         generatedDate: new Date().toLocaleDateString(),
         appName: ENVIRONMENT.APP.NAME,
       }),

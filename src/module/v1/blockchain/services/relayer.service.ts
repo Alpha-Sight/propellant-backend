@@ -9,9 +9,14 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
-  Transaction,
-  TransactionDocument,
+  BlockchainTransaction,
+  BlockchainTransactionDocument,
 } from '../schemas/transaction.schema';
+import {
+  TransactionStatusEnum,
+  TransactionTypeEnum,
+} from 'src/common/enums/transaction.enum';
+import { UserDocument } from '../../user/schemas/user.schema';
 
 @Injectable()
 export class RelayerService implements OnModuleInit {
@@ -27,8 +32,8 @@ export class RelayerService implements OnModuleInit {
   constructor(
     private configService: ConfigService,
     private eventEmitter: EventEmitter2,
-    @InjectModel(Transaction.name)
-    private transactionModel: Model<TransactionDocument>,
+    @InjectModel(BlockchainTransaction.name)
+    private transactionModel: Model<BlockchainTransactionDocument>,
   ) {}
 
   /**
@@ -159,7 +164,8 @@ export class RelayerService implements OnModuleInit {
         value,
         data,
         operation,
-        status: 'PENDING',
+        status: TransactionStatusEnum.Pending,
+        type: TransactionTypeEnum.AccountCreation,
         description,
         createdAt: new Date(),
       });
@@ -172,13 +178,10 @@ export class RelayerService implements OnModuleInit {
       this.eventEmitter.emit('transaction.queued', {
         transactionId,
         userAddress,
-        status: 'PENDING',
+        status: TransactionStatusEnum.Pending,
       });
 
-      return {
-        transactionId,
-        status: 'PENDING',
-      };
+      return transaction;
     } catch (error) {
       this.logger.error(`Failed to queue transaction: ${error.message}`);
       throw error;
@@ -252,7 +255,7 @@ export class RelayerService implements OnModuleInit {
         );
 
         // Update transaction status
-        transaction.status = 'FAILED';
+        transaction.status = TransactionStatusEnum.Failed;
         transaction.error = error.message;
         transaction.updatedAt = new Date();
         await transaction.save();
@@ -270,7 +273,7 @@ export class RelayerService implements OnModuleInit {
   /**
    * Process a single transaction
    */
-  private async processTransaction(transaction: TransactionDocument) {
+  private async processTransaction(transaction: BlockchainTransactionDocument) {
     const {
       transactionId,
       userAddress,
@@ -297,7 +300,10 @@ export class RelayerService implements OnModuleInit {
     const receipt = await this.provider.waitForTransaction(transactionHash);
 
     // Update transaction status
-    transaction.status = receipt.status === 1 ? 'SUCCESS' : 'FAILED';
+    transaction.status =
+      receipt.status === 1
+        ? TransactionStatusEnum.Completed
+        : TransactionStatusEnum.Failed;
     transaction.transactionHash = transactionHash;
     transaction.blockNumber = receipt.blockNumber;
     transaction.gasUsed = receipt.gasUsed.toString();

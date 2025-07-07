@@ -19,10 +19,10 @@ export class User {
   @Prop({ select: false })
   password: string;
 
-  @Prop({ required: false, default: null })
+  @Prop({ required: false, default: '' })
   profilePhoto: string;
 
-  @Prop({ required: false, default: null, trim: true, index: true })
+  @Prop({ required: false, default: '', trim: true, index: true })
   fullname: string;
 
   @Prop({ default: '' })
@@ -40,17 +40,17 @@ export class User {
   @Prop({ default: AuthSourceEnum.EMAIL, enum: AuthSourceEnum })
   authSource: AuthSourceEnum;
 
-  @Prop({ default: '' })
-  linkedin: string;
+  @Prop({ required: false })
+  linkedin?: string;
 
-  @Prop({ default: '' })
-  github: string;
+  @Prop({ required: false })
+  github?: string;
 
-  @Prop({ default: '' })
-  twitter: string;
+  @Prop({ required: false })
+  twitter?: string;
 
-  @Prop({ default: '' })
-  instagram: string;
+  @Prop({ required: false })
+  instagram?: string;
 
   @Prop({ default: null, index: true })
   referralCode: string;

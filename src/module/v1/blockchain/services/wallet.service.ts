@@ -50,7 +50,7 @@ export class WalletService {
     }
   }
 
-  async createWallet(userId: string) {
+  async createWallet() {
     try {
       // Generate a new wallet
       const wallet = BaseHelper.generateWallet();
@@ -72,7 +72,7 @@ export class WalletService {
         data,
         operation: 0,
         description: `Create account for wallet ${wallet.walletAddress}`,
-        isAccountCreation: true, // Add this flag
+        isAccountCreation: true,
       });
 
       // Calculate the expected account address

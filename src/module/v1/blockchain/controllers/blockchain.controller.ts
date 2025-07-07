@@ -18,10 +18,14 @@ export class BlockchainController {
     @LoggedInUserDecorator() user: UserDocument,
   ) {
     // Make sure the user can only submit transactions for their own address
-    if (payload.userAddress.toLowerCase() !== user.walletAddress.toLowerCase()) {
-      throw new Error('Unauthorized: Can only submit transactions for your own wallet');
+    if (
+      payload.userAddress.toLowerCase() !== user.walletAddress.toLowerCase()
+    ) {
+      throw new Error(
+        'Unauthorized: Can only submit transactions for your own wallet',
+      );
     }
-    
+
     return this.relayerService.queueTransaction(payload);
   }
 

@@ -12,5 +12,5 @@ export enum PaymentStatusEnum {
 
 export enum TransactionTypeEnum {
   Premium = 'Premium',
-  Withdrawal = 'Withdrawal',
+  AccountCreation = 'AccountCreation',
 }
