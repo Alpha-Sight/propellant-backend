@@ -12,13 +12,16 @@ import { SkillLevelEnum } from 'src/common/enums/cv.enum';
 
 export class ExperienceDto {
   @IsString()
-  company: string;
+  @IsOptional()
+  company?: string;
 
   @IsString()
-  position: string;
+  @IsOptional()
+  position?: string;
 
   @IsString()
-  startDate: string;
+  @IsOptional()
+  startDate?: string;
 
   @IsOptional()
   @IsString()
@@ -42,15 +45,19 @@ export class ExperienceDto {
 
 export class EducationDto {
   @IsString()
-  institution: string;
+  @IsOptional()
+  institution?: string;
 
   @IsString()
-  degree: string;
+  @IsOptional()
+  degree?: string;
 
   @IsString()
-  fieldOfStudy: string;
+  @IsOptional()
+  fieldOfStudy?: string;
 
   @IsString()
+  @IsOptional()
   startDate: string;
 
   @IsOptional()
@@ -68,26 +75,30 @@ export class EducationDto {
 
 export class SkillDto {
   @IsString()
-  name: string;
+  @IsOptional()
+  name?: string;
 
   @IsOptional()
   @IsEnum(SkillLevelEnum)
   level?: SkillLevelEnum;
 
-  @IsOptional()
-  @IsString()
-  category?: string;
+  // @IsOptional()
+  // @IsString()
+  // category?: string;
 }
 
 export class CertificationDto {
   @IsString()
-  name: string;
+  @IsOptional()
+  name?: string;
 
   @IsString()
-  issuer: string;
+  @IsOptional()
+  issuer?: string;
 
   @IsString()
-  dateIssued: string;
+  @IsOptional()
+  dateIssued?: string;
 
   @IsOptional()
   @IsString()
@@ -104,7 +115,8 @@ export class CertificationDto {
 
 export class ProjectDto {
   @IsString()
-  name: string;
+  @IsOptional()
+  name?: string;
 
   @IsOptional()
   @IsString()
@@ -129,7 +141,7 @@ export class ProjectDto {
 
   @IsOptional()
   @IsUrl()
-  github?: string;
+  link?: string;
 }
 
 export class SocialsDto {
@@ -179,17 +191,17 @@ export class GenerateCVDto {
   @IsString()
   address?: string;
 
-  @IsOptional()
-  @IsString()
-  github?: string;
+  // @IsOptional()
+  // @IsString()
+  // github?: string;
 
-  @IsOptional()
-  @IsString()
-  portfolio?: string;
+  // @IsOptional()
+  // @IsString()
+  // portfolio?: string;
 
-  @IsOptional()
-  @IsString()
-  website?: string;
+  // @IsOptional()
+  // @IsString()
+  // website?: string;
 
   @IsOptional()
   @IsArray()
@@ -221,26 +233,26 @@ export class GenerateCVDto {
   @Type(() => ProjectDto)
   projects?: ProjectDto[];
 
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  languages?: string[];
+  // @IsOptional()
+  // @IsArray()
+  // @IsString({ each: true })
+  // languages?: string[];
 
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  hobbies?: string[];
+  // @IsOptional()
+  // @IsArray()
+  // @IsString({ each: true })
+  // hobbies?: string[];
 
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  achievements?: string[];
+  // @IsOptional()
+  // @IsArray()
+  // @IsString({ each: true })
+  // achievements?: string[];
 
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => SocialsDto)
-  socials?: SocialsDto[];
+  // @IsOptional()
+  // @IsArray()
+  // @ValidateNested({ each: true })
+  // @Type(() => SocialsDto)
+  // socials?: SocialsDto[];
 
   @IsOptional()
   @IsArray()

@@ -5,7 +5,7 @@ export const cvGeneratedEmailTemplate = (context: {
   hasWorkExperience: boolean;
   hasSkills: boolean;
   hasCertifications: boolean;
-  hasLanguages: boolean;
+  //   hasLanguages: boolean;
   hasBio: boolean;
   generatedDate: string;
 }) => {
@@ -382,7 +382,6 @@ export const cvGeneratedEmailTemplate = (context: {
                           ${context.hasWorkExperience ? '<li>Professional Work Experience & Career History</li>' : ''}
                           ${context.hasSkills ? '<li>Skills & Technical Competencies</li>' : ''}
                           ${context.hasCertifications ? '<li>Certifications & Professional Achievements</li>' : ''}
-                          ${context.hasLanguages ? '<li>Language Proficiencies & Communication Skills</li>' : ''}
                           ${context.hasBio ? '<li>Professional Summary & Career Objective</li>' : ''}
                       </ul>
                   </div>

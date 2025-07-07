@@ -2,7 +2,10 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { Transaction, TransactionSchema } from './schemas/transaction.schema';
+import {
+  BlockchainTransaction,
+  BlockchainTransactionSchema,
+} from './schemas/transaction.schema';
 import { RelayerService } from './services/relayer.service';
 import { BlockchainController } from './controllers/blockchain.controller';
 import { WalletService } from './services/wallet.service';
@@ -15,7 +18,7 @@ import { CredentialController } from './controllers/credential.controller';
     ConfigModule,
     EventEmitterModule.forRoot(),
     MongooseModule.forFeature([
-      { name: Transaction.name, schema: TransactionSchema },
+      { name: BlockchainTransaction.name, schema: BlockchainTransactionSchema },
     ]),
   ],
   providers: [RelayerService, WalletService, CredentialService],

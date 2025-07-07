@@ -1,10 +1,14 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
+import {
+  TransactionStatusEnum,
+  TransactionTypeEnum,
+} from 'src/common/enums/transaction.enum';
 
-export type TransactionDocument = Transaction & Document;
+export type BlockchainTransactionDocument = BlockchainTransaction & Document;
 
 @Schema()
-export class Transaction {
+export class BlockchainTransaction {
   @Prop({ required: true, index: true })
   transactionId: string;
 
@@ -26,8 +30,11 @@ export class Transaction {
   @Prop({ required: true })
   operation: number;
 
-  @Prop({ required: true, enum: ['PENDING', 'SUCCESS', 'FAILED'] })
-  status: string;
+  @Prop({ required: true, enum: TransactionStatusEnum })
+  status: TransactionStatusEnum;
+
+  @Prop({ required: true, enum: TransactionTypeEnum })
+  type: TransactionTypeEnum;
 
   @Prop()
   transactionHash?: string;
@@ -51,4 +58,6 @@ export class Transaction {
   updatedAt?: Date;
 }
 
-export const TransactionSchema = SchemaFactory.createForClass(Transaction);
+export const BlockchainTransactionSchema = SchemaFactory.createForClass(
+  BlockchainTransaction,
+);
