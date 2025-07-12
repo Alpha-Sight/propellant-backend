@@ -1,30 +1,42 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
 import { CredentialService } from '../services/credential.service';
-import { LoggedInUserDecorator } from '../../../../common/decorators/logged-in-user.decorator';
-import { UserDocument } from '../../user/schemas/user.schema';
-import { ResponseMessage } from '../../../../common/decorators/response.decorator';
-import { MintCredentialDto } from '../dto/mint-credential.dto';
+import { ResponseMessage } from 'src/common/decorators/response.decorator';
+import { LoggedInUserDecorator } from 'src/common/decorators/logged-in-user.decorator';
+import { UserDocument } from 'src/module/v1/user/schemas/user.schema';
+import { IssueCredentialDto } from '../dto/mint-credential.dto';
+import { WalletService } from '../services/wallet.service';
 
 @Controller('blockchain/credentials')
 export class CredentialController {
-  constructor(private readonly credentialService: CredentialService) {}
+  logger: any;
+  constructor(
+    private readonly credentialService: CredentialService,
+    private readonly walletService: WalletService, // Add this injection
+  ) {}
 
-  @Post('mint')
+  @Post('issue')
   @UseGuards(JwtAuthGuard)
-  @ResponseMessage('Credential minting transaction queued successfully')
-  async mintCredential(
-    @Body() payload: MintCredentialDto,
+  @ResponseMessage('Credential issuance transaction queued successfully')
+  async issueCredential(
+    @Body() payload: IssueCredentialDto,
     @LoggedInUserDecorator() user: UserDocument,
   ) {
-    // Only admins or approved issuers can mint credentials
+    // Only admins or approved issuers can issue credentials
     if (!user.role?.includes('ADMIN') && !user.role?.includes('ISSUER')) {
+
+      throw new Error('Unauthorized: Only admins or approved issuers can issue credentials');
+    }
+    
+    return this.credentialService.issueCredential(payload, user._id.toString());
+
       throw new Error(
         'Unauthorized: Only admins or approved issuers can mint credentials',
       );
     }
 
     return this.credentialService.mintCredential(payload, user._id.toString());
+
   }
 
   @Get(':walletAddress')
@@ -34,8 +46,19 @@ export class CredentialController {
     return this.credentialService.getCredentialsForWallet(walletAddress);
   }
 
-  @Get('verify/:credentialId')
+  @Post('verify/:id')
   @UseGuards(JwtAuthGuard)
+
+  async verifyCredential(@Param('id') id: string, @LoggedInUserDecorator() user: UserDocument) {
+    // The previous error was because `req.user.address` was undefined.
+    // The fix is to use the LoggedInUserDecorator to get the full user document
+    // and then access the property that holds the wallet address.
+    // We assume this property is named 'walletAddress'.
+    // If your User schema uses a different name, please update it here.
+    const verifierAddress = user.walletAddress; 
+
+    return this.credentialService.verifyCredential(id, verifierAddress); 
+
   @ResponseMessage('Credential verification transaction queued successfully')
   async verifyCredential(
     @Param('credentialId') credentialId: string,
@@ -73,4 +96,21 @@ export class CredentialController {
       user._id.toString(),
     );
   }
+
+
+  @Get('pending/:walletAddress')
+  @UseGuards(JwtAuthGuard)
+  @ResponseMessage('Pending credentials retrieved successfully')
+  async getPendingCredentialsForWallet(@Param('walletAddress') walletAddress: string) {
+    try {
+      // Use the wallet address directly, not the account address
+      return this.credentialService.getPendingCredentials(walletAddress);
+    } catch (error) {
+      this.logger.error(`Failed to get pending credentials: ${error.message}`);
+      throw error;
+    }
+  }
 }
+
+}
+

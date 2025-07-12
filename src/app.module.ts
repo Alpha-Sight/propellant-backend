@@ -11,6 +11,7 @@ import { AppService } from './app.service';
 import { CredentialModule } from './module/v1/credential/credential.module';
 import { WaitlistModule } from './module/v1/waitlist/waitlist.module';
 import { BlockchainModule } from './module/v1/blockchain/blockchain.module';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CvModule } from './module/v1/cv/cv.module';
 import { PremiumModule } from './module/v1/premium/premium.module';
 import { PaymentModule } from './module/v1/payment/payment.module';
@@ -25,6 +26,9 @@ import { TransactionModule } from './module/v1/transaction/transaction.module';
     MailModule,
     OtpModule,
     SettingModule,
+    EventEmitterModule.forRoot({
+      global: true, // Make it global so other modules can use it
+    }),
     CredentialModule,
     WaitlistModule,
     CvModule,
