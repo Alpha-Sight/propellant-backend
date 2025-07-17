@@ -95,4 +95,19 @@ export class PDFHelper {
 
     return filePath;
   }
+
+  static async generatePDFBufferFromHTML(html: string): Promise<Buffer> {
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+
+    const pdfUint8 = await page.pdf({ format: 'A4', printBackground: true });
+    const pdfBuffer = Buffer.from(pdfUint8);
+
+    await browser.close();
+    return pdfBuffer;
+  }
 }

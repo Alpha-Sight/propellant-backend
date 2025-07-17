@@ -13,8 +13,9 @@ import { UserService } from '../services/user.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
 import {
   ChangeEmailDto,
+  UpdateOrganizationProfileDto,
   UpdatePasswordDto,
-  UpdateProfileDto,
+  UpdateTalentProfileDto,
   UserAvailabilityDto,
 } from '../dto/user.dto';
 import { NoCache } from '../../../../common/decorators/cache.decorator';
@@ -25,6 +26,9 @@ import { ResponseMessage } from '../../../../common/decorators/response.decorato
 import { LoggedInUserDecorator } from '../../../../common/decorators/logged-in-user.decorator';
 import { UserDocument } from '../schemas/user.schema';
 import { PaginationDto } from '../../repository/dto/repository.dto';
+import { Roles } from 'src/common/decorators/role.decorator';
+import { UserRoleEnum } from 'src/common/enums/user.enum';
+import { RoleGuard } from '../../auth/guards/role.guard';
 
 @NoCache()
 @Controller('users')
@@ -56,13 +60,29 @@ export class UserController {
   }
 
   @UseInterceptors(FileInterceptor('image'))
-  @Patch('profile')
-  async updateProfile(
-    @Body() payload: UpdateProfileDto,
+  @Patch('profile/talent')
+  async updateTalentProfile(
+    @Body() payload: UpdateTalentProfileDto,
     @LoggedInUserDecorator() user: UserDocument,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return await this.userService.updateProfile(user, payload, file);
+    return await this.userService.updateTalentProfile(user, payload, file);
+  }
+
+  @UseGuards(RoleGuard)
+  @Roles(UserRoleEnum.ORGANIZATION)
+  @UseInterceptors(FileInterceptor('image'))
+  @Patch('profile/organization')
+  async updateOrganizationProfile(
+    @Body() payload: UpdateOrganizationProfileDto,
+    @LoggedInUserDecorator() user: UserDocument,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return await this.userService.updateOrganizationProfile(
+      user,
+      payload,
+      file,
+    );
   }
 
   @Public()

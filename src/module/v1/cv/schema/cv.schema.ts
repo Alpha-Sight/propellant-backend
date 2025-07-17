@@ -1,5 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import mongoose, { Document } from 'mongoose';
+import { User, UserDocument } from '../../user/schemas/user.schema';
+import { SkillLevelEnum } from 'src/common/enums/cv.enum';
 
 export type CVDocument = CV & Document;
 
@@ -59,8 +61,8 @@ export class Skill {
   @Prop({ required: true })
   name: string;
 
-  @Prop({ enum: ['beginner', 'intermediate', 'advanced', 'expert'] })
-  level?: string;
+  @Prop({ enum: SkillLevelEnum })
+  level?: SkillLevelEnum;
 
   @Prop()
   category?: string;
@@ -128,8 +130,14 @@ export class Socials {
 
 @Schema({ timestamps: true })
 export class CV {
-  @Prop({ unique: true, index: true })
-  email: string;
+  @Prop({
+    type: mongoose.Schema.Types.ObjectId,
+    ref: User.name,
+  })
+  user: UserDocument;
+
+  @Prop({ sparse: true })
+  email?: string;
 
   @Prop({ required: false, default: null, trim: true, index: true })
   firstName: string;
@@ -149,14 +157,14 @@ export class CV {
   @Prop()
   address?: string;
 
-  @Prop()
-  github?: string;
+  // @Prop()
+  // github?: string;
 
-  @Prop()
-  portfolio?: string;
+  // @Prop()
+  // portfolio?: string;
 
-  @Prop()
-  website?: string;
+  // @Prop()
+  // website?: string;
 
   @Prop([Experience])
   workExperience?: Experience[];
@@ -173,20 +181,20 @@ export class CV {
   @Prop([Project])
   projects?: Project[];
 
-  @Prop([String])
-  languages?: string[];
+  // @Prop([String])
+  // languages?: string[];
 
-  @Prop([String])
-  hobbies?: string[];
+  // @Prop([String])
+  // hobbies?: string[];
 
-  @Prop([String])
-  achievements?: string[];
+  // @Prop([String])
+  // achievements?: string[];
 
-  @Prop([Socials])
-  socials?: Socials[];
+  // @Prop([Socials])
+  // socials?: Socials[];
 
-  @Prop([String])
-  references?: string[];
+  // @Prop([String])
+  // references?: string[];
 
   @Prop({ default: false })
   isDeleted: boolean;

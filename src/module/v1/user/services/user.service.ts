@@ -12,8 +12,9 @@ import {
   CreateOrganizationDto,
   CreateUserDto,
   CreateWalletUserDto,
+  UpdateOrganizationProfileDto,
   UpdatePasswordDto,
-  UpdateProfileDto,
+  UpdateTalentProfileDto,
   // UpdateProfileDto,
   UserAvailabilityDto,
 } from '../dto/user.dto';
@@ -256,9 +257,9 @@ export class UserService {
     return this.userModel.findById(userId);
   }
 
-  async updateProfile(
+  async updateTalentProfile(
     user: UserDocument,
-    payload: UpdateProfileDto,
+    payload: UpdateTalentProfileDto,
     file?: Express.Multer.File,
   ) {
     // const { username } = payload;
@@ -299,6 +300,31 @@ export class UserService {
     // if (!user?.referralCode) {
     //   updateData['referralCode'] = user?.username;
     // }
+
+    return await this.userModel.findByIdAndUpdate(
+      user._id,
+      { ...payload, ...(imageUrl && { imageUrl }), ...updateData },
+      {
+        new: true,
+      },
+    );
+  }
+
+  async updateOrganizationProfile(
+    user: UserDocument,
+    payload: UpdateOrganizationProfileDto,
+    file?: Express.Multer.File,
+  ) {
+    let imageUrl = null;
+
+    if (file) {
+      const uploadResult = await this.pinataService.uploadFile(file);
+      imageUrl = uploadResult;
+    }
+
+    const updateData = {
+      ...payload,
+    };
 
     return await this.userModel.findByIdAndUpdate(
       user._id,

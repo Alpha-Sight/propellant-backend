@@ -15,6 +15,7 @@ import { CvModule } from './module/v1/cv/cv.module';
 import { PremiumModule } from './module/v1/premium/premium.module';
 import { PaymentModule } from './module/v1/payment/payment.module';
 import { TransactionModule } from './module/v1/transaction/transaction.module';
+import { OrganizationPostModule } from './module/v1/organization-post/organization-post.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { TransactionModule } from './module/v1/transaction/transaction.module';
     PaymentModule,
     TransactionModule,
     BlockchainModule,
+    OrganizationPostModule,
   ],
   controllers: [AppController],
   providers: [AppService],
