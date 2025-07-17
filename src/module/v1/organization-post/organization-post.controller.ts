@@ -4,7 +4,6 @@ import {
   Get,
   Patch,
   Post,
-  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -82,5 +81,19 @@ export class OrganizationPostController {
       _id,
       payload,
     );
+  }
+
+  @UseGuards(RoleGuard)
+  @Roles(UserRoleEnum.SUPER_ADMIN, UserRoleEnum.ADMIN)
+  @Delete('remove')
+  async remove(@Query() { _id }: IDQueryDto) {
+    return await this.adminUserService.softDelete(_id);
+  }
+
+  @UseGuards(RoleGuard)
+  @Roles(UserRoleEnum.SUPER_ADMIN, UserRoleEnum.ADMIN)
+  @Delete('restore')
+  async restore(@Query() { _id }: IDQueryDto) {
+    return await this.adminUserService.restoreDeleted(_id);
   }
 }
