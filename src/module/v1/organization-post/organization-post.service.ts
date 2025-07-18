@@ -12,19 +12,22 @@ import {
 } from './schema/organization-post.schema';
 import { RepositoryService } from '../repository/repository.service';
 import { UserDocument } from '../user/schemas/user.schema';
+import { BaseRepositoryService } from '../repository/base.service';
 
 @Injectable()
-export class OrganizationPostService {
+export class OrganizationPostService extends BaseRepositoryService<OrganizationPostDocument> {
   constructor(
     @InjectModel(OrganizationPost.name)
     private organizationPostModel: Model<OrganizationPostDocument>,
     private repositoryService: RepositoryService,
-  ) {}
+  ) {
+    super(organizationPostModel);
+  }
 
   async createJobPost(
     organization: UserDocument,
     payload: CreateJobPostDto,
-  ): Promise<OrganizationPost> {
+  ): Promise<OrganizationPostDocument> {
     return await this.organizationPostModel.create({
       organization: organization._id,
       ...payload,
@@ -136,5 +139,67 @@ export class OrganizationPostService {
     }
 
     return updatedJobPost;
+  }
+
+  async deleteJobPost(postId: string, organizationId: string) {
+    const deletedPost = await this.organizationPostModel.findOneAndUpdate(
+      {
+        _id: postId,
+        organization: organizationId,
+        isDeleted: { $ne: true },
+      },
+      { isDeleted: true },
+      { new: true },
+    );
+
+    if (!deletedPost) {
+      throw new NotFoundException('Job post not found or already deleted');
+    }
+
+    return {
+      message: 'Job post deleted successfully',
+      // data: deletedPost,
+    };
+  }
+
+  async toggleJobPostActivation(postId: string, organizationId: string) {
+    const jobPost = await this.organizationPostModel.findOne({
+      _id: postId,
+      organization: organizationId,
+      isDeleted: { $ne: true },
+    });
+
+    if (!jobPost) {
+      throw new NotFoundException('Job post not found');
+    }
+
+    jobPost.isActive = !jobPost.isActive;
+    await jobPost.save();
+
+    return {
+      message: `Job post has been ${jobPost.isActive ? 'activated' : 'inactivated'} successfully`,
+      // data: jobPost,
+    };
+  }
+
+  async getJobPostStats(organizationId: string) {
+    const [total, activePosts, inactivePosts] = await Promise.all([
+      this.organizationPostModel.countDocuments({
+        organization: organizationId,
+        isDeleted: { $ne: true },
+      }),
+      this.organizationPostModel.countDocuments({
+        organization: organizationId,
+        isDeleted: { $ne: true },
+        isActive: true,
+      }),
+      this.organizationPostModel.countDocuments({
+        organization: organizationId,
+        isDeleted: { $ne: true },
+        isActive: false,
+      }),
+    ]);
+
+    return { total, activePosts, inactivePosts };
   }
 }

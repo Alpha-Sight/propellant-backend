@@ -189,6 +189,10 @@ export class UpdateOrganizationProfileDto {
   // @ValidateNested({ each: true })
   // @Type(() => OrganizationSocialDto)
   socials?: OrganizationSocialDto[];
+
+  @IsOptional()
+  @IsString()
+  website?: string;
 }
 
 export class CheckUsernameAvailableDto {

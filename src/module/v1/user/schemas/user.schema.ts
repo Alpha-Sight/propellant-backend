@@ -76,6 +76,9 @@ export class User {
   @Prop({ required: false, type: [OrganizationSocialDto] })
   socials?: OrganizationSocialDto[];
 
+  // @Prop({ default: 0 })
+  // totalJobPost: number;
+
   // general profile properties
   @Prop({ default: null, index: true })
   referralCode: string;
@@ -118,6 +121,30 @@ UserSchema.pre(/^find/, function (next) {
 
   next();
 });
+
+// UserSchema.set('toObject', {
+//   transform: (_, ret) => {
+//     if (ret.role === 'TALENT') {
+//       delete ret.totalJobPost;
+//     }
+//     if (ret.role === 'ORGANIZATION') {
+//       delete ret.totalReferrals;
+//     }
+//     return ret;
+//   },
+// });
+
+// UserSchema.set('toJSON', {
+//   transform: (_, ret) => {
+//     if (ret.role === 'TALENT') {
+//       delete ret.totalJobPost;
+//     }
+//     if (ret.role === 'ORGANIZATION') {
+//       delete ret.totalReferrals;
+//     }
+//     return ret;
+//   },
+// });
 
 // UserSchema.pre('validate', async function (next) {
 //   if (!this.referralCode) {

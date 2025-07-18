@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { JobTypeEnum } from 'src/common/enums/organization.enum';
 import { User, UserDocument } from '../../user/schemas/user.schema';
-import mongoose from 'mongoose';
+import mongoose, { Document } from 'mongoose';
 
 export type OrganizationPostDocument = OrganizationPost & Document;
 
@@ -30,6 +30,9 @@ export class OrganizationPost {
 
   @Prop({ type: [String], required: true })
   requiredSkills: string[];
+
+  @Prop({ default: true })
+  isActive: boolean;
 
   @Prop({ default: false })
   isDeleted: boolean;

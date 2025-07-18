@@ -45,7 +45,7 @@ export const RESPONSE_CONSTANT = {
   },
   CV: {
     DOWNLOAD_SUCCESS: 'CV Downloaded successfully',
-    GENERATE_SUCCESS: 'CV Downloaded successfully',
+    GENERATE_SUCCESS: 'CV Generated successfully',
     OPTIMIZED_SUCCESS: 'CV Optimized successfully',
     DRAFT_SAVED_SUCCESS: 'Draft saved successfully',
     DRAFT_UPDATED_SUCCESS: 'Draft updated successfully',
