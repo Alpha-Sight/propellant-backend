@@ -15,13 +15,13 @@ import { classicCVTemplate } from 'src/common/utils/pdf/templates/cv/classic.tem
 import { CV, CVDocument } from './schema/cv.schema';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { firstValueFrom } from 'rxjs';
 import { HttpService } from '@nestjs/axios';
+import axios from 'axios';
 
 @Injectable()
 export class CvService {
   private readonly logger = new Logger(CvService.name);
-  private readonly AI_URL = 'https://ai-service-manager.fly.dev/cv-analysis';
+  private readonly AI_URL = 'https://propellant.fly.dev/api/cv-analysis';
 
   constructor(
     private mailService: MailService,
@@ -109,42 +109,104 @@ export class CvService {
     return draft ?? {};
   }
 
-  async optimizeCV(payload: GenerateCVDto): Promise<GenerateCVDto> {
+  // async optimizeCV(payload: GenerateCVDto): Promise<GenerateCVDto> {
+  //   try {
+  //     const { data } = await firstValueFrom(
+  //       this.httpService.post(this.AI_URL, {
+  //         skills: payload.skills || [],
+  //         jobDescription: payload.professionalSummary || '',
+  //         experiences: payload.workExperience || [],
+  //       }),
+  //     );
+
+  //     return {
+  //       ...payload,
+  //       workExperience: data.experiences ?? payload.workExperience,
+  //       skills: data.skills ?? payload.skills,
+  //       professionalSummary: data.jobDescription ?? payload.professionalSummary,
+  //     };
+  //   } catch (err) {
+  //     this.logger.error('AI Optimization Failed', err);
+  //     return payload;
+  //   }
+  // }
+
+  // import axios from 'axios';
+
+  async optimizeCV(userCvData: any) {
     try {
-      const inferredJobTitle =
-        payload.workExperience?.[0]?.title || 'Professional';
+      if (!userCvData) throw new Error('userCvData is required');
 
-      const inferredYearsOfExperience = payload.workExperience
-        ? payload.workExperience.length
-        : 0;
+      // Ensure arrays exist
+      const skillsInput = Array.isArray(userCvData.skills)
+        ? userCvData.skills
+        : [];
+      const workInput = Array.isArray(userCvData.workExperience)
+        ? userCvData.workExperience
+        : [];
 
-      const inferredCurrentRole =
-        payload.workExperience?.[0]?.description || 'N/A';
+      // Map skills
+      const skills = skillsInput.map((skill, index) => ({
+        id: `${index}`,
+        name: skill.name || '',
+        level: skill.level || '',
+      }));
 
-      const inferredJobDescription =
-        payload.workExperience?.[0]?.description || 'No description available';
+      // Map experiences
+      const experiences = workInput.map((exp, index) => ({
+        id: `${index}`,
+        company: exp.company || '',
+        position: exp.position || '',
+        startDate: exp.startDate || '',
+        endDate: exp.endDate || '',
+        current: !!exp.isCurrentRole,
+        location: exp.location || '',
+        description: exp.description || '',
+        achievements: exp.achievements || [], // Pass if present, else empty
+      }));
 
-      const { data } = await firstValueFrom(
-        this.httpService.post(this.AI_URL, {
-          job_title: inferredJobTitle,
-          experience_years: inferredYearsOfExperience.toString(),
-          skills: (payload.skills || []).map((s) => s.name).join(', '),
-          current_role: inferredCurrentRole,
-          job_description: inferredJobDescription,
-          cv_text: payload.professionalSummary || '',
-        }),
+      // Prepare AI payload
+      const aiPayload = {
+        skills,
+        jobDescription: userCvData.professionalSummary || '',
+        experiences,
+      };
+
+      // Optional: Log payload for debugging
+      console.log(
+        '[CvService] Sending payload to AI:',
+        JSON.stringify(aiPayload, null, 2),
       );
 
+      // Send to AI service
+      const { data } = await axios.post(
+        'https://propellant.fly.dev/api/cv-analysis',
+        aiPayload,
+      );
+
+      console.log('[CvService] AI optimization successful');
       return {
-        ...payload,
-        professionalSummary: data.cv_text ?? payload.professionalSummary,
-        workExperience: data.workExperience ?? payload.workExperience,
-        skills: data.skills ?? payload.skills,
-        certifications: data.certifications ?? payload.certifications,
+        ...userCvData,
+        professionalSummary:
+          data.professionalSummary ?? userCvData.professionalSummary,
+        skills: (data.skills || []).map(({ name, level }) => ({ name, level })),
+        workExperience: (data.experiences || []).map((exp) => ({
+          company: exp.company,
+          position: exp.position,
+          startDate: exp.startDate,
+          endDate: exp.endDate,
+          isCurrentRole: exp.current,
+          location: exp.location,
+          description: exp.description,
+          achievements: exp.achievements || [],
+        })),
       };
-    } catch (err) {
-      this.logger.error('AI Optimization Failed', err);
-      return payload;
+    } catch (error) {
+      console.error('[CvService] AI Optimization Failed', error.message);
+      if (error.response) {
+        console.error('[CvService] AI Error Response:', error.response.data);
+      }
+      throw new Error('AI Optimization failed. Please try again.');
     }
   }
 
