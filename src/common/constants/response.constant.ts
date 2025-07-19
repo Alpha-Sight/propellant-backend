@@ -43,4 +43,12 @@ export const RESPONSE_CONSTANT = {
     SELECT_PREMIUM_PLAN_SUCCESS: 'User plan selected successfully',
     PROCESS_PREMIUM_PAYMENT_SUCCESS: 'User upgraded to premium successfully',
   },
+  CV: {
+    DOWNLOAD_SUCCESS: 'CV Downloaded successfully',
+    GENERATE_SUCCESS: 'CV Generated successfully',
+    OPTIMIZED_SUCCESS: 'CV Optimized successfully',
+    DRAFT_SAVED_SUCCESS: 'Draft saved successfully',
+    DRAFT_UPDATED_SUCCESS: 'Draft updated successfully',
+    DRAFT_RETRIEVED_SUCCESS: 'Draft retrieved successfully',
+  },
 };

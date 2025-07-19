@@ -1,5 +1,6 @@
 import { Transform } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsBooleanString,
   IsEmail,
@@ -53,22 +54,28 @@ export class ChangeEmailDto {
 
 export class CreateOrganizationDto extends CreateUserDto {
   @IsString()
-  businessDescription: string;
+  @IsOptional()
+  businessDescription?: string;
 
   @IsString()
-  businessLocation: string;
+  @IsOptional()
+  businessLocation?: string;
 
   @IsString()
-  address: string;
+  @IsOptional()
+  address?: string;
 
   @IsString()
-  city: string;
+  @IsOptional()
+  city?: string;
 
   @IsString()
-  state: string;
+  @IsOptional()
+  state?: string;
 
   @IsString()
-  country: string;
+  @IsOptional()
+  country?: string;
 }
 export class UpdatePasswordDto {
   @IsString()
@@ -90,7 +97,7 @@ export class UpdatePasswordDto {
   confirmPassword: string;
 }
 
-export class UpdateProfileDto {
+export class UpdateTalentProfileDto {
   @IsOptional()
   @IsString()
   fullname?: string;
@@ -132,6 +139,60 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString({ each: true })
   achievements?: string;
+}
+
+export class OrganizationSocialDto {
+  @IsString()
+  platform: string;
+
+  @IsUrl()
+  url: string;
+}
+
+export class UpdateOrganizationProfileDto {
+  @IsOptional()
+  @IsString()
+  companyName?: string;
+
+  @IsOptional()
+  @IsString()
+  tagline?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsString()
+  industry?: string;
+
+  @IsOptional()
+  @IsString()
+  companySize?: string;
+
+  @IsOptional()
+  @IsArray()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? JSON.parse(value) : value,
+  )
+  offers?: string[];
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    try {
+      return typeof value === 'string' ? JSON.parse(value) : value;
+    } catch {
+      return [];
+    }
+  })
+  @IsArray()
+  // @ValidateNested({ each: true })
+  // @Type(() => OrganizationSocialDto)
+  socials?: OrganizationSocialDto[];
+
+  @IsOptional()
+  @IsString()
+  website?: string;
 }
 
 export class CheckUsernameAvailableDto {

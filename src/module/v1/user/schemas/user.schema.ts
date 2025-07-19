@@ -5,11 +5,13 @@ import {
   UserRoleEnum,
 } from '../../../../common/enums/user.enum';
 import { PlanTypeEnum } from 'src/common/enums/premium.enum';
+import { OrganizationSocialDto } from '../dto/user.dto';
 
 export type UserDocument = User & Document;
 
 @Schema({ timestamps: true })
 export class User {
+  // user profile properties
   @Prop({ unique: true, index: true })
   email: string;
 
@@ -22,10 +24,10 @@ export class User {
   @Prop({ required: false, default: '' })
   profilePhoto: string;
 
-  @Prop({ required: false, default: '', trim: true, index: true })
+  @Prop({ required: false, trim: true, index: true })
   fullname: string;
 
-  @Prop({ default: '' })
+  @Prop({ required: false })
   bio: string;
 
   @Prop({ required: false })
@@ -52,6 +54,32 @@ export class User {
   @Prop({ required: false })
   instagram?: string;
 
+  // organization profile properties
+  @Prop({ required: false })
+  companyName?: string;
+
+  @Prop({ required: false })
+  tagline?: string;
+
+  @Prop({ required: false })
+  description?: string;
+
+  @Prop({ required: false })
+  industry?: string;
+
+  @Prop({ required: false })
+  companySize?: string;
+
+  @Prop({ required: false, type: [String] })
+  offers?: string[];
+
+  @Prop({ required: false, type: [OrganizationSocialDto] })
+  socials?: OrganizationSocialDto[];
+
+  // @Prop({ default: 0 })
+  // totalJobPost: number;
+
+  // general profile properties
   @Prop({ default: null, index: true })
   referralCode: string;
 
@@ -93,6 +121,30 @@ UserSchema.pre(/^find/, function (next) {
 
   next();
 });
+
+// UserSchema.set('toObject', {
+//   transform: (_, ret) => {
+//     if (ret.role === 'TALENT') {
+//       delete ret.totalJobPost;
+//     }
+//     if (ret.role === 'ORGANIZATION') {
+//       delete ret.totalReferrals;
+//     }
+//     return ret;
+//   },
+// });
+
+// UserSchema.set('toJSON', {
+//   transform: (_, ret) => {
+//     if (ret.role === 'TALENT') {
+//       delete ret.totalJobPost;
+//     }
+//     if (ret.role === 'ORGANIZATION') {
+//       delete ret.totalReferrals;
+//     }
+//     return ret;
+//   },
+// });
 
 // UserSchema.pre('validate', async function (next) {
 //   if (!this.referralCode) {
