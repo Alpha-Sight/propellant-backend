@@ -6,6 +6,7 @@ import {
   forwardRef,
   UnprocessableEntityException,
   HttpStatus,
+  Logger, // Import Logger
 } from '@nestjs/common';
 import { CreateUserDto } from '../user/dto/user.dto';
 import { UserService } from '../user/services/user.service';
@@ -32,20 +33,57 @@ import { cacheKeys } from 'src/common/constants/cache.constant';
 import { CacheHelperUtil } from 'src/common/utils/cache-helper.util';
 import { UserDocument } from '../user/schemas/user.schema';
 import { authConstants } from 'src/common/constants/authConstant';
+import { WalletService } from '../blockchain/services/wallet.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name); // Initialize logger
+
   constructor(
     private userService: UserService,
     private jwtService: JwtService,
     @Inject(forwardRef(() => OtpService))
     private readonly otpService: OtpService,
     private mailService: MailService,
+    @Inject(forwardRef(() => WalletService))
+    private walletService: WalletService,
   ) {}
 
   async register(payload: CreateUserDto) {
     const user = await this.userService.createUser(payload);
 
+    // Auto-generate wallet for the user using email
+    try {
+      const walletResult = await this.walletService.createWallet(
+        user._id.toString(),
+        user.email, // Pass the email for deterministic generation
+      );
+      const wallet = walletResult as unknown as { walletAddress?: string; accountAddress?: string } | null | undefined;
+      
+      if (wallet && wallet.walletAddress && wallet.accountAddress) {
+        // Update user with wallet information
+        await this.userService.updateQuery(
+          { _id: user._id },
+          { 
+            walletAddress: wallet.walletAddress,
+            accountAddress: wallet.accountAddress 
+          }
+        );
+
+        this.logger.log(`Auto-generated wallet ${wallet.walletAddress} for user ${user.email}`);
+      } else if (wallet) {
+        this.logger.warn(`Wallet created for user ${user.email}, but some properties (walletAddress/accountAddress) might be missing. Wallet object: ${JSON.stringify(wallet)}`);
+      } else {
+         this.logger.warn(`Wallet creation did not return a wallet object for user ${user.email}.`);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to auto-generate wallet for user ${user.email}: ${error instanceof Error ? error.message : String(error)}`,
+        error instanceof Error ? error.stack : undefined // Log stack trace if available
+      );
+    }
+
+    // Send OTP as usual
     await this.otpService.sendOTP({
       email: payload.email,
       type: OtpTypeEnum.VERIFY_EMAIL,

@@ -26,7 +26,17 @@ export class BlockchainController {
       );
     }
 
-    return this.relayerService.queueTransaction(payload);
+    
+    return this.relayerService.queueTransaction({
+      ...payload,
+      value: payload.value || '0',
+      operation: payload.operation || 0,
+      description: payload.description || 'User submitted transaction',
+    });
+
+
+//     return this.relayerService.queueTransaction(payload);
+
   }
 
   @Get('transactions/:id')
