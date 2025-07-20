@@ -9,7 +9,6 @@ import { User, UserDocument } from '../schemas/user.schema';
 import { ClientSession, FilterQuery, Model, UpdateQuery } from 'mongoose';
 import {
   ChangeEmailDto,
-  CreateOrganizationDto,
   CreateUserDto,
   CreateWalletUserDto,
   UpdateOrganizationProfileDto,
@@ -22,10 +21,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { BaseHelper } from '../../../../common/utils/helper/helper.util';
 import { OtpTypeEnum } from '../../../../common/enums/otp.enum';
 import { OtpService } from '../../otp/services/otp.service';
-import {
-  AuthSourceEnum,
-  UserRoleEnum,
-} from '../../../../common/enums/user.enum';
+import { AuthSourceEnum } from '../../../../common/enums/user.enum';
 import { GoogleAuthDto } from '../../auth/dto/auth.dto';
 import { PinataService } from 'src/common/utils/pinata.util';
 import { PaginationDto } from '../../repository/dto/repository.dto';
@@ -42,12 +38,9 @@ export class UserService {
     private walletService: WalletService,
   ) {}
 
-  async createUser(
-    payload: CreateUserDto | CreateOrganizationDto,
-    role?: UserRoleEnum,
-  ) {
+  async createUser(payload: CreateUserDto) {
     try {
-      const { referralCode } = payload;
+      const { referralCode, role } = payload;
 
       if (!payload.termsAndConditionsAccepted) {
         throw new BadRequestException('Please accept terms and conditions');
@@ -81,10 +74,10 @@ export class UserService {
 
       const hashedPassword = await BaseHelper.hashData(payload.password);
 
-      let userRole = role ?? UserRoleEnum.TALENT;
-      if (payload instanceof CreateOrganizationDto) {
-        userRole = UserRoleEnum.ORGANIZATION;
-      }
+      // let userRole = role ?? UserRoleEnum.TALENT;
+      // if (payload.role === UserRoleEnum.ORGANIZATION) {
+      //   userRole = UserRoleEnum.ORGANIZATION;
+      // }
 
       // Generate unique referral code for the new user
       const userReferralCode = await BaseHelper.generateReferenceCode();
@@ -95,7 +88,7 @@ export class UserService {
       const createdUser = await this.userModel.create({
         ...payload,
         password: hashedPassword,
-        role: userRole,
+        role: role,
         referredBy: referralUserId,
         referralCode: userReferralCode,
         walletAddress: createWallet.walletAddress,

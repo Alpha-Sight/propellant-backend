@@ -22,7 +22,7 @@ import {
 import { BaseHelper } from '../../../common/utils/helper/helper.util';
 import { OtpService } from '../otp/services/otp.service';
 import { ENVIRONMENT } from '../../../common/configs/environment';
-import { AuthSourceEnum, UserRoleEnum } from '../../../common/enums/user.enum';
+import { AuthSourceEnum } from '../../../common/enums/user.enum';
 import { OtpTypeEnum } from '../../../common/enums/otp.enum';
 import { MailService } from '../mail /mail.service';
 import { welcomeEmailTemplate } from '../mail /templates/welcome.email';
@@ -49,9 +49,8 @@ export class AuthService {
     private walletService: WalletService,
   ) {}
 
-  async register(payload: CreateUserDto, role?: UserRoleEnum) {
-    // Create user first
-    const user = await this.userService.createUser(payload, role);
+  async register(payload: CreateUserDto) {
+    const user = await this.userService.createUser(payload);
 
     // Auto-generate wallet for the user using email
     try {
