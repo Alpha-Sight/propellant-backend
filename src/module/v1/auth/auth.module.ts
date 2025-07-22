@@ -4,7 +4,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { UserModule } from '../user/user.module';
 import { OtpModule } from '../otp/otp.module';
-import { MailModule } from '../mail /mail.module';
+import { MailModule } from '../mail/mail.module';
 import { BlockchainModule } from '../blockchain/blockchain.module';
 import { ENVIRONMENT } from '../../../common/configs/environment';
 import { JwtStrategy } from './strategies/jwt.strategy';

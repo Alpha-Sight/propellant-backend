@@ -89,4 +89,9 @@ export class AdminUserController {
   async restore(@Query() { _id }: IDQueryDto) {
     return await this.adminUserService.restoreDeleted(_id);
   }
+
+  // @Get('stats/aggregates')
+  // async getUserAndOrganizationStats() {
+  //   return this.adminService.aggregateUserStats();
+  // }
 }

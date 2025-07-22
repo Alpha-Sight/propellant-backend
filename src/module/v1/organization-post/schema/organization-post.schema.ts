@@ -1,7 +1,10 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { JobTypeEnum } from 'src/common/enums/organization.enum';
-import { User, UserDocument } from '../../user/schemas/user.schema';
 import mongoose, { Document } from 'mongoose';
+import {
+  Organization,
+  OrganizationDocument,
+} from '../../user/schemas/organization.schema';
 
 export type OrganizationPostDocument = OrganizationPost & Document;
 
@@ -9,9 +12,9 @@ export type OrganizationPostDocument = OrganizationPost & Document;
 export class OrganizationPost {
   @Prop({
     type: mongoose.Schema.Types.ObjectId,
-    ref: User.name,
+    ref: Organization.name,
   })
-  organization: UserDocument;
+  organization: OrganizationDocument;
 
   @Prop({ required: true })
   title: string;
@@ -33,6 +36,12 @@ export class OrganizationPost {
 
   @Prop({ default: true })
   isActive: boolean;
+
+  @Prop({ default: true })
+  isRemote: boolean;
+
+  @Prop({ default: true })
+  isVisible: boolean;
 
   @Prop({ default: false })
   isDeleted: boolean;

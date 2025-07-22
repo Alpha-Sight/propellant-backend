@@ -24,8 +24,8 @@ import { OtpService } from '../otp/services/otp.service';
 import { ENVIRONMENT } from '../../../common/configs/environment';
 import { AuthSourceEnum } from '../../../common/enums/user.enum';
 import { OtpTypeEnum } from '../../../common/enums/otp.enum';
-import { MailService } from '../mail /mail.service';
-import { welcomeEmailTemplate } from '../mail /templates/welcome.email';
+import { MailService } from '../mail/mail.service';
+import { welcomeEmailTemplate } from '../mail/templates/welcome.email';
 import { JwtService } from '@nestjs/jwt';
 import { ERROR_CODES } from 'src/common/constants/error-codes.constant';
 import { AppError } from 'src/common/filter/app-error.filter';
@@ -58,28 +58,37 @@ export class AuthService {
         user._id.toString(),
         user.email, // Pass the email for deterministic generation
       );
-      const wallet = walletResult as unknown as { walletAddress?: string; accountAddress?: string } | null | undefined;
-      
+      const wallet = walletResult as unknown as
+        | { walletAddress?: string; accountAddress?: string }
+        | null
+        | undefined;
+
       if (wallet && wallet.walletAddress && wallet.accountAddress) {
         // Update user with wallet information
         await this.userService.updateQuery(
           { _id: user._id },
-          { 
+          {
             walletAddress: wallet.walletAddress,
-            accountAddress: wallet.accountAddress 
-          }
+            accountAddress: wallet.accountAddress,
+          },
         );
 
-        this.logger.log(`Auto-generated wallet ${wallet.walletAddress} for user ${user.email}`);
+        this.logger.log(
+          `Auto-generated wallet ${wallet.walletAddress} for user ${user.email}`,
+        );
       } else if (wallet) {
-        this.logger.warn(`Wallet created for user ${user.email}, but some properties (walletAddress/accountAddress) might be missing. Wallet object: ${JSON.stringify(wallet)}`);
+        this.logger.warn(
+          `Wallet created for user ${user.email}, but some properties (walletAddress/accountAddress) might be missing. Wallet object: ${JSON.stringify(wallet)}`,
+        );
       } else {
-         this.logger.warn(`Wallet creation did not return a wallet object for user ${user.email}.`);
+        this.logger.warn(
+          `Wallet creation did not return a wallet object for user ${user.email}.`,
+        );
       }
     } catch (error) {
       this.logger.error(
         `Failed to auto-generate wallet for user ${user.email}: ${error instanceof Error ? error.message : String(error)}`,
-        error instanceof Error ? error.stack : undefined // Log stack trace if available
+        error instanceof Error ? error.stack : undefined, // Log stack trace if available
       );
     }
 

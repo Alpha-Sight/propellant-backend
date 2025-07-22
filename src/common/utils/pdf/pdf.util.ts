@@ -64,6 +64,7 @@
 // export const PDFUtil = new PDFHelper();
 
 // utils/pdf.util.ts
+import { BadRequestException } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as puppeteer from 'puppeteer';
@@ -97,17 +98,32 @@ export class PDFHelper {
   }
 
   static async generatePDFBufferFromHTML(html: string): Promise<Buffer> {
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    let browser;
+    try {
+      // const browser = await puppeteer.launch({
+      //   headless: true,
+      //   args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      // });
+      const browser = await puppeteer.launch({
+        headless: true,
+        executablePath:
+          process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      });
 
-    const pdfUint8 = await page.pdf({ format: 'A4', printBackground: true });
-    const pdfBuffer = Buffer.from(pdfUint8);
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'networkidle0' });
 
-    await browser.close();
-    return pdfBuffer;
+      const pdfUint8 = await page.pdf({ format: 'A4', printBackground: true });
+      const pdfBuffer = Buffer.from(pdfUint8);
+
+      await browser.close();
+      return pdfBuffer;
+    } catch (error) {
+      console.error(' PDF generation failed:', error);
+      throw new BadRequestException('Failed to generate PDF');
+    } finally {
+      if (browser) await browser.close();
+    }
   }
 }

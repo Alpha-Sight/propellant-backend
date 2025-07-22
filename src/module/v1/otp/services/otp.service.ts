@@ -14,12 +14,12 @@ import { BaseHelper } from '../../../../common/utils/helper/helper.util';
 import { OtpMailService } from './otp-mail.service';
 import { TwilioSms } from 'src/common/utils/twillio.utils';
 import { UserService } from '../../user/services/user.service';
-import { MailService } from '../../mail /mail.service';
+import { MailService } from '../../mail/mail.service';
 import {
   VerifyEmailTemplate,
   VerifyPhoneTemplate,
-} from '../../mail /templates/verify-email.email';
-import { ForgotPasswordTemplate } from '../../mail /templates/forgot-password.email';
+} from '../../mail/templates/verify-email.email';
+import { ForgotPasswordTemplate } from '../../mail/templates/forgot-password.email';
 
 @Injectable()
 export class OtpService {

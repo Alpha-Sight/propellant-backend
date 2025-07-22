@@ -69,21 +69,21 @@ export class UserController {
     return await this.userService.updateTalentProfile(user, payload, file);
   }
 
-  @UseGuards(RoleGuard)
-  @Roles(UserRoleEnum.ORGANIZATION)
-  @UseInterceptors(FileInterceptor('image'))
-  @Patch('profile/organization')
-  async updateOrganizationProfile(
-    @Body() payload: UpdateOrganizationProfileDto,
-    @LoggedInUserDecorator() user: UserDocument,
-    @UploadedFile() file?: Express.Multer.File,
-  ) {
-    return await this.userService.updateOrganizationProfile(
-      user,
-      payload,
-      file,
-    );
-  }
+  // @UseGuards(RoleGuard)
+  // @Roles(UserRoleEnum.ORGANIZATION)
+  // @UseInterceptors(FileInterceptor('image'))
+  // @Patch('profile/organization')
+  // async updateOrganizationProfile(
+  //   @Body() payload: UpdateOrganizationProfileDto,
+  //   @LoggedInUserDecorator() user: UserDocument,
+  //   @UploadedFile() file?: Express.Multer.File,
+  // ) {
+  //   return await this.userService.updateOrganizationProfile(
+  //     user,
+  //     payload,
+  //     file,
+  //   );
+  // }
 
   @Public()
   @Get('check-email')
@@ -98,4 +98,5 @@ export class UserController {
   ) {
     return await this.userService.showUserReferrals(user, payload);
   }
+
 }

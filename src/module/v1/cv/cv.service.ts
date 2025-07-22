@@ -1,10 +1,10 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { existsSync, unlinkSync } from 'fs';
-import { MailService } from '../mail /mail.service';
+import { MailService } from '../mail/mail.service';
 import {
   cvGeneratedEmailSubject,
   cvGeneratedEmailTemplate,
-} from '../mail /templates/cv.template.email';
+} from '../mail/templates/cv.template.email';
 import { UserDocument } from '../user/schemas/user.schema';
 import { ENVIRONMENT } from 'src/common/configs/environment';
 import { GenerateCVDto } from './dto/cv.dto';
