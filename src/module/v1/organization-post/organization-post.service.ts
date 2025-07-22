@@ -11,8 +11,10 @@ import {
   OrganizationPostDocument,
 } from './schema/organization-post.schema';
 import { RepositoryService } from '../repository/repository.service';
-import { UserDocument } from '../user/schemas/user.schema';
 import { BaseRepositoryService } from '../repository/base.service';
+import { UserService } from '../user/services/user.service';
+import { OrganizationDocument } from '../user/schemas/organization.schema';
+import { UserDocument } from '../user/schemas/user.schema';
 
 @Injectable()
 export class OrganizationPostService extends BaseRepositoryService<OrganizationPostDocument> {
@@ -20,18 +22,24 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
     @InjectModel(OrganizationPost.name)
     private organizationPostModel: Model<OrganizationPostDocument>,
     private repositoryService: RepositoryService,
+    private userService: UserService,
   ) {
     super(organizationPostModel);
   }
 
   async createJobPost(
-    organization: UserDocument,
+    organization: OrganizationDocument,
     payload: CreateJobPostDto,
   ): Promise<OrganizationPostDocument> {
-    return await this.organizationPostModel.create({
+    const jobPost = await this.organizationPostModel.create({
       organization: organization._id,
       ...payload,
     });
+
+    await this.userService.updateOrgDetails(organization._id.toString(), {
+      $inc: { totalJobPost: 1 },
+    });
+    return jobPost;
   }
 
   async getAllJobPosts(query: GetAllJobPostsDto) {
@@ -73,7 +81,7 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
   }
 
   async getOrganizationJobPosts(
-    organization: UserDocument,
+    organization: OrganizationDocument,
     query: GetAllJobPostsDto,
   ) {
     const {
@@ -122,7 +130,7 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
   }
 
   async updateJobPostById(
-    organization: UserDocument,
+    organization: OrganizationDocument,
     postId: string,
     payload: UpdateJobPostDto,
   ): Promise<OrganizationPostDocument> {
@@ -155,6 +163,11 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
     if (!deletedPost) {
       throw new NotFoundException('Job post not found or already deleted');
     }
+
+    // Decrement totalJobPosts count
+    await this.userService.updateOrgDetails(organizationId, {
+      $inc: { totalJobPosts: -1 },
+    });
 
     return {
       message: 'Job post deleted successfully',
@@ -201,5 +214,17 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
     ]);
 
     return { total, activePosts, inactivePosts };
+  }
+
+  async getMatchingTalentsForJob(jobPostId: string): Promise<UserDocument[]> {
+    const jobPost = await this.organizationPostModel.findById(jobPostId);
+
+    if (!jobPost) {
+      throw new NotFoundException('Job post not found');
+    }
+
+    const jobSkills = jobPost.requiredSkills;
+
+    return this.userService.getUserBySkills(jobSkills);
   }
 }

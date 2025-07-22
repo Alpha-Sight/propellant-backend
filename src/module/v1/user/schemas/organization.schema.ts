@@ -1,16 +1,17 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import mongoose, { Document } from 'mongoose';
+import { Document } from 'mongoose';
 import {
   AuthSourceEnum,
   UserRoleEnum,
 } from '../../../../common/enums/user.enum';
 import { PlanTypeEnum } from 'src/common/enums/premium.enum';
+import { OrganizationSocialDto } from '../dto/user.dto';
+import { OrganizationVisibilityEnum } from 'src/common/enums/organization.enum';
 
-export type UserDocument = User & Document;
+export type OrganizationDocument = Organization & Document;
 
 @Schema({ timestamps: true })
-export class User {
-  // user profile properties
+export class Organization {
   @Prop({ unique: true, index: true })
   email: string;
 
@@ -23,17 +24,8 @@ export class User {
   @Prop({ required: false, default: '' })
   profilePhoto: string;
 
-  @Prop({ required: false, trim: true, index: true })
-  fullname: string;
-
-  @Prop({ required: false })
-  bio: string;
-
   @Prop({ required: false })
   phone: string;
-
-  @Prop({ required: false, sparse: true, unique: true, index: true })
-  walletAddress: string;
 
   @Prop({ enum: UserRoleEnum })
   role: UserRoleEnum;
@@ -42,63 +34,56 @@ export class User {
   authSource: AuthSourceEnum;
 
   @Prop({ required: false })
-  linkedin?: string;
+  companyName?: string;
 
   @Prop({ required: false })
-  github?: string;
+  tagline?: string;
 
   @Prop({ required: false })
-  twitter?: string;
+  description?: string;
 
   @Prop({ required: false })
-  instagram?: string;
+  industry?: string;
+
+  @Prop({ required: false })
+  companySize?: string;
 
   @Prop({ required: false, type: [String] })
-  skills?: string[];
+  offers?: string[];
 
-  @Prop({ required: false })
-  location?: string;
+  @Prop({ required: false, type: [OrganizationSocialDto] })
+  socials?: OrganizationSocialDto[];
 
-  // // organization profile properties
-  // @Prop({ required: false })
-  // companyName?: string;
-
-  // @Prop({ required: false })
-  // tagline?: string;
-
-  // @Prop({ required: false })
-  // description?: string;
-
-  // @Prop({ required: false })
-  // industry?: string;
-
-  // @Prop({ required: false })
-  // companySize?: string;
-
-  // @Prop({ required: false, type: [String] })
-  // offers?: string[];
-
-  // @Prop({ required: false, type: [OrganizationSocialDto] })
-  // socials?: OrganizationSocialDto[];
-
-  // @Prop({ default: 0 })
-  // totalJobPost: number;
-
-  // general profile properties
-  @Prop({ default: null, index: true })
-  referralCode: string;
-
-  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: User.name })
-  referredBy: UserDocument;
+  @Prop({ required: false, sparse: true, unique: true, index: true })
+  walletAddress: string;
 
   @Prop({ default: 0 })
-  totalReferrals: number;
+  totalJobPost: number;
+
+  @Prop({ default: 0 })
+  talentContacted: number;
+
+  @Prop({ default: 0 })
+  responseRate: number;
+
+  @Prop({ default: 0 })
+  successfulHire: number;
+
+  @Prop({
+    type: String,
+    enum: OrganizationVisibilityEnum,
+    default: OrganizationVisibilityEnum.PUBLIC,
+  })
+  visibility: OrganizationVisibilityEnum;
 
   @Prop({ enum: PlanTypeEnum })
   plan: PlanTypeEnum;
 
-  @Prop({ default: false })
-  profileCompleted?: boolean;
+  //   @Prop({ default: false })
+  //   profileCompleted?: boolean;
+
+  //   @Prop({ default: null, index: true })
+  //   referralCode: string;
 
   @Prop({ default: null })
   lastLoginAt: Date;
@@ -113,9 +98,9 @@ export class User {
   isDeleted: boolean;
 }
 
-export const UserSchema = SchemaFactory.createForClass(User);
+export const OrganizationSchema = SchemaFactory.createForClass(Organization);
 
-UserSchema.pre(/^find/, function (next) {
+OrganizationSchema.pre(/^find/, function (next) {
   const preConditions = {
     isDeleted: false,
   };

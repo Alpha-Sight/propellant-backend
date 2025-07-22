@@ -139,6 +139,13 @@ export class UpdateTalentProfileDto {
   @IsOptional()
   @IsString({ each: true })
   achievements?: string;
+
+  @IsOptional()
+  @IsArray()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? JSON.parse(value) : value,
+  )
+  skills?: string[];
 }
 
 export class OrganizationSocialDto {
@@ -165,6 +172,14 @@ export class UpdateOrganizationProfileDto {
   @IsOptional()
   @IsString()
   industry?: string;
+
+  @IsOptional()
+  @IsString()
+  location?: string;
+
+  @IsOptional()
+  @IsString()
+  foundedAt?: string;
 
   @IsOptional()
   @IsString()

@@ -21,10 +21,10 @@ import {
 import { BaseHelper } from '../../../common/utils/helper/helper.util';
 import { OtpService } from '../otp/services/otp.service';
 import { ENVIRONMENT } from '../../../common/configs/environment';
-import { AuthSourceEnum, UserRoleEnum } from '../../../common/enums/user.enum';
+import { AuthSourceEnum } from '../../../common/enums/user.enum';
 import { OtpTypeEnum } from '../../../common/enums/otp.enum';
-import { MailService } from '../mail /mail.service';
-import { welcomeEmailTemplate } from '../mail /templates/welcome.email';
+import { MailService } from '../mail/mail.service';
+import { welcomeEmailTemplate } from '../mail/templates/welcome.email';
 import { JwtService } from '@nestjs/jwt';
 import { ERROR_CODES } from 'src/common/constants/error-codes.constant';
 import { AppError } from 'src/common/filter/app-error.filter';
@@ -43,15 +43,13 @@ export class AuthService {
     private mailService: MailService,
   ) {}
 
-  async register(payload: CreateUserDto, role?: UserRoleEnum) {
-    const user = await this.userService.createUser(payload, role);
-
+  async register(payload: CreateUserDto) {
     await this.otpService.sendOTP({
       email: payload.email,
       type: OtpTypeEnum.VERIFY_EMAIL,
     });
 
-    return user;
+    return await this.userService.createUser(payload);
   }
 
   async login(payload: LoginDto) {

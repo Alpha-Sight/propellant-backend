@@ -26,6 +26,7 @@ import { ResponseMessage } from '../../../../common/decorators/response.decorato
 import { LoggedInUserDecorator } from '../../../../common/decorators/logged-in-user.decorator';
 import { UserDocument } from '../schemas/user.schema';
 import { PaginationDto } from '../../repository/dto/repository.dto';
+import { OrganizationDocument } from '../schemas/organization.schema';
 import { Roles } from 'src/common/decorators/role.decorator';
 import { UserRoleEnum } from 'src/common/enums/user.enum';
 import { RoleGuard } from '../../auth/guards/role.guard';
@@ -75,11 +76,11 @@ export class UserController {
   @Patch('profile/organization')
   async updateOrganizationProfile(
     @Body() payload: UpdateOrganizationProfileDto,
-    @LoggedInUserDecorator() user: UserDocument,
+    @LoggedInUserDecorator() organization: OrganizationDocument,
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return await this.userService.updateOrganizationProfile(
-      user,
+      organization,
       payload,
       file,
     );

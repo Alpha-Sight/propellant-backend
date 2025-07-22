@@ -3,13 +3,19 @@ import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
   // UnprocessableEntityException,
 } from '@nestjs/common';
 import { User, UserDocument } from '../schemas/user.schema';
-import { ClientSession, FilterQuery, Model, UpdateQuery } from 'mongoose';
+import {
+  ClientSession,
+  FilterQuery,
+  Model,
+  Types,
+  UpdateQuery,
+} from 'mongoose';
 import {
   ChangeEmailDto,
-  CreateOrganizationDto,
   CreateUserDto,
   CreateWalletUserDto,
   UpdateOrganizationProfileDto,
@@ -31,45 +37,157 @@ import { PinataService } from 'src/common/utils/pinata.util';
 import { PaginationDto } from '../../repository/dto/repository.dto';
 import { RepositoryService } from '../../repository/repository.service';
 import { WalletService } from '../../blockchain/services/wallet.service';
+import {
+  Organization,
+  OrganizationDocument,
+} from '../schemas/organization.schema';
+import {
+  OrganizationPost,
+  OrganizationPostDocument,
+} from '../../organization-post/schema/organization-post.schema';
+import { OrganizationVisibilityEnum } from 'src/common/enums/organization.enum';
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(Organization.name)
+    private organizationModel: Model<OrganizationDocument>,
+    @InjectModel(OrganizationPost.name)
+    private organizationPostModel: Model<OrganizationPostDocument>,
     private otpService: OtpService,
     private pinataService: PinataService,
     private repositoryService: RepositoryService,
     private walletService: WalletService,
   ) {}
 
-  async createUser(
-    payload: CreateUserDto | CreateOrganizationDto,
-    role?: UserRoleEnum,
-  ) {
+  // async createUser(payload: CreateUserDto) {
+  //   try {
+  //     const { referralCode, role } = payload;
+
+  //     if (!payload.termsAndConditionsAccepted) {
+  //       throw new BadRequestException('Please accept terms and conditions');
+  //     }
+
+  //     const [userWithEmailExists, userWithPhoneExists] = await Promise.all([
+  //       this.userModel.exists({ email: payload.email }),
+  //       this.userModel.exists({ phone: payload.phone }),
+  //     ]);
+
+  //     if (userWithEmailExists) {
+  //       throw new BadRequestException('User with this email already exists');
+  //     }
+
+  //     if (userWithPhoneExists) {
+  //       throw new BadRequestException('User with this phone already exists');
+  //     }
+
+  //     delete payload.referralCode; // delete the referral code to prevent persisting this as the new user referral code
+
+  //     let referralUserId: string;
+  //     if (referralCode) {
+  //       const referralUser = await this.userModel.findOne({ referralCode });
+
+  //       if (!referralUser) {
+  //         throw new BadRequestException('Referral code is invalid');
+  //       }
+
+  //       referralUserId = referralUser._id.toString();
+  //     }
+
+  //     const hashedPassword = await BaseHelper.hashData(payload.password);
+
+  //     // let userRole = role ?? UserRoleEnum.TALENT;
+  //     // if (payload.role === UserRoleEnum.ORGANIZATION) {
+  //     //   userRole = UserRoleEnum.ORGANIZATION;
+  //     // }
+
+  //     // Generate unique referral code for the new user
+  //     const userReferralCode = await BaseHelper.generateReferenceCode();
+
+  //     // this.logger.log(`Creating wallet for user`);
+  //     const createWallet = await this.walletService.createWallet();
+
+  //     const createdUser = await this.userModel.create({
+  //       ...payload,
+  //       password: hashedPassword,
+  //       role: role,
+  //       referredBy: referralUserId,
+  //       referralCode: userReferralCode,
+  //       walletAddress: createWallet.walletAddress,
+  //     });
+
+  //     // update referral user referral count
+  //     // TODO: award referral point
+  //     if (referralUserId) {
+  //       await this.userModel.updateOne(
+  //         { _id: referralUserId },
+  //         {
+  //           $inc: {
+  //             totalReferrals: 1,
+  //           },
+  //         },
+  //       );
+  //     }
+  //     // update user referral code
+
+  //     // TODO: not important but we can send an email or push notification to notify user of new referral
+
+  //     delete createdUser['_doc'].password;
+  //     return {
+  //       user: createdUser,
+  //       walletDetails: {
+  //         walletAddress: createWallet.walletAddress,
+  //         privateKey: createWallet.privateKey,
+  //         accountAddress: createWallet.accountAddress,
+  //         transactionId: createWallet.transactionId,
+  //       },
+  //     };
+  //   } catch (e) {
+  //     console.error('Error while creating user', e);
+  //     if (e.code === 11000) {
+  //       throw new ConflictException(
+  //         `${Object.keys(e.keyValue)} already exists`,
+  //       );
+  //     } else {
+  //       throw new InternalServerErrorException(
+  //         e.response?.message || 'Something went wrong',
+  //       );
+  //     }
+  //   }
+  // }
+
+  async createUser(payload: CreateUserDto) {
     try {
-      const { referralCode } = payload;
+      const { referralCode, role } = payload;
 
       if (!payload.termsAndConditionsAccepted) {
         throw new BadRequestException('Please accept terms and conditions');
       }
 
-      const [userWithEmailExists, userWithPhoneExists] = await Promise.all([
-        this.userModel.exists({ email: payload.email }),
-        this.userModel.exists({ phone: payload.phone }),
+      const isOrganization = role === UserRoleEnum.ORGANIZATION;
+
+      const modelToCheck = isOrganization
+        ? this.organizationModel
+        : this.userModel;
+
+      const [emailExists, phoneExists] = await Promise.all([
+        modelToCheck.exists({ email: payload.email }),
+        modelToCheck.exists({ phone: payload.phone }),
       ]);
 
-      if (userWithEmailExists) {
+      if (emailExists) {
         throw new BadRequestException('User with this email already exists');
       }
 
-      if (userWithPhoneExists) {
+      if (phoneExists) {
         throw new BadRequestException('User with this phone already exists');
       }
 
-      delete payload.referralCode; // delete the referral code to prevent persisting this as the new user referral code
+      delete payload.referralCode;
 
       let referralUserId: string;
-      if (referralCode) {
+      if (referralCode && !isOrganization) {
         const referralUser = await this.userModel.findOne({ referralCode });
 
         if (!referralUser) {
@@ -80,46 +198,35 @@ export class UserService {
       }
 
       const hashedPassword = await BaseHelper.hashData(payload.password);
-
-      let userRole = role ?? UserRoleEnum.TALENT;
-      if (payload instanceof CreateOrganizationDto) {
-        userRole = UserRoleEnum.ORGANIZATION;
-      }
-
-      // Generate unique referral code for the new user
       const userReferralCode = await BaseHelper.generateReferenceCode();
-
-      // this.logger.log(`Creating wallet for user`);
       const createWallet = await this.walletService.createWallet();
 
-      const createdUser = await this.userModel.create({
+      const commonData = {
         ...payload,
         password: hashedPassword,
-        role: userRole,
-        referredBy: referralUserId,
         referralCode: userReferralCode,
         walletAddress: createWallet.walletAddress,
-      });
+      };
 
-      // update referral user referral count
-      // TODO: award referral point
+      if (!isOrganization) {
+        commonData['referredBy'] = referralUserId;
+      }
+
+      const createdEntity = isOrganization
+        ? await new this.organizationModel(commonData).save()
+        : await new this.userModel(commonData).save();
+
       if (referralUserId) {
         await this.userModel.updateOne(
           { _id: referralUserId },
-          {
-            $inc: {
-              totalReferrals: 1,
-            },
-          },
+          { $inc: { totalReferrals: 1 } },
         );
       }
-      // update user referral code
 
-      // TODO: not important but we can send an email or push notification to notify user of new referral
+      delete createdEntity['_doc'].password;
 
-      delete createdUser['_doc'].password;
       return {
-        user: createdUser,
+        user: createdEntity,
         walletDetails: {
           walletAddress: createWallet.walletAddress,
           privateKey: createWallet.privateKey,
@@ -128,7 +235,7 @@ export class UserService {
         },
       };
     } catch (e) {
-      console.error('Error while creating user', e);
+      console.error('Error while creating user/organization', e);
       if (e.code === 11000) {
         throw new ConflictException(
           `${Object.keys(e.keyValue)} already exists`,
@@ -152,6 +259,14 @@ export class UserService {
     populateFields?: string,
   ): Promise<UserDocument> {
     return this.userModel.findOne({ _id: id }).populate(populateFields);
+  }
+
+  async getUserBySkills(skills: string[]): Promise<UserDocument[]> {
+    return this.userModel.find({
+      role: UserRoleEnum.TALENT,
+      isDeleted: false,
+      skills: { $in: skills },
+    });
   }
 
   async getUserByEmail(
@@ -311,7 +426,7 @@ export class UserService {
   }
 
   async updateOrganizationProfile(
-    user: UserDocument,
+    user: OrganizationDocument,
     payload: UpdateOrganizationProfileDto,
     file?: Express.Multer.File,
   ) {
@@ -326,7 +441,7 @@ export class UserService {
       ...payload,
     };
 
-    return await this.userModel.findByIdAndUpdate(
+    return await this.organizationModel.findByIdAndUpdate(
       user._id,
       { ...payload, ...(imageUrl && { imageUrl }), ...updateData },
       {
@@ -353,8 +468,22 @@ export class UserService {
     };
   }
 
+  // async aggregateUserStats() {
+  //   return await this.userModel.aggregate([
+  //     {
+  //       $match: { isDeleted: { $ne: true } },
+  //     },
+  //     {
+  //       $group: {
+  //         _id: '$role',
+  //         count: { $sum: 1 },
+  //       },
+  //     },
+  //   ]);
+  // }
+
   async aggregateUserStats() {
-    return await this.userModel.aggregate([
+    const userStats = await this.userModel.aggregate([
       {
         $match: { isDeleted: { $ne: true } },
       },
@@ -365,6 +494,20 @@ export class UserService {
         },
       },
     ]);
+
+    const organizationStats = await this.organizationModel.aggregate([
+      {
+        $match: { isDeleted: { $ne: true } },
+      },
+      {
+        $group: {
+          _id: '$role',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    return { userStats, organizationStats };
   }
 
   async update(
@@ -374,6 +517,19 @@ export class UserService {
     return await this.userModel.findOneAndUpdate({ _id: userId }, payload, {
       new: true,
     });
+  }
+
+  async updateOrgDetails(
+    userId: string,
+    payload: UpdateQuery<OrganizationDocument>,
+  ): Promise<OrganizationDocument> {
+    return await this.organizationModel.findOneAndUpdate(
+      { _id: userId },
+      payload,
+      {
+        new: true,
+      },
+    );
   }
 
   async createUserFromGoogle(payload: GoogleAuthDto) {
@@ -427,5 +583,132 @@ export class UserService {
         referredBy: user._id,
       },
     });
+  }
+
+  // async deleteUser(organization: UserDocument) {
+  //   const deletedPost = await this.userModel.findOneAndUpdate(
+  //     {
+  //       user: organization._id,
+  //       isDeleted: { $ne: true },
+  //     },
+  //     { isDeleted: true },
+  //     { new: true },
+  //   );
+
+  //   if (!deletedPost) {
+  //     throw new NotFoundException(' User not found or already deleted');
+  //   }
+
+  //   return {
+  //     message: 'User deleted successfully',
+  //     // data: deletedPost,
+  //   };
+  // }
+
+  async getTopSkillsInDemand(organizationId: string) {
+    const pipeline = [
+      {
+        $match: {
+          organization: new Types.ObjectId(organizationId),
+          isDeleted: { $ne: true },
+        },
+      },
+      {
+        $unwind: {
+          path: '$requiredSkills',
+        },
+      },
+      {
+        $group: {
+          _id: '$requiredSkills',
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $sort: {
+          count: -1,
+        } as any,
+      },
+      {
+        $group: {
+          _id: null,
+          skills: {
+            $push: {
+              skill: '$_id',
+              count: '$count',
+            },
+          },
+          maxCount: { $first: '$count' },
+        },
+      },
+      {
+        $unwind: {
+          path: '$skills',
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          skill: '$skills.skill',
+          count: '$skills.count',
+          demandRate: {
+            $multiply: [{ $divide: ['$skills.count', '$maxCount'] }, 100],
+          },
+        },
+      },
+      {
+        $sort: {
+          count: -1,
+        } as any,
+      },
+    ];
+
+    return this.organizationPostModel.aggregate(pipeline);
+  }
+
+  async updateOrganizationVisibility(
+    orgId: string,
+    visibility: OrganizationVisibilityEnum,
+  ): Promise<OrganizationDocument> {
+    const updated = await this.organizationModel.findByIdAndUpdate(
+      orgId,
+      { $set: { visibility } },
+      { new: true },
+    );
+
+    if (!updated) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    return updated;
+  }
+
+  async deleteOrganization(orgId: string): Promise<{ message: string }> {
+    const session = await this.organizationModel.db.startSession();
+    session.startTransaction();
+
+    try {
+      const org = await this.organizationModel.findByIdAndUpdate(
+        orgId,
+        { $set: { isDeleted: true } },
+        { new: true, session },
+      );
+
+      if (!org) throw new NotFoundException('Organization not found');
+
+      await this.organizationPostModel.updateMany(
+        { organization: orgId },
+        { $set: { isDeleted: true } },
+        { session },
+      );
+
+      await session.commitTransaction();
+      return { message: 'Organization and its job posts deleted successfully' };
+    } catch (err) {
+      await session.abortTransaction();
+      throw err;
+    } finally {
+      await session.endSession();
+    }
   }
 }

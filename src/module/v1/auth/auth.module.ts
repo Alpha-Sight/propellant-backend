@@ -8,7 +8,7 @@ import { JwtAuthGuard } from './guards/jwt.guard';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { OtpModule } from '../otp/otp.module';
-import { MailModule } from '../mail /mail.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
