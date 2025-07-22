@@ -2,7 +2,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Param,
   Patch,
   Query,
   UploadedFile,
@@ -30,6 +32,7 @@ import { OrganizationDocument } from '../schemas/organization.schema';
 import { Roles } from 'src/common/decorators/role.decorator';
 import { UserRoleEnum } from 'src/common/enums/user.enum';
 import { RoleGuard } from '../../auth/guards/role.guard';
+import { OrganizationVisibilityEnum } from 'src/common/enums/organization.enum';
 
 @NoCache()
 @Controller('users')
@@ -98,5 +101,23 @@ export class UserController {
     @LoggedInUserDecorator() user: UserDocument,
   ) {
     return await this.userService.showUserReferrals(user, payload);
+  }
+
+  @Patch(':organizationId/visibility')
+  async updateVisibility(
+    @Param('organizationId') organizationId: string,
+    @Body('visibility') visibility: OrganizationVisibilityEnum,
+  ): Promise<OrganizationDocument> {
+    return this.userService.updateOrganizationUserVisibility(
+      organizationId,
+      visibility,
+    );
+  }
+
+  @Delete(':organizationId')
+  async deleteOrganization(
+    @Param('organizationId') organizationId: string,
+  ): Promise<{ message: string }> {
+    return this.userService.deleteOrganizationUser(organizationId);
   }
 }

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model } from 'mongoose';
+import { FilterQuery, Model, Types } from 'mongoose';
 import {
   CreateJobPostDto,
   GetAllJobPostsDto,
@@ -37,7 +37,10 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
     });
 
     await this.userService.updateOrgDetails(organization._id.toString(), {
-      $inc: { totalJobPost: 1 },
+      $inc: {
+        totalJobPost: 1,
+        activeJobPost: 1,
+      },
     });
     return jobPost;
   }
@@ -134,16 +137,28 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
     postId: string,
     payload: UpdateJobPostDto,
   ): Promise<OrganizationPostDocument> {
-    const updatedJobPost = await this.organizationPostModel.findOneAndUpdate(
-      { _id: postId, organization: organization._id, isDeleted: { $ne: true } },
+    const existingJobPost = await this.organizationPostModel.findOne({
+      _id: postId,
+      organization: organization._id,
+      isDeleted: { $ne: true },
+    });
+
+    if (!existingJobPost) {
+      throw new NotFoundException(
+        'Job post not found or may have been deleted',
+      );
+    }
+
+    const updatedJobPost = await this.organizationPostModel.findByIdAndUpdate(
+      postId,
       { $set: payload },
       { new: true, runValidators: true },
     );
 
-    if (!updatedJobPost) {
-      throw new NotFoundException(
-        'Job post not found or may have been deleted',
-      );
+    if (existingJobPost.isActive && payload.isActive === false) {
+      await this.userService.updateOrgDetails(organization._id.toString(), {
+        $inc: { activeJobPost: -1 },
+      });
     }
 
     return updatedJobPost;
@@ -226,5 +241,66 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
     const jobSkills = jobPost.requiredSkills;
 
     return this.userService.getUserBySkills(jobSkills);
+  }
+
+  async getTopSkillsInDemand(organizationId: string) {
+    const pipeline = [
+      {
+        $match: {
+          organization: new Types.ObjectId(organizationId),
+          isDeleted: { $ne: true },
+        },
+      },
+      {
+        $unwind: {
+          path: '$requiredSkills',
+        },
+      },
+      {
+        $group: {
+          _id: '$requiredSkills',
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $sort: {
+          count: -1,
+        } as any,
+      },
+      {
+        $group: {
+          _id: null,
+          skills: {
+            $push: {
+              skill: '$_id',
+              count: '$count',
+            },
+          },
+          maxCount: { $first: '$count' },
+        },
+      },
+      {
+        $unwind: {
+          path: '$skills',
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          skill: '$skills.skill',
+          count: '$skills.count',
+          demandRate: {
+            $multiply: [{ $divide: ['$skills.count', '$maxCount'] }, 100],
+          },
+        },
+      },
+      {
+        $sort: {
+          count: -1,
+        } as any,
+      },
+    ];
+
+    return this.organizationPostModel.aggregate(pipeline);
   }
 }

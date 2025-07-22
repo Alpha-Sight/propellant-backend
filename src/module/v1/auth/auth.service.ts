@@ -96,19 +96,63 @@ export class AuthService {
     };
   }
 
+  // async verifyEmail(payload: VerifyEmailDto) {
+  //   const { code, email } = payload;
+
+  //   const user = await this.userService.getUserByEmail(email);
+
+  //   if (!user) {
+  //     throw new BadRequestException('Invalid Email');
+  //   }
+
+  //   if (user.emailVerified) {
+  //     throw new UnprocessableEntityException('Email already verified');
+  //   }
+
+  //   await this.otpService.verifyOTP(
+  //     {
+  //       code,
+  //       email,
+  //       type: OtpTypeEnum.VERIFY_EMAIL,
+  //     },
+  //     true,
+  //   );
+
+  //   await this.userService.updateQuery(
+  //     { email },
+  //     {
+  //       emailVerified: true,
+  //     },
+  //   );
+
+  //   const welcomeEmailName = user?.email || 'User';
+  //   await this.mailService.sendEmail(
+  //     user.email,
+  //     `Welcome To ${ENVIRONMENT.APP.NAME}`,
+  //     welcomeEmailTemplate({
+  //       name: welcomeEmailName,
+  //     }),
+  //   );
+  // }
+
   async verifyEmail(payload: VerifyEmailDto) {
     const { code, email } = payload;
 
-    const user = await this.userService.getUserByEmail(email);
+    // Try to find the user in both models
+    const [user, org] = await Promise.all([
+      this.userService.getUserByEmail(email),
+      this.userService.getOrgByEmail(email),
+    ]);
 
-    if (!user) {
+    if (!user && !org) {
       throw new BadRequestException('Invalid Email');
     }
 
-    if (user.emailVerified) {
+    if (user?.emailVerified || org?.emailVerified) {
       throw new UnprocessableEntityException('Email already verified');
     }
 
+    // Verify OTP
     await this.otpService.verifyOTP(
       {
         code,
@@ -118,19 +162,22 @@ export class AuthService {
       true,
     );
 
-    await this.userService.updateQuery(
-      { email },
-      {
-        emailVerified: true,
-      },
-    );
+    // Update emailVerified in the correct document
+    if (user) {
+      await this.userService.updateQuery({ email }, { emailVerified: true });
+    }
 
-    const welcomeEmailName = user?.email || 'User';
+    if (org) {
+      await this.userService.updateQuery({ email }, { emailVerified: true });
+    }
+
+    const recipientName = user?.email || org?.email || 'User';
+
     await this.mailService.sendEmail(
-      user.email,
+      email,
       `Welcome To ${ENVIRONMENT.APP.NAME}`,
       welcomeEmailTemplate({
-        name: welcomeEmailName,
+        name: recipientName,
       }),
     );
   }

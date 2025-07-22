@@ -130,4 +130,19 @@ export class OrganizationPostController {
       organization._id.toString(),
     );
   }
+
+  @Get(':jobPostId/matching-talents')
+  async getMatchingTalents(@Param('jobPostId') jobPostId: string) {
+    const talents =
+      await this.organizationService.getMatchingTalentsForJob(jobPostId);
+    return {
+      message: 'Matching talents fetched successfully',
+      data: talents,
+    };
+  }
+
+  @Get(':organizationId/top-skills')
+  async getTopSkillsInDemand(@Param('organizationId') organizationId: string) {
+    return this.organizationService.getTopSkillsInDemand(organizationId);
+  }
 }

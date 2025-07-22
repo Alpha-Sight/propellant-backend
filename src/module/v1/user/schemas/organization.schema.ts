@@ -64,6 +64,12 @@ export class Organization {
   talentContacted: number;
 
   @Prop({ default: 0 })
+  activePost: number;
+
+  @Prop({ default: 0 })
+  activeConversations: number;
+
+  @Prop({ default: 0 })
   responseRate: number;
 
   @Prop({ default: 0 })
