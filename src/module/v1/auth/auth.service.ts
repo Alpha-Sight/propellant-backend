@@ -232,7 +232,10 @@ export class AuthService {
 
     const hashedPassword = await BaseHelper.hashData(password);
 
-    await this.userService.updateQuery({ email }, { password: hashedPassword });
+    await this.userService.updateUsersQuery(
+      { email },
+      { password: hashedPassword },
+    );
   }
 
   async logout(userId: string): Promise<void> {

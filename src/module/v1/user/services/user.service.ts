@@ -341,14 +341,40 @@ export class UserService {
     return updatedUser;
   }
 
+  async updateUsersQuery(
+    filter: FilterQuery<any>,
+    payload: UpdateQuery<any>,
+    session?: ClientSession,
+  ): Promise<any> {
+    let model: Model<any> | null = null;
+
+    const user = await this.userModel.findOne(filter);
+    if (user) model = this.userModel;
+
+    const org = !user ? await this.organizationModel.findOne(filter) : null;
+    if (org) model = this.organizationModel;
+
+    if (!model) {
+      throw new NotFoundException('No matching user or organization');
+    }
+
+    return await model.findOneAndUpdate(filter, payload, {
+      new: true,
+      session,
+    });
+  }
+
   async deleteUser(id: string) {
     return this.userModel.findByIdAndDelete(id);
   }
 
   async checkUserExistByEmail(email: string): Promise<boolean> {
-    const user = await this.getUserByEmail(email);
+    const [user, org] = await Promise.all([
+      this.getUserByEmail(email),
+      this.getOrgByEmail(email),
+    ]);
 
-    if (!user) {
+    if (!user || !org) {
       throw new BadRequestException('No user exist with provided email');
     }
 
