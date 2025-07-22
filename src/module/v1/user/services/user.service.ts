@@ -7,13 +7,7 @@ import {
   // UnprocessableEntityException,
 } from '@nestjs/common';
 import { User, UserDocument } from '../schemas/user.schema';
-import {
-  ClientSession,
-  FilterQuery,
-  Model,
-  Types,
-  UpdateQuery,
-} from 'mongoose';
+import { ClientSession, FilterQuery, Model, UpdateQuery } from 'mongoose';
 import {
   ChangeEmailDto,
   CreateUserDto,
@@ -276,6 +270,12 @@ export class UserService {
     return this.userModel.findOne({ email }).populate(populateFields);
   }
 
+  async getOrgByEmail(
+    email: string,
+    populateFields?: string,
+  ): Promise<OrganizationDocument> {
+    return this.organizationModel.findOne({ email }).populate(populateFields);
+  }
   async updateUserByEmail(email: string, details: any) {
     return this.userModel.updateOne({ email }, details);
   }
@@ -339,33 +339,91 @@ export class UserService {
     });
   }
 
+  // async updatePassword(user: UserDocument, payload: UpdatePasswordDto) {
+  //   const { password, newPassword, confirmPassword } = payload;
+
+  //   if (newPassword !== confirmPassword) {
+  //     throw new BadRequestException(
+  //       'new password and confirm password do not match',
+  //     );
+  //   }
+
+  //   if (password === newPassword) {
+  //     throw new BadRequestException(
+  //       'new password cannot be same as old password',
+  //     );
+  //   }
+
+  //   const oldPasswordMatch = await BaseHelper.compareHashedData(
+  //     password,
+  //     (await this.getUserDetailsWithPassword({ email: user.email })).password,
+  //   );
+
+  //   if (!oldPasswordMatch) {
+  //     throw new BadRequestException('Incorrect Password');
+  //   }
+
+  //   const hashedPassword = await BaseHelper.hashData(newPassword);
+
+  //   await this.updateQuery({ _id: user._id }, { password: hashedPassword });
+  // }
+
   async updatePassword(user: UserDocument, payload: UpdatePasswordDto) {
     const { password, newPassword, confirmPassword } = payload;
 
     if (newPassword !== confirmPassword) {
       throw new BadRequestException(
-        'new password and confirm password do not match',
+        'New password and confirm password do not match',
       );
     }
 
     if (password === newPassword) {
       throw new BadRequestException(
-        'new password cannot be same as old password',
+        'New password cannot be same as old password',
       );
+    }
+
+    let existingPassword: string;
+
+    if (user.role === UserRoleEnum.TALENT) {
+      const talent = await this.getUserDetailsWithPassword({
+        email: user.email,
+      });
+      existingPassword = talent.password;
+    } else if (user.role === UserRoleEnum.ORGANIZATION) {
+      const organization = await this.organizationModel
+        .findOne({ email: user.email })
+        .select('+password')
+        .lean();
+
+      if (!organization) {
+        throw new NotFoundException('Organization not found');
+      }
+
+      existingPassword = organization.password;
+    } else {
+      throw new BadRequestException('Invalid user role');
     }
 
     const oldPasswordMatch = await BaseHelper.compareHashedData(
       password,
-      (await this.getUserDetailsWithPassword({ email: user.email })).password,
+      existingPassword,
     );
 
     if (!oldPasswordMatch) {
-      throw new BadRequestException('Incorrect Password');
+      throw new BadRequestException('Incorrect current password');
     }
 
     const hashedPassword = await BaseHelper.hashData(newPassword);
 
-    await this.updateQuery({ _id: user._id }, { password: hashedPassword });
+    if (user.role === UserRoleEnum.TALENT) {
+      await this.updateQuery({ _id: user._id }, { password: hashedPassword });
+    } else {
+      await this.organizationModel.updateOne(
+        { _id: user._id },
+        { password: hashedPassword },
+      );
+    }
   }
 
   async findOneById(userId: string) {
@@ -605,68 +663,68 @@ export class UserService {
   //   };
   // }
 
-  async getTopSkillsInDemand(organizationId: string) {
-    const pipeline = [
-      {
-        $match: {
-          organization: new Types.ObjectId(organizationId),
-          isDeleted: { $ne: true },
-        },
-      },
-      {
-        $unwind: {
-          path: '$requiredSkills',
-        },
-      },
-      {
-        $group: {
-          _id: '$requiredSkills',
-          count: { $sum: 1 },
-        },
-      },
-      {
-        $sort: {
-          count: -1,
-        } as any,
-      },
-      {
-        $group: {
-          _id: null,
-          skills: {
-            $push: {
-              skill: '$_id',
-              count: '$count',
-            },
-          },
-          maxCount: { $first: '$count' },
-        },
-      },
-      {
-        $unwind: {
-          path: '$skills',
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          skill: '$skills.skill',
-          count: '$skills.count',
-          demandRate: {
-            $multiply: [{ $divide: ['$skills.count', '$maxCount'] }, 100],
-          },
-        },
-      },
-      {
-        $sort: {
-          count: -1,
-        } as any,
-      },
-    ];
+  // async getTopSkillsInDemand(organizationId: string) {
+  //   const pipeline = [
+  //     {
+  //       $match: {
+  //         organization: new Types.ObjectId(organizationId),
+  //         isDeleted: { $ne: true },
+  //       },
+  //     },
+  //     {
+  //       $unwind: {
+  //         path: '$requiredSkills',
+  //       },
+  //     },
+  //     {
+  //       $group: {
+  //         _id: '$requiredSkills',
+  //         count: { $sum: 1 },
+  //       },
+  //     },
+  //     {
+  //       $sort: {
+  //         count: -1,
+  //       } as any,
+  //     },
+  //     {
+  //       $group: {
+  //         _id: null,
+  //         skills: {
+  //           $push: {
+  //             skill: '$_id',
+  //             count: '$count',
+  //           },
+  //         },
+  //         maxCount: { $first: '$count' },
+  //       },
+  //     },
+  //     {
+  //       $unwind: {
+  //         path: '$skills',
+  //       },
+  //     },
+  //     {
+  //       $project: {
+  //         _id: 0,
+  //         skill: '$skills.skill',
+  //         count: '$skills.count',
+  //         demandRate: {
+  //           $multiply: [{ $divide: ['$skills.count', '$maxCount'] }, 100],
+  //         },
+  //       },
+  //     },
+  //     {
+  //       $sort: {
+  //         count: -1,
+  //       } as any,
+  //     },
+  //   ];
 
-    return this.organizationPostModel.aggregate(pipeline);
-  }
+  //   return this.organizationPostModel.aggregate(pipeline);
+  // }
 
-  async updateOrganizationVisibility(
+  async updateOrganizationUserVisibility(
     orgId: string,
     visibility: OrganizationVisibilityEnum,
   ): Promise<OrganizationDocument> {
@@ -683,7 +741,7 @@ export class UserService {
     return updated;
   }
 
-  async deleteOrganization(orgId: string): Promise<{ message: string }> {
+  async deleteOrganizationUser(orgId: string): Promise<{ message: string }> {
     const session = await this.organizationModel.db.startSession();
     session.startTransaction();
 
