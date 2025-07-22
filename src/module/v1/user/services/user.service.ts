@@ -28,10 +28,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { BaseHelper } from '../../../../common/utils/helper/helper.util';
 import { OtpTypeEnum } from '../../../../common/enums/otp.enum';
 import { OtpService } from '../../otp/services/otp.service';
-import {
-  AuthSourceEnum,
-  UserRoleEnum,
-} from '../../../../common/enums/user.enum';
+import { AuthSourceEnum } from '../../../../common/enums/user.enum';
 import { GoogleAuthDto } from '../../auth/dto/auth.dto';
 import { PinataService } from 'src/common/utils/pinata.util';
 import { PaginationDto } from '../../repository/dto/repository.dto';
@@ -201,7 +198,7 @@ export class UserService {
       const userReferralCode = await BaseHelper.generateReferenceCode();
       const createWallet = await this.walletService.createWallet();
 
-      const commonData = {
+       const commonData = {
         ...payload,
         password: hashedPassword,
         referralCode: userReferralCode,

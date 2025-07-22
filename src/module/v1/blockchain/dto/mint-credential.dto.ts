@@ -6,6 +6,7 @@ import {
   IsEnum,
 } from 'class-validator';
 
+
 export enum CredentialTypeEnum {
   EDUCATION = 0,
   CERTIFICATION = 1,
@@ -16,7 +17,7 @@ export enum CredentialTypeEnum {
   OTHER = 6,
 }
 
-export class MintCredentialDto {
+export class IssueCredentialDto {
   @IsString()
   subject: string;
 
@@ -37,7 +38,7 @@ export class MintCredentialDto {
   validUntil?: number; // Timestamp, 0 for no expiration
 
   @IsString()
-  evidenceHash: string;
+  evidenceHash: string; // Can be hex string (0x...) or plain text that will be hashed
 
   @IsBoolean()
   revocable: boolean;

@@ -6,6 +6,7 @@ import {
   forwardRef,
   UnprocessableEntityException,
   HttpStatus,
+  Logger, // Import Logger
 } from '@nestjs/common';
 import { CreateUserDto } from '../user/dto/user.dto';
 import { UserService } from '../user/services/user.service';
@@ -32,15 +33,20 @@ import { cacheKeys } from 'src/common/constants/cache.constant';
 import { CacheHelperUtil } from 'src/common/utils/cache-helper.util';
 import { UserDocument } from '../user/schemas/user.schema';
 import { authConstants } from 'src/common/constants/authConstant';
+import { WalletService } from '../blockchain/services/wallet.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name); // Initialize logger
+
   constructor(
     private userService: UserService,
     private jwtService: JwtService,
     @Inject(forwardRef(() => OtpService))
     private readonly otpService: OtpService,
     private mailService: MailService,
+    @Inject(forwardRef(() => WalletService))
+    private walletService: WalletService,
   ) {}
 
   async register(payload: CreateUserDto) {

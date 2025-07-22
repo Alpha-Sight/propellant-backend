@@ -1,14 +1,14 @@
-import { Module } from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { AuthController } from './auth.controller';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
-import { ENVIRONMENT } from '../../../common/configs/environment';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
 import { UserModule } from '../user/user.module';
-import { JwtAuthGuard } from './guards/jwt.guard';
-import { APP_GUARD } from '@nestjs/core';
-import { JwtStrategy } from './strategies/jwt.strategy';
 import { OtpModule } from '../otp/otp.module';
-import { MailModule } from '../mail/mail.module';
+import { MailModule } from '../mail /mail.module';
+import { BlockchainModule } from '../blockchain/blockchain.module';
+import { ENVIRONMENT } from '../../../common/configs/environment';
+import { JwtStrategy } from './strategies/jwt.strategy';
+
 
 @Module({
   imports: [
@@ -20,17 +20,12 @@ import { MailModule } from '../mail/mail.module';
       global: true,
     },
     UserModule,
-    OtpModule,
+    forwardRef(() => OtpModule),
     MailModule,
+    forwardRef(() => BlockchainModule),
   ],
   controllers: [AuthController],
-  providers: [
-    AuthService,
-    JwtStrategy,
-    {
-      provide: APP_GUARD,
-      useClass: JwtAuthGuard,
-    },
-  ],
+  providers: [AuthService, JwtStrategy],
+  exports: [AuthService],
 })
 export class AuthModule {}
