@@ -4,7 +4,6 @@ import {
   Controller,
   Delete,
   Get,
-  Param,
   Patch,
   Query,
   UploadedFile,
@@ -33,6 +32,7 @@ import { Roles } from 'src/common/decorators/role.decorator';
 import { UserRoleEnum } from 'src/common/enums/user.enum';
 import { RoleGuard } from '../../auth/guards/role.guard';
 import { OrganizationVisibilityEnum } from 'src/common/enums/organization.enum';
+import { LoggedInUser } from 'src/common/interfaces/user.interface';
 
 @NoCache()
 @Controller('users')
@@ -42,15 +42,15 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   @ResponseMessage(RESPONSE_CONSTANT.USER.GET_CURRENT_USER_SUCCESS)
   @Get('/')
-  async getCurrentUser(@LoggedInUserDecorator() user: UserDocument) {
-    return await this.userService.getUserById(user._id.toString());
+  async getCurrentUser(@LoggedInUserDecorator() user: { _id: string }) {
+    return await this.userService.getCurrentUserProfile(user._id.toString());
   }
 
   @ResponseMessage(RESPONSE_CONSTANT.USER.CHANGE_EMAIL_SUCCESS)
   @Patch('email')
   async updateEmail(
     @Body() payload: ChangeEmailDto,
-    @LoggedInUserDecorator() user: UserDocument,
+    @LoggedInUserDecorator() user: LoggedInUser,
   ) {
     return await this.userService.changeEmail(payload, user);
   }
@@ -58,7 +58,7 @@ export class UserController {
   @Patch('password')
   async updatePassword(
     @Body() payload: UpdatePasswordDto,
-    @LoggedInUserDecorator() user: UserDocument,
+    @LoggedInUserDecorator() user: LoggedInUser,
   ) {
     return await this.userService.updatePassword(user, payload);
   }
@@ -103,21 +103,21 @@ export class UserController {
     return await this.userService.showUserReferrals(user, payload);
   }
 
-  @Patch(':organizationId/visibility')
+  @Patch('visibility')
   async updateVisibility(
-    @Param('organizationId') organizationId: string,
+    @LoggedInUserDecorator() organization: OrganizationDocument,
     @Body('visibility') visibility: OrganizationVisibilityEnum,
   ): Promise<OrganizationDocument> {
     return this.userService.updateOrganizationUserVisibility(
-      organizationId,
+      organization._id.toString(),
       visibility,
     );
   }
 
-  @Delete(':organizationId')
+  @Delete()
   async deleteOrganization(
-    @Param('organizationId') organizationId: string,
+    @LoggedInUserDecorator() organization: OrganizationDocument,
   ): Promise<{ message: string }> {
-    return this.userService.deleteOrganizationUser(organizationId);
+    return this.userService.deleteOrganizationUser(organization._id.toString());
   }
 }
