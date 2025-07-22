@@ -21,7 +21,7 @@ import {
 import { BaseHelper } from '../../../common/utils/helper/helper.util';
 import { OtpService } from '../otp/services/otp.service';
 import { ENVIRONMENT } from '../../../common/configs/environment';
-import { AuthSourceEnum } from '../../../common/enums/user.enum';
+import { AuthSourceEnum, UserRoleEnum } from '../../../common/enums/user.enum';
 import { OtpTypeEnum } from '../../../common/enums/otp.enum';
 import { MailService } from '../mail/mail.service';
 import { welcomeEmailTemplate } from '../mail/templates/welcome.email';
@@ -59,22 +59,36 @@ export class AuthService {
       throw new BadRequestException('Email is required');
     }
 
-    const user = await this.userService.getUserDetailsWithPassword({ email });
+    // const user = await this.userService.getUserDetailsWithPassword({ email });
 
-    if (!user) {
+    // Try to find the user in both models
+    const [user, org] = await Promise.all([
+      this.userService.getUserDetailsWithPassword({ email }),
+      this.userService.getOrgDetailsWithPassword({ email }),
+    ]);
+
+    // if (!user) {
+    //   throw new BadRequestException('Invalid Credential');
+    // }
+
+    if (!user && !org) {
       throw new BadRequestException('Invalid Credential');
     }
 
+    // Determine which account matched
+    const account = user || org;
+    const role = user ? UserRoleEnum.TALENT : UserRoleEnum.ORGANIZATION;
+
     const passwordMatch = await BaseHelper.compareHashedData(
       password,
-      user.password,
+      account.password,
     );
 
     if (!passwordMatch) {
       throw new BadRequestException('Incorrect Password');
     }
 
-    if (!user.emailVerified) {
+    if (!account.emailVerified) {
       throw new AppError(
         'kindly verify your email to login',
         HttpStatus.BAD_REQUEST,
@@ -83,15 +97,15 @@ export class AuthService {
     }
 
     const token = this.jwtService.sign(
-      { _id: user._id },
+      { _id: account._id, role },
       {
         secret: ENVIRONMENT.JWT.SECRET,
       },
     );
-    delete user['_doc'].password;
+    delete account['_doc'].password;
 
     return {
-      ...user['_doc'],
+      ...account['_doc'],
       accessToken: token,
     };
   }
@@ -168,7 +182,7 @@ export class AuthService {
     }
 
     if (org) {
-      await this.userService.updateQuery({ email }, { emailVerified: true });
+      await this.userService.updateOrgQuery({ email }, { emailVerified: true });
     }
 
     const recipientName = user?.email || org?.email || 'User';

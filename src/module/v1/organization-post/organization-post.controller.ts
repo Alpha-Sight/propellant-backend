@@ -131,7 +131,7 @@ export class OrganizationPostController {
     );
   }
 
-  @Get(':jobPostId/matching-talents')
+  @Get(':jobPostId/talents')
   async getMatchingTalents(@Param('jobPostId') jobPostId: string) {
     const talents =
       await this.organizationService.getMatchingTalentsForJob(jobPostId);
@@ -141,8 +141,12 @@ export class OrganizationPostController {
     };
   }
 
-  @Get(':organizationId/top-skills')
-  async getTopSkillsInDemand(@Param('organizationId') organizationId: string) {
-    return this.organizationService.getTopSkillsInDemand(organizationId);
+  @Get('top-skills')
+  async getTopSkillsInDemand(
+    @LoggedInUserDecorator() organization: OrganizationDocument,
+  ) {
+    return this.organizationService.getTopSkillsInDemand(
+      organization._id.toString(),
+    );
   }
 }

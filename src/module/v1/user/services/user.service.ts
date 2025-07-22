@@ -40,6 +40,7 @@ import {
   OrganizationPostDocument,
 } from '../../organization-post/schema/organization-post.schema';
 import { OrganizationVisibilityEnum } from 'src/common/enums/organization.enum';
+import { LoggedInUser } from 'src/common/interfaces/user.interface';
 
 @Injectable()
 export class UserService {
@@ -248,11 +249,36 @@ export class UserService {
     return this.userModel.findOne(query).select('+password');
   }
 
+  async getOrgDetailsWithPassword(
+    query: FilterQuery<OrganizationDocument>,
+  ): Promise<OrganizationDocument> {
+    return this.organizationModel.findOne(query).select('+password');
+  }
+
+  async getCurrentUserProfile(
+    id: string,
+    populateFields?: string,
+  ): Promise<UserDocument | OrganizationDocument | null> {
+    const [user, org] = await Promise.all([
+      this.userModel.findOne({ _id: id }).populate(populateFields),
+      this.organizationModel.findOne({ _id: id }).populate(populateFields),
+    ]);
+
+    return user || org;
+  }
+
   async getUserById(
     id: string,
     populateFields?: string,
   ): Promise<UserDocument> {
     return this.userModel.findOne({ _id: id }).populate(populateFields);
+  }
+
+  async getOrgById(
+    id: string,
+    populateFields?: string,
+  ): Promise<OrganizationDocument> {
+    return this.organizationModel.findOne({ _id: id }).populate(populateFields);
   }
 
   async getUserBySkills(skills: string[]): Promise<UserDocument[]> {
@@ -299,6 +325,22 @@ export class UserService {
     return updatedUser;
   }
 
+  async updateOrgQuery(
+    filter: FilterQuery<OrganizationDocument>,
+    payload: UpdateQuery<OrganizationDocument>,
+    session?: ClientSession,
+  ): Promise<OrganizationDocument> {
+    const updatedUser = await this.organizationModel.findOneAndUpdate(
+      filter,
+      payload,
+      {
+        session,
+      },
+    );
+
+    return updatedUser;
+  }
+
   async deleteUser(id: string) {
     return this.userModel.findByIdAndDelete(id);
   }
@@ -313,7 +355,7 @@ export class UserService {
     return true;
   }
 
-  async changeEmail(payload: ChangeEmailDto, user: UserDocument) {
+  async changeEmail(payload: ChangeEmailDto, user: LoggedInUser) {
     const { newEmail } = payload;
 
     if (user.email === newEmail) {
@@ -368,7 +410,7 @@ export class UserService {
   //   await this.updateQuery({ _id: user._id }, { password: hashedPassword });
   // }
 
-  async updatePassword(user: UserDocument, payload: UpdatePasswordDto) {
+  async updatePassword(user: LoggedInUser, payload: UpdatePasswordDto) {
     const { password, newPassword, confirmPassword } = payload;
 
     if (newPassword !== confirmPassword) {
