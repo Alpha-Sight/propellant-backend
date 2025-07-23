@@ -58,7 +58,7 @@ export class PremiumService {
       options: {
         user: userId,
         type: TransactionTypeEnum.Premium,
-        status: TransactionStatusEnum.Pending,
+        status: TransactionStatusEnum.PENDING,
       },
     });
 
@@ -71,7 +71,7 @@ export class PremiumService {
     if (!transaction) {
       transaction = await this.transactionService.create({
         user: userId,
-        status: TransactionStatusEnum.Pending,
+        status: TransactionStatusEnum.PENDING,
         totalAmount: 1000,
         description: 'premium plan subscription payment',
         type: TransactionTypeEnum.Premium,
@@ -95,7 +95,7 @@ export class PremiumService {
       await this.transactionService.updateQuery(
         { _id: transaction._id },
         {
-          status: TransactionStatusEnum.Completed,
+          status: TransactionStatusEnum.COMPLETED,
         },
         session,
       );

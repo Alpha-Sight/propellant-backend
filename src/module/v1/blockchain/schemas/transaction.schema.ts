@@ -40,7 +40,7 @@ export class BlockchainTransaction {
   type: TransactionTypeEnum;
 
   @Prop({ default: 0 })
-  attempts: number;
+  attempts?: number;
 
   @Prop()
   transactionHash?: string;
@@ -56,6 +56,9 @@ export class BlockchainTransaction {
 
   @Prop()
   processedAt?: Date;
+
+  @Prop()
+  updatedAt?: Date;
 }
 
 export const BlockchainTransactionSchema = SchemaFactory.createForClass(

@@ -1,14 +1,11 @@
 export enum TransactionStatusEnum {
-    PENDING = 'PENDING',
-    PENDING_CONFIRMATION = 'PENDING_CONFIRMATION', // Added for clarity after submission
-    SUCCESS = 'SUCCESS',
-    FAILED = 'FAILED',
-    RETRY = 'RETRY', // Optional: if you implement retries
-  }
-//   Pending = 'Pending',
-//   Completed = 'Completed',
-//   Failed = 'Failed',
-// }
+  PENDING = 'PENDING',
+  PROCESSING = 'PROCESSING', 
+  COMPLETED = 'COMPLETED',
+  CONFIRMED = 'CONFIRMED',
+  FAILED = 'FAILED',
+  Failed = "Failed",
+}
 
 export enum PaymentStatusEnum {
   Pending = 'Pending',
@@ -17,7 +14,10 @@ export enum PaymentStatusEnum {
 }
 
 export enum TransactionTypeEnum {
-  Premium = 'Premium',
-  AccountCreation = 'AccountCreation',
+  AccountCreation = 'ACCOUNT_CREATION',
+  CredentialIssuance = 'CREDENTIAL_ISSUANCE',
+  CredentialVerification = 'CREDENTIAL_VERIFICATION',
+  CredentialRevocation = 'CREDENTIAL_REVOCATION',
+  Premium = "Premium",
 }
 
