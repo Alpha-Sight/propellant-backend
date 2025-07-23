@@ -8,6 +8,9 @@ export class Credential {
   @Prop({ required: true, unique: true, index: true })
   credentialId: string;
 
+  @Prop({ type: Number, index: true })
+  blockchainCredentialId?: number; // Numeric ID for blockchain operations
+
   @Prop({ required: true, index: true })
   subject: string;
 

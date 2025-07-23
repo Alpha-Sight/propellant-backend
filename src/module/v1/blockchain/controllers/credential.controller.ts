@@ -4,7 +4,7 @@ import { CredentialService } from '../services/credential.service';
 import { ResponseMessage } from 'src/common/decorators/response.decorator';
 import { LoggedInUserDecorator } from 'src/common/decorators/logged-in-user.decorator';
 import { UserDocument } from 'src/module/v1/user/schemas/user.schema';
-import { IssueCredentialDto } from '../dto/issue-credential.dto'; // Updated import
+import { IssueCredentialDto } from '../dto/issue-credential.dto';
 import { WalletService } from '../services/wallet.service';
 
 @Controller('blockchain/credentials')
@@ -38,6 +38,7 @@ export class CredentialController {
 
   @Post('verify/:id')
   @UseGuards(JwtAuthGuard)
+  @ResponseMessage('Credential verification transaction queued successfully')
   async verifyCredential(
     @Param('id') id: string,
     @LoggedInUserDecorator() user: UserDocument,
@@ -47,11 +48,13 @@ export class CredentialController {
       throw new Error('Unauthorized: Only admins or approved issuers can verify credentials');
     }
 
+    // The id parameter is the MongoDB ObjectId of the credential
     return this.credentialService.verifyCredential(id, user._id.toString());
   }
 
   @Post('revoke/:id')
   @UseGuards(JwtAuthGuard)
+  @ResponseMessage('Credential revocation transaction queued successfully')
   async revokeCredential(
     @Param('id') id: string,
     @LoggedInUserDecorator() user: UserDocument,

@@ -64,9 +64,18 @@ export class CredentialService implements OnModuleInit {
 
       this.credentialModuleAddress = credentialModuleAddress;
       
+      // Use a minimal ABI with only the functions we actually need
+      const minimalABI = [
+        'function verifyCredential(uint256 credentialId) external returns (bool)',
+        'function revokeCredential(uint256 credentialId, string memory reason) external returns (bool)',
+        'function getCredentialsForSubject(address subject) external view returns (uint256[])',
+        'function getCredential(uint256 credentialId) external view returns (tuple(address issuer, address subject, string name, string description, uint8 status))',
+        'function issueCredential(address subject, string memory name, string memory description, string memory metadataURI, uint8 credentialType, uint256 validUntil, bytes32 evidenceHash, bool revocable) external returns (uint256)',
+      ];
+      
       this.credentialModule = new ethers.Contract(
         this.credentialModuleAddress,
-        CredentialVerificationModuleABI as any,
+        minimalABI,
         this.provider
       );
 
@@ -97,12 +106,14 @@ export class CredentialService implements OnModuleInit {
     }
 
     try {
-      // Generate a unique credential ID
-      const credentialId = `CRED_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Generate a numeric credential ID (timestamp + random number)
+      const numericCredentialId = Date.now() + Math.floor(Math.random() * 10000);
+      const credentialId = numericCredentialId.toString();
       
       // Prepare credential data with all required fields
       const credentialData = {
-        credentialId: credentialId, // Required field
+        credentialId: credentialId, // Now purely numeric
+        blockchainCredentialId: numericCredentialId, // Store numeric version for blockchain calls
         subject: payload.subject,
         issuer: new Types.ObjectId(issuerId),
         name: payload.name,
@@ -144,11 +155,28 @@ export class CredentialService implements OnModuleInit {
     try {
       await this.ensureInitialized();
 
+      // Find the credential in the database first
+      const credential = await this.credentialModel.findById(credentialId);
+      if (!credential) {
+        throw new Error(`Credential not found: ${credentialId}`);
+      }
+
+      // Use the numeric blockchain credential ID
+      const blockchainCredentialId = credential.blockchainCredentialId || credential.credentialId;
+      
+      this.logger.log(`Verifying credential with blockchain ID: ${blockchainCredentialId}`);
+
+      // Ensure the credential ID is numeric
+      const numericCredentialId = parseInt(blockchainCredentialId.toString());
+      if (isNaN(numericCredentialId)) {
+        throw new Error(`Invalid credential ID format: ${blockchainCredentialId}`);
+      }
+
       const iface = new ethers.Interface([
         'function verifyCredential(uint256 credentialId) returns (bool)',
       ]);
 
-      const encodedData = iface.encodeFunctionData('verifyCredential', [credentialId]);
+      const encodedData = iface.encodeFunctionData('verifyCredential', [numericCredentialId]);
 
       const transactionResult = await this.relayerService.queueTransaction({
         userAddress: verifierAddress,
@@ -156,7 +184,7 @@ export class CredentialService implements OnModuleInit {
         value: '0',
         data: encodedData,
         operation: 0,
-        description: `Verify credential ID ${credentialId}`,
+        description: `Verify credential ID ${numericCredentialId}`,
         isAccountCreation: false,
       });
 
@@ -164,6 +192,7 @@ export class CredentialService implements OnModuleInit {
         transactionId: transactionResult.transactionId,
         status: transactionResult.status,
         credentialId,
+        blockchainCredentialId: numericCredentialId.toString(),
       };
     } catch (error) {
       this.logger.error(`Failed to verify credential: ${error.message}`);
@@ -173,35 +202,91 @@ export class CredentialService implements OnModuleInit {
 
   async getCredentialsForWallet(walletAddress: string) {
     try {
-      await this.ensureInitialized();
-
-      const credentialIds = await this.credentialModule.getCredentialsForSubject(walletAddress);
+      // First try to get blockchain credentials
+      let blockchainCredentials = [];
       
-      if (!credentialIds.length) {
-        return [];
+      try {
+        await this.ensureInitialized();
+        
+        this.logger.log(`Getting credentials for wallet: ${walletAddress}`);
+        
+        // Try to call the contract method
+        const credentialIds = await this.credentialModule.getCredentialsForSubject(walletAddress);
+        
+        this.logger.log(`Found ${credentialIds.length} credentials on blockchain`);
+        
+        for (const id of credentialIds) {
+          try {
+            const credential = await this.credentialModule.getCredential(id);
+            blockchainCredentials.push({
+              id: id.toString(),
+              issuer: credential.issuer,
+              subject: credential.subject,
+              name: credential.name,
+              description: credential.description,
+              status: this.mapCredentialStatus(credential.status),
+              source: 'blockchain'
+            });
+          } catch (error) {
+            this.logger.error(`Error fetching credential ${id}: ${error.message}`);
+          }
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to get blockchain credentials: ${error.message}`);
       }
 
-      const credentials = [];
-      for (const id of credentialIds) {
-        try {
-          const credential = await this.credentialModule.getCredential(id);
-          credentials.push({
-            id: id.toString(),
+      // Also get database credentials
+      const dbCredentials = await this.credentialModel.find({
+        subject: walletAddress
+      });
+
+      const databaseCredentials = dbCredentials.map(credential => ({
+        id: credential._id.toString(),
+        credentialId: credential.credentialId,
+        blockchainCredentialId: credential.blockchainCredentialId,
+        issuer: credential.issuer,
+        subject: credential.subject,
+        name: credential.name,
+        description: credential.description,
+        status: credential.status,
+        source: 'database',
+        createdAt: credential.createdAt,
+      }));
+
+      return {
+        blockchain: blockchainCredentials,
+        database: databaseCredentials,
+        total: blockchainCredentials.length + databaseCredentials.length
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get credentials for wallet: ${error.message}`);
+      // Return database credentials only if blockchain fails
+      try {
+        const dbCredentials = await this.credentialModel.find({
+          subject: walletAddress
+        });
+
+        return {
+          blockchain: [],
+          database: dbCredentials.map(credential => ({
+            id: credential._id.toString(),
+            credentialId: credential.credentialId,
+            blockchainCredentialId: credential.blockchainCredentialId,
             issuer: credential.issuer,
             subject: credential.subject,
             name: credential.name,
             description: credential.description,
-            status: this.mapCredentialStatus(credential.status),
-          });
-        } catch (error) {
-          this.logger.error(`Error fetching credential ${id}: ${error.message}`);
-        }
+            status: credential.status,
+            source: 'database',
+            createdAt: credential.createdAt,
+          })),
+          total: dbCredentials.length,
+          note: 'Blockchain data unavailable, showing database records only'
+        };
+      } catch (dbError) {
+        this.logger.error(`Failed to get database credentials: ${dbError.message}`);
+        return { blockchain: [], database: [], total: 0 };
       }
-
-      return credentials;
-    } catch (error) {
-      this.logger.error(`Failed to get credentials for wallet: ${error.message}`);
-      return [];
     }
   }
 
@@ -215,6 +300,7 @@ export class CredentialService implements OnModuleInit {
       return pendingCredentials.map(credential => ({
         id: credential._id.toString(),
         credentialId: credential.credentialId,
+        blockchainCredentialId: credential.blockchainCredentialId,
         issuer: credential.issuer,
         subject: credential.subject,
         name: credential.name,
@@ -232,12 +318,26 @@ export class CredentialService implements OnModuleInit {
     try {
       await this.ensureInitialized();
 
+      // Find the credential in the database first
+      const credential = await this.credentialModel.findById(credentialId);
+      if (!credential) {
+        throw new Error(`Credential not found: ${credentialId}`);
+      }
+
+      // Use the numeric blockchain credential ID
+      const blockchainCredentialId = credential.blockchainCredentialId || credential.credentialId;
+      const numericCredentialId = parseInt(blockchainCredentialId.toString());
+      
+      if (isNaN(numericCredentialId)) {
+        throw new Error(`Invalid credential ID format: ${blockchainCredentialId}`);
+      }
+
       const iface = new ethers.Interface([
         'function revokeCredential(uint256 tokenId, string reason) returns (bool)',
       ]);
 
       const encodedData = iface.encodeFunctionData('revokeCredential', [
-        credentialId,
+        numericCredentialId,
         'Revoked by PropellantBD administrator',
       ]);
 
@@ -247,7 +347,7 @@ export class CredentialService implements OnModuleInit {
         value: '0',
         data: encodedData,
         operation: 0,
-        description: `Revoke credential ID ${credentialId}`,
+        description: `Revoke credential ID ${numericCredentialId}`,
         isAccountCreation: false,
       });
 
@@ -255,6 +355,7 @@ export class CredentialService implements OnModuleInit {
         transactionId: transactionResult.transactionId,
         status: transactionResult.status,
         credentialId,
+        blockchainCredentialId: numericCredentialId.toString(),
       };
     } catch (error) {
       this.logger.error(`Failed to revoke credential: ${error.message}`);
@@ -329,6 +430,8 @@ export class CredentialService implements OnModuleInit {
       
       const combinedCredentials = dbCredentials.map(dbCred => ({
         id: dbCred.credentialId,
+        mongoId: dbCred._id.toString(),
+        blockchainCredentialId: dbCred.blockchainCredentialId,
         name: dbCred.name,
         description: dbCred.description,
         status: dbCred.status,
