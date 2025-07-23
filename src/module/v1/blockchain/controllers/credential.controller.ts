@@ -1,17 +1,17 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from '../../auth/guards/jwt.guard'; // Fix import path
+import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
 import { CredentialService } from '../services/credential.service';
 import { ResponseMessage } from 'src/common/decorators/response.decorator';
 import { LoggedInUserDecorator } from 'src/common/decorators/logged-in-user.decorator';
 import { UserDocument } from 'src/module/v1/user/schemas/user.schema';
-import { IssueCredentialDto } from '../dto/mint-credential.dto';
+import { IssueCredentialDto } from '../dto/issue-credential.dto'; // Updated import
 import { WalletService } from '../services/wallet.service';
 
 @Controller('blockchain/credentials')
 export class CredentialController {
   constructor(
     private readonly credentialService: CredentialService,
-    private readonly walletService: WalletService, // Add this injection
+    private readonly walletService: WalletService,
   ) {}
 
   @Post('issue')
@@ -23,7 +23,6 @@ export class CredentialController {
   ) {
     // Only admins or approved issuers can issue credentials
     if (!user.role?.includes('ADMIN') && !user.role?.includes('ISSUER')) {
-
       throw new Error('Unauthorized: Only admins or approved issuers can issue credentials');
     }
     
@@ -72,4 +71,3 @@ export class CredentialController {
     return this.credentialService.getPendingCredentialsForWallet(walletAddress);
   }
 }
-

@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, ClientSession, Types } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import { ethers } from 'ethers';
 import { RelayerService } from './relayer.service';
@@ -96,9 +96,6 @@ export class CredentialService implements OnModuleInit {
       throw new Error('Missing required parameters');
     }
 
-    const session = await this.credentialModel.startSession();
-    await session.startTransaction();
-    
     try {
       // Generate a unique credential ID
       const credentialId = `CRED_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -121,8 +118,8 @@ export class CredentialService implements OnModuleInit {
 
       this.logger.log(`Creating credential with data:`, credentialData);
 
-      const [credential] = await this.credentialModel.create([credentialData], { session });
-      await session.commitTransaction();
+      // Create credential without transaction (since MongoDB standalone doesn't support transactions)
+      const credential = await this.credentialModel.create(credentialData);
       
       this.logger.log(`Credential created successfully with ID: ${credential._id}`);
       
@@ -133,11 +130,8 @@ export class CredentialService implements OnModuleInit {
         timestamp: new Date()
       };
     } catch (error: unknown) {
-      await session.abortTransaction();
       this.logger.error(`Failed to issue credential: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
-    } finally {
-      await session.endSession();
     }
   }
 
