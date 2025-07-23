@@ -35,7 +35,7 @@ export class Transaction {
   @Prop()
   paymentMethod: string;
 
-  @Prop({ enum: TransactionStatusEnum, default: TransactionStatusEnum.Pending })
+  @Prop({ enum: TransactionStatusEnum, default: TransactionStatusEnum.PENDING })
   status: TransactionStatusEnum;
 
   @Prop({ type: Object, default: {}, select: false })

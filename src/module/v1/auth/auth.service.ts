@@ -6,6 +6,7 @@ import {
   forwardRef,
   UnprocessableEntityException,
   HttpStatus,
+  Logger, // Import Logger
 } from '@nestjs/common';
 import { CreateUserDto } from '../user/dto/user.dto';
 import { UserService } from '../user/services/user.service';
@@ -32,24 +33,109 @@ import { cacheKeys } from 'src/common/constants/cache.constant';
 import { CacheHelperUtil } from 'src/common/utils/cache-helper.util';
 import { UserDocument } from '../user/schemas/user.schema';
 import { authConstants } from 'src/common/constants/authConstant';
+import { WalletService } from '../blockchain/services/wallet.service';
+import { ethers } from 'ethers'; // Import ethers
+import { ConfigService } from '@nestjs/config';
+import * as AccountFactoryABI from '../blockchain/abis/AccountFactory.json';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name); // Initialize logger
+  private provider: ethers.JsonRpcProvider; // Declare provider
+  private accountFactory: ethers.Contract; // Declare accountFactory
+
   constructor(
+    @Inject(forwardRef(() => UserService))
     private userService: UserService,
-    private jwtService: JwtService,
-    @Inject(forwardRef(() => OtpService))
-    private readonly otpService: OtpService,
+    private otpService: OtpService,
     private mailService: MailService,
-  ) {}
+    private jwtService: JwtService,
+    private configService: ConfigService, // Add this injection
+    private walletService: WalletService, // Inject WalletService
+  ) {
+    this.initializeProvider(); // Initialize provider in the constructor
+  }
 
-  async register(payload: CreateUserDto) {
-    await this.otpService.sendOTP({
-      email: payload.email,
-      type: OtpTypeEnum.VERIFY_EMAIL,
-    });
 
-    return await this.userService.createUser(payload);
+  private async initializeProvider() {
+    const rpcUrl = this.configService.get<string>('BLOCKCHAIN_RPC_URL');
+    const accountFactoryAddress = this.configService.get<string>('ACCOUNT_FACTORY_ADDRESS');
+    
+    this.provider = new ethers.JsonRpcProvider(rpcUrl);
+    
+    // Force disable ENS to avoid resolution errors
+    const originalGetNetwork = this.provider.getNetwork.bind(this.provider);
+    this.provider.getNetwork = async () => {
+      const network = await originalGetNetwork();
+      Object.defineProperty(network, 'ensAddress', { value: null });
+      return network;
+    };
+    
+    this.accountFactory = new ethers.Contract(
+      accountFactoryAddress,
+      AccountFactoryABI.abi,
+      this.provider,
+    );
+  }
+
+async register(payload: CreateUserDto) {
+  // Create the user
+  const user = await this.userService.createUser(payload);
+
+  // Auto-generate wallet for the user using email
+  this.autoGenerateWalletForUser(user);
+
+  // Send OTP for email verification
+  await this.otpService.sendOTP({
+    email: payload.email,
+    type: OtpTypeEnum.VERIFY_EMAIL,
+  });
+
+  return user;
+}
+
+  private async autoGenerateWalletForUser(user: any) {
+    try {
+      const rpcUrl = this.configService.get<string>('BLOCKCHAIN_RPC_URL');
+      const accountFactoryAddress = this.configService.get<string>('ACCOUNT_FACTORY_ADDRESS');
+      
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      
+      const accountFactory = new ethers.Contract(
+        accountFactoryAddress,
+        AccountFactoryABI.abi,
+        provider,
+      );
+
+      // Generate wallet using the wallet service
+      const walletResult = await this.walletService.createWallet(
+        user.user._id.toString(),
+        user.user.email,
+      );
+
+      // Update user with wallet information
+      await this.userService.updateQuery(
+        { _id: user.user._id },
+        {
+          $set: {
+            walletAddress: walletResult.walletAddress,
+            accountAddress: walletResult.accountAddress,
+          },
+        },
+      );
+
+      this.logger.log(`Auto-generated wallet ${walletResult.walletAddress} for user ${user.user.email}`);
+      
+      if (walletResult.walletAddress && walletResult.accountAddress) {
+        // Success case
+      } else {
+        this.logger.warn(`Wallet created for user ${user.user.email}, but some properties (walletAddress/accountAddress) might be missing. Wallet object: ${JSON.stringify(walletResult)}`);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to auto-generate wallet for user ${user.user.email}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   async login(payload: LoginDto) {

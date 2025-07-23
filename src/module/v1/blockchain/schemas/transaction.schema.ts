@@ -7,34 +7,40 @@ import {
 
 export type BlockchainTransactionDocument = BlockchainTransaction & Document;
 
-@Schema()
+@Schema({ timestamps: true })
 export class BlockchainTransaction {
-  @Prop({ required: true, index: true })
+  @Prop({ required: true, index: true, unique: true })
   transactionId: string;
 
-  @Prop({ required: true })
+  @Prop({ required: true, index: true })
   userAddress: string;
 
-  @Prop({ required: true })
+  @Prop({ required: true, index: true })
   accountAddress: string;
 
   @Prop({ required: true })
   target: string;
 
-  @Prop({ required: true })
+  @Prop({ required: true, default: '0' })
   value: string;
 
   @Prop({ required: true })
   data: string;
 
-  @Prop({ required: true })
+  @Prop({ required: true, default: 0 })
   operation: number;
 
-  @Prop({ required: true, enum: TransactionStatusEnum })
+  @Prop()
+  description?: string;
+
+  @Prop({ required: true, enum: TransactionStatusEnum, default: TransactionStatusEnum.PENDING })
   status: TransactionStatusEnum;
 
   @Prop({ required: true, enum: TransactionTypeEnum })
   type: TransactionTypeEnum;
+
+  @Prop({ default: 0 })
+  attempts?: number;
 
   @Prop()
   transactionHash?: string;
@@ -46,13 +52,10 @@ export class BlockchainTransaction {
   gasUsed?: string;
 
   @Prop()
-  error?: string;
+  lastError?: string;
 
-  @Prop({ required: true })
-  description: string;
-
-  @Prop({ required: true })
-  createdAt: Date;
+  @Prop()
+  processedAt?: Date;
 
   @Prop()
   updatedAt?: Date;

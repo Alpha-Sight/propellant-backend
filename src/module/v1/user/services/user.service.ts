@@ -22,10 +22,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { BaseHelper } from '../../../../common/utils/helper/helper.util';
 import { OtpTypeEnum } from '../../../../common/enums/otp.enum';
 import { OtpService } from '../../otp/services/otp.service';
-import {
-  AuthSourceEnum,
-  UserRoleEnum,
-} from '../../../../common/enums/user.enum';
+import { AuthSourceEnum, UserRoleEnum } from '../../../../common/enums/user.enum';
 import { GoogleAuthDto } from '../../auth/dto/auth.dto';
 import { PinataService } from 'src/common/utils/pinata.util';
 import { PaginationDto } from '../../repository/dto/repository.dto';
@@ -56,101 +53,6 @@ export class UserService {
     private walletService: WalletService,
   ) {}
 
-  // async createUser(payload: CreateUserDto) {
-  //   try {
-  //     const { referralCode, role } = payload;
-
-  //     if (!payload.termsAndConditionsAccepted) {
-  //       throw new BadRequestException('Please accept terms and conditions');
-  //     }
-
-  //     const [userWithEmailExists, userWithPhoneExists] = await Promise.all([
-  //       this.userModel.exists({ email: payload.email }),
-  //       this.userModel.exists({ phone: payload.phone }),
-  //     ]);
-
-  //     if (userWithEmailExists) {
-  //       throw new BadRequestException('User with this email already exists');
-  //     }
-
-  //     if (userWithPhoneExists) {
-  //       throw new BadRequestException('User with this phone already exists');
-  //     }
-
-  //     delete payload.referralCode; // delete the referral code to prevent persisting this as the new user referral code
-
-  //     let referralUserId: string;
-  //     if (referralCode) {
-  //       const referralUser = await this.userModel.findOne({ referralCode });
-
-  //       if (!referralUser) {
-  //         throw new BadRequestException('Referral code is invalid');
-  //       }
-
-  //       referralUserId = referralUser._id.toString();
-  //     }
-
-  //     const hashedPassword = await BaseHelper.hashData(payload.password);
-
-  //     // let userRole = role ?? UserRoleEnum.TALENT;
-  //     // if (payload.role === UserRoleEnum.ORGANIZATION) {
-  //     //   userRole = UserRoleEnum.ORGANIZATION;
-  //     // }
-
-  //     // Generate unique referral code for the new user
-  //     const userReferralCode = await BaseHelper.generateReferenceCode();
-
-  //     // this.logger.log(`Creating wallet for user`);
-  //     const createWallet = await this.walletService.createWallet();
-
-  //     const createdUser = await this.userModel.create({
-  //       ...payload,
-  //       password: hashedPassword,
-  //       role: role,
-  //       referredBy: referralUserId,
-  //       referralCode: userReferralCode,
-  //       walletAddress: createWallet.walletAddress,
-  //     });
-
-  //     // update referral user referral count
-  //     // TODO: award referral point
-  //     if (referralUserId) {
-  //       await this.userModel.updateOne(
-  //         { _id: referralUserId },
-  //         {
-  //           $inc: {
-  //             totalReferrals: 1,
-  //           },
-  //         },
-  //       );
-  //     }
-  //     // update user referral code
-
-  //     // TODO: not important but we can send an email or push notification to notify user of new referral
-
-  //     delete createdUser['_doc'].password;
-  //     return {
-  //       user: createdUser,
-  //       walletDetails: {
-  //         walletAddress: createWallet.walletAddress,
-  //         privateKey: createWallet.privateKey,
-  //         accountAddress: createWallet.accountAddress,
-  //         transactionId: createWallet.transactionId,
-  //       },
-  //     };
-  //   } catch (e) {
-  //     console.error('Error while creating user', e);
-  //     if (e.code === 11000) {
-  //       throw new ConflictException(
-  //         `${Object.keys(e.keyValue)} already exists`,
-  //       );
-  //     } else {
-  //       throw new InternalServerErrorException(
-  //         e.response?.message || 'Something went wrong',
-  //       );
-  //     }
-  //   }
-  // }
 
   async createUser(payload: CreateUserDto) {
     try {
@@ -199,6 +101,10 @@ export class UserService {
       const commonData = {
         ...payload,
         password: hashedPassword,
+
+        role: role,
+        referredBy: referralUserId,
+
         referralCode: userReferralCode,
         walletAddress: createWallet.walletAddress,
       };

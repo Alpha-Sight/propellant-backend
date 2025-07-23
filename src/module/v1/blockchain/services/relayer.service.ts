@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, forwardRef, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ethers } from 'ethers';
 import { UserOperationStruct } from '../interfaces/user-operation.interface';
@@ -8,14 +8,11 @@ import * as PaymasterABI from '../abis/Paymaster.json';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import {
-  BlockchainTransaction,
-  BlockchainTransactionDocument,
-} from '../schemas/transaction.schema';
-import {
-  TransactionStatusEnum,
-  TransactionTypeEnum,
-} from 'src/common/enums/transaction.enum';
+import { BlockchainTransaction, BlockchainTransactionDocument } from '../schemas/transaction.schema';
+import { WalletService } from './wallet.service';
+import { Credential, CredentialDocument } from '../schemas/credential.schema';
+import { Wallet, WalletDocument } from '../schemas/wallet.schema';
+import { TransactionStatusEnum, TransactionTypeEnum } from 'src/common/enums/transaction.enum';
 import { UserDocument } from '../../user/schemas/user.schema';
 
 @Injectable()
@@ -24,92 +21,57 @@ export class RelayerService implements OnModuleInit {
   private provider: ethers.JsonRpcProvider;
   private wallet: ethers.Wallet;
   private entryPoint: ethers.Contract;
+  private credentialModule: ethers.Contract;
   private accountFactory: ethers.Contract;
-  private paymaster: ethers.Contract;
+  private userProfileModule: ethers.Contract;
+  private roleModule: ethers.Contract;
+  private storageModule: ethers.Contract;
+  private credentialVerificationModule: ethers.Contract;
+  private paymaster: ethers.Contract; // Add this property
   private isProcessing = false;
   private pendingTransactions: Map<string, any> = new Map();
 
   constructor(
     private configService: ConfigService,
     private eventEmitter: EventEmitter2,
-    @InjectModel(BlockchainTransaction.name)
-    private transactionModel: Model<BlockchainTransactionDocument>,
+
+    @InjectModel(BlockchainTransaction.name) private transactionModel: Model<BlockchainTransactionDocument>,
+    @InjectModel(Credential.name) private credentialModel: Model<CredentialDocument>,
+    @Inject(forwardRef(() => WalletService)) private readonly walletService: WalletService,
+    @InjectModel(Wallet.name) private walletModel: Model<WalletDocument>,
   ) {}
 
-  /**
-   * Get transactions for a specific user wallet address
-   * @param walletAddress The wallet address to fetch transactions for
-   */
-  async getUserTransactions(walletAddress: string) {
-    // Query transactions where the user address matches the provided wallet address
-    const transactions = await this.transactionModel
-      .find({
-        userAddress: walletAddress,
-      })
-      .sort({ createdAt: -1 }); // Most recent first
-
-    return transactions;
-  }
   async onModuleInit() {
     await this.initializeProvider();
-    this.logger.log('Relayer service initialized');
-
-    // Start background processing of transactions
     this.startTransactionProcessing();
   }
 
   private async initializeProvider() {
     try {
       const rpcUrl = this.configService.get<string>('BLOCKCHAIN_RPC_URL');
-      const privateKey = this.configService.get<string>('RELAYER_PRIVATE_KEY');
-
-      if (!rpcUrl || !privateKey) {
-        throw new Error('Missing blockchain configuration');
-      }
+      const relayerPrivateKey = this.configService.get<string>('RELAYER_PRIVATE_KEY');
+      const entryPointAddress = this.configService.get<string>('ENTRY_POINT_ADDRESS');
+      const credentialModuleAddress = this.configService.get<string>('CREDENTIAL_VERIFICATION_MODULE_ADDRESS');
+      const accountFactoryAddress = this.configService.get<string>('ACCOUNT_FACTORY_ADDRESS');
+      const paymasterAddress = this.configService.get<string>('PAYMASTER_ADDRESS');
 
       this.provider = new ethers.JsonRpcProvider(rpcUrl);
-      this.wallet = new ethers.Wallet(privateKey, this.provider);
+      this.wallet = new ethers.Wallet(relayerPrivateKey, this.provider);
 
-      this.logger.log(
-        `Relayer initialized with address: ${this.wallet.address}`,
-      );
+      this.entryPoint = new ethers.Contract(entryPointAddress, EntryPointABI.abi, this.wallet);
+      this.accountFactory = new ethers.Contract(accountFactoryAddress, AccountFactoryABI.abi, this.provider);
+      
+      if (paymasterAddress) {
+        this.paymaster = new ethers.Contract(paymasterAddress, PaymasterABI.abi, this.wallet);
+      }
 
-      // Initialize contracts
-      const entryPointAddress = this.configService.get<string>(
-        'ENTRY_POINT_ADDRESS',
-      );
-      const accountFactoryAddress = this.configService.get<string>(
-        'ACCOUNT_FACTORY_ADDRESS',
-      );
-      const paymasterAddress =
-        this.configService.get<string>('PAYMASTER_ADDRESS');
-
-      this.entryPoint = new ethers.Contract(
-        entryPointAddress,
-        EntryPointABI.abi,
-        this.wallet,
-      );
-
-      this.accountFactory = new ethers.Contract(
-        accountFactoryAddress,
-        AccountFactoryABI.abi,
-        this.wallet,
-      );
-
-      this.paymaster = new ethers.Contract(
-        paymasterAddress,
-        PaymasterABI.abi,
-        this.wallet,
-      );
+      this.logger.log('Relayer service initialized successfully');
     } catch (error) {
-      this.logger.error(`Failed to initialize relayer: ${error.message}`);
+      this.logger.error(`Failed to initialize relayer service: ${error.message}`);
       throw error;
     }
   }
 
-  /**
-   * Queue a transaction to be submitted to the blockchain
-   */
   async queueTransaction(payload: {
     userAddress: string;
     target: string;
@@ -117,9 +79,15 @@ export class RelayerService implements OnModuleInit {
     data: string;
     operation: number;
     description: string;
-    isAccountCreation?: boolean; // Add this flag
+    isAccountCreation?: boolean;
   }) {
     try {
+      this.logger.log(`Queuing transaction: ${JSON.stringify(payload)}`);
+      
+      if (!payload.target || !payload.data) {
+        throw new Error('Invalid transaction payload: missing target or data');
+      }
+
       const {
         userAddress,
         target,
@@ -130,32 +98,28 @@ export class RelayerService implements OnModuleInit {
         isAccountCreation,
       } = payload;
 
-      // Skip account lookup for account creation transactions
-      let accountAddress;
+      let accountAddress: string;
       if (isAccountCreation) {
-        // For account creation, we use the target as the factory address
         accountAddress = target;
-        this.logger.log(
-          `Processing account creation for wallet: ${userAddress}`,
-        );
+        this.logger.log(`Processing account creation for wallet: ${userAddress}`);
       } else {
-        // For regular transactions, get the user's account address
-        accountAddress = await this.accountFactory.getAccount(userAddress);
-
-        if (accountAddress === ethers.ZeroAddress) {
-          throw new Error(`No account found for user: ${userAddress}`);
+        try {
+          accountAddress = await this.accountFactory.getAccount(userAddress);
+          if (accountAddress === ethers.ZeroAddress) {
+            throw new Error(`No account found for user: ${userAddress}`);
+          }
+        } catch (error) {
+          this.logger.warn(`Could not get smart account address, using user address: ${error.message}`);
+          accountAddress = userAddress;
         }
       }
 
-      // Generate a unique transaction ID
       const transactionId = ethers.keccak256(
-        ethers.solidityPacked(
-          ['address', 'address', 'uint256', 'bytes', 'uint256', 'uint256'],
-          [accountAddress, target, value, data, operation, Date.now()],
-        ),
+        ethers.toUtf8Bytes(
+          `${payload.userAddress}-${payload.target}-${Date.now()}-${Math.random()}`
+        )
       );
 
-      // Store the transaction in database
       const transaction = new this.transactionModel({
         transactionId,
         userAddress,
@@ -164,7 +128,7 @@ export class RelayerService implements OnModuleInit {
         value,
         data,
         operation,
-        status: TransactionStatusEnum.Pending,
+        status: TransactionStatusEnum.PENDING,
         type: TransactionTypeEnum.AccountCreation,
         description,
         createdAt: new Date(),
@@ -173,24 +137,24 @@ export class RelayerService implements OnModuleInit {
       await transaction.save();
 
       this.logger.log(`Transaction queued with ID: ${transactionId}`);
-
-      // Emit event for real-time notifications
+      
       this.eventEmitter.emit('transaction.queued', {
         transactionId,
         userAddress,
-        status: TransactionStatusEnum.Pending,
+        status: TransactionStatusEnum.PENDING,
       });
 
-      return transaction;
+      return {
+        transactionId: transactionId,
+        status: 'PENDING'
+      };
+
     } catch (error) {
       this.logger.error(`Failed to queue transaction: ${error.message}`);
       throw error;
     }
   }
 
-  /**
-   * Get transaction status by ID
-   */
   async getTransactionStatus(transactionId: string) {
     const transaction = await this.transactionModel.findOne({
       transactionId,
@@ -205,15 +169,12 @@ export class RelayerService implements OnModuleInit {
       status: transaction.status,
       blockNumber: transaction.blockNumber,
       transactionHash: transaction.transactionHash,
-      error: transaction.error,
-      createdAt: transaction.createdAt,
-      updatedAt: transaction.updatedAt,
+      error: transaction.lastError,
+      createdAt: transaction.get('createdAt'),
+      updatedAt: transaction.get('updatedAt'),
     };
   }
 
-  /**
-   * Start background processing of pending transactions
-   */
   private startTransactionProcessing() {
     setInterval(async () => {
       if (this.isProcessing) return;
@@ -226,159 +187,130 @@ export class RelayerService implements OnModuleInit {
       } finally {
         this.isProcessing = false;
       }
-    }, 15000); // Process every 15 seconds
+    }, 15000);
   }
 
-  /**
-   * Process pending transactions
-   */
   private async processPendingTransactions() {
-    const pendingTransactions = await this.transactionModel
-      .find({
-        status: 'PENDING',
-      })
-      .sort({ createdAt: 1 })
-      .limit(10);
-
-    if (pendingTransactions.length === 0) return;
-
-    this.logger.log(
-      `Processing ${pendingTransactions.length} pending transactions`,
-    );
-
-    for (const transaction of pendingTransactions) {
-      try {
-        await this.processTransaction(transaction);
-      } catch (error) {
-        this.logger.error(
-          `Failed to process transaction ${transaction.transactionId}: ${error.message}`,
-        );
-
-        // Update transaction status
-        transaction.status = TransactionStatusEnum.Failed;
-        transaction.error = error.message;
-        transaction.updatedAt = new Date();
-        await transaction.save();
-
-        // Emit event
-        this.eventEmitter.emit('transaction.failed', {
-          transactionId: transaction.transactionId,
-          userAddress: transaction.userAddress,
-          error: error.message,
-        });
+    try {
+      const pendingTransactions = await this.transactionModel.find({
+        status: TransactionStatusEnum.PENDING,
+        createdAt: { $gt: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+      }).limit(5);
+      
+      if (pendingTransactions.length === 0) {
+        return;
       }
+      
+      this.logger.log(`Processing ${pendingTransactions.length} pending transactions`);
+      
+      for (const transaction of pendingTransactions) {
+        if (transaction.transactionHash) {
+          try {
+            const receipt = await this.provider.getTransactionReceipt(transaction.transactionHash);
+            if (receipt) {
+              await this.transactionModel.updateOne(
+                { transactionId: transaction.transactionId },
+                { status: TransactionStatusEnum.COMPLETED }
+              );
+              continue;
+            }
+          } catch (e) {
+            // Ignore errors checking receipt, continue with processing
+          }
+        }
+        
+        try {
+          await this.processTransaction(transaction._id.toString());
+        } catch (error) {
+          this.logger.error(`Failed to process transaction ${transaction._id}: ${error.message}`);
+        }
+      }
+    } catch (error) {
+      this.logger.error(`Error processing transactions: ${error.message}`);
     }
   }
 
-  /**
-   * Process a single transaction
-   */
-  private async processTransaction(transaction: BlockchainTransactionDocument) {
-    const {
-      transactionId,
-      userAddress,
-      accountAddress,
-      target,
-      value,
-      data,
-      operation,
-    } = transaction;
+  private async processTransaction(transactionMongoId: string) {
+    try {
+      const transaction = await this.transactionModel.findById(transactionMongoId);
+      if (!transaction) {
+        this.logger.warn(`Transaction not found by mongo ID: ${transactionMongoId}`);
+        return;
+      }
 
-    // Create user operation
-    const userOp = await this.createUserOperation({
-      sender: accountAddress,
-      target,
-      value,
-      data,
-      operation,
-    });
+      this.logger.log(`Processing transaction ${transaction.transactionId}: ${transaction.description}`);
 
-    // Submit user operation
-    const transactionHash = await this.submitUserOperation(userOp);
+      const relayerPrivateKey = this.configService.get<string>('RELAYER_PRIVATE_KEY');
+      if (!relayerPrivateKey) {
+        throw new Error('RELAYER_PRIVATE_KEY not configured');
+      }
 
-    // Wait for transaction to be mined
-    const receipt = await this.provider.waitForTransaction(transactionHash);
+      const provider = new ethers.JsonRpcProvider(this.configService.get<string>('BLOCKCHAIN_RPC_URL'));
+      const relayerWallet = new ethers.Wallet(relayerPrivateKey, provider);
 
-    // Update transaction status
-    transaction.status =
-      receipt.status === 1
-        ? TransactionStatusEnum.Completed
-        : TransactionStatusEnum.Failed;
-    transaction.transactionHash = transactionHash;
-    transaction.blockNumber = receipt.blockNumber;
-    transaction.gasUsed = receipt.gasUsed.toString();
-    transaction.updatedAt = new Date();
+      const tx = await relayerWallet.sendTransaction({
+        to: transaction.target,
+        data: transaction.data,
+        value: transaction.value || 0,
+        gasLimit: 500000,
+      });
 
-    await transaction.save();
+      this.logger.log(`Transaction sent: ${tx.hash}`);
+      const receipt = await tx.wait();
+      this.logger.log(`Transaction confirmed in block: ${receipt.blockNumber}`);
 
-    // Emit event
-    this.eventEmitter.emit('transaction.completed', {
-      transactionId,
-      userAddress,
-      status: transaction.status,
-      transactionHash,
-      blockNumber: receipt.blockNumber,
-    });
+      await this.transactionModel.updateOne(
+        { _id: transactionMongoId },
+        {
+          status: 'COMPLETED',
+          transactionHash: tx.hash,
+          blockNumber: receipt.blockNumber,
+          processedAt: new Date(),
+        }
+      );
 
-    this.logger.log(
-      `Transaction ${transactionId} processed with status: ${transaction.status}`,
-    );
+      let credentialStatus = 'ISSUED';
+      
+      if (transaction.description && transaction.description.includes('Verify credential')) {
+        credentialStatus = 'VERIFIED';
+      }
 
-    return receipt;
+      await this.credentialModel.updateOne(
+        { transactionId: transaction.transactionId },
+        {
+          status: credentialStatus,
+          transactionHash: tx.hash,
+          blockNumber: receipt.blockNumber,
+        }
+      );
+
+      this.logger.log(`Transaction ${transaction.transactionId} and associated credential updated to ${credentialStatus}.`);
+
+    } catch (error) {
+      this.logger.error(`Failed to process transaction with mongo ID ${transactionMongoId}: ${error.message}`);
+      await this.transactionModel.updateOne(
+        { _id: transactionMongoId },
+        {
+          $inc: { attempts: 1 },
+          lastError: error.message,
+          status: 'FAILED',
+          updatedAt: new Date(),
+        }
+      );
+    }
   }
 
-  /**
-   * Create an ERC-4337 UserOperation
-   */
-  private async createUserOperation({
-    sender,
-    target,
-    value,
-    data,
-    operation,
-  }: {
-    sender: string;
-    target: string;
-    value: string;
-    data: string;
-    operation: number;
-  }) {
-    // Get the current nonce for this account
-    const nonce = await this.entryPoint.getNonce(sender, 0);
-
-    // Prepare calldata
-    const callData = this.encodeExecuteCallData(target, value, data);
-
-    // Estimate gas
-    const feeData = await this.provider.getFeeData();
-    const gasPrice =
-      feeData.gasPrice || feeData.maxFeePerGas || BigInt(30000000000); // fallback value
-    const gasLimit = await this.estimateGas(sender, callData);
-
-    // Create user operation
-    const userOp: UserOperationStruct = {
-      sender,
-      nonce: nonce.toString(),
-      initCode: '0x',
-      callData,
-      callGasLimit: gasLimit.toString(),
-      verificationGasLimit: '200000',
-      preVerificationGas: '50000',
-      maxFeePerGas: gasPrice.toString(),
-      maxPriorityFeePerGas: (gasPrice / BigInt(2)).toString(),
-      paymasterAndData: this.encodePaymasterData(),
-      signature: '0x',
-    };
-
-    // Sign the user operation
-    userOp.signature = await this.signUserOp(userOp);
-
-    return userOp;
+  private encodePaymasterData() {
+    if (this.paymaster) {
+      return ethers.concat([this.paymaster.target.toString(), '0x']);
+    }
+    return '0x';
   }
 
-  /**
-   * Encode execute call data for the account
-   */
+  async getPaymasterData(): Promise<string> {
+    return this.encodePaymasterData();
+  }
+
   private encodeExecuteCallData(target: string, value: string, data: string) {
     const executeInterface = new ethers.Interface([
       'function execute(address target, uint256 value, bytes data) returns (bytes)',
@@ -391,21 +323,7 @@ export class RelayerService implements OnModuleInit {
     ]);
   }
 
-  /**
-   * Encode paymaster data
-   */
-  private encodePaymasterData() {
-    // In production, this would include proper paymaster validation data
-    // For now, we're using a simplified version
-    return ethers.concat([this.paymaster.target.toString(), '0x']);
-  }
-
-  /**
-   * Estimate gas for user operation
-   */
   private async estimateGas(sender: string, callData: string) {
-    // This is a simplified estimation
-    // In production, you'd use more accurate estimation techniques
     try {
       const gasEstimate = await this.provider.estimateGas({
         from: this.wallet.address,
@@ -413,29 +331,19 @@ export class RelayerService implements OnModuleInit {
         data: callData,
       });
 
-      // Add buffer for safety
       return (gasEstimate * BigInt(120)) / BigInt(100);
     } catch (error) {
-      return BigInt(1000000); // Default fallback
+      return BigInt(1000000);
     }
   }
 
-  /**
-   * Sign a user operation according to ERC-4337
-   */
-  private async signUserOp(userOp: UserOperationStruct) {
-    const userOpHash = await this.entryPoint.getUserOpHash(userOp);
-    const signature = await this.wallet.signMessage(
-      ethers.getBytes(userOpHash),
-    );
-    return signature;
-  }
+  async getUserTransactions(walletAddress: string) {
+    const transactions = await this.transactionModel
+      .find({
+        userAddress: walletAddress,
+      })
+      .sort({ createdAt: -1 });
 
-  /**
-   * Submit a user operation to the entrypoint
-   */
-  private async submitUserOperation(userOp: UserOperationStruct) {
-    const tx = await this.entryPoint.handleOps([userOp], this.wallet.address);
-    return tx.hash;
+    return transactions;
   }
 }
