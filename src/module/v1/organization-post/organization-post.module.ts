@@ -7,6 +7,7 @@ import {
 import { OrganizationPostController } from './organization-post.controller';
 import { OrganizationPostService } from './organization-post.service';
 import { UserModule } from '../user/user.module';
+import { RepositoryModule } from '../repository/repository.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { UserModule } from '../user/user.module';
       { name: OrganizationPost.name, schema: OrganizationPostSchema },
     ]),
     UserModule,
+    RepositoryModule,
   ],
   controllers: [OrganizationPostController],
   providers: [OrganizationPostService],

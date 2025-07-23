@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { OtpTypeEnum } from '../../../../common/enums/otp.enum';
 import { IRequestOtp } from '../../../../common/interfaces/otp.interface';
-import { MailService } from '../../mail /mail.service';
-import { OtpEmailTemplate } from '../../mail /templates/generic-otp.email';
-import { VerifyEmailTemplate } from '../../mail /templates/verify-email.email';
+import { MailService } from '../../mail/mail.service';
+import { OtpEmailTemplate } from '../../mail/templates/generic-otp.email';
+import { VerifyEmailTemplate } from '../../mail/templates/verify-email.email';
 
 @Injectable()
 export class OtpMailService {

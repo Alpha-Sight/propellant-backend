@@ -4,3 +4,9 @@ export enum JobTypeEnum {
   CONTRACT = 'CONTRACT',
   FREELANCE = 'FREELANCE',
 }
+
+export enum OrganizationVisibilityEnum {
+  PUBLIC = 'PUBLIC',
+  VERIFIED_ONLY = 'VERIFIED_ONLY',
+  PRIVATE = 'PRIVATE',
+}

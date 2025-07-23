@@ -6,8 +6,8 @@ import { JoinWaitlistDto } from './dto/waitlist.dto';
 import { RepositoryService } from '../repository/repository.service';
 import { PaginationDto } from '../repository/dto/repository.dto';
 import { EMAIL_CONSTANT } from '../../../common/constants/email.constant';
-import { MailService } from '../mail /mail.service';
-import { waitlistConfirmationEmailTemplate } from '../mail /templates/waitlist-confirmation.email';
+import { MailService } from '../mail/mail.service';
+import { waitlistConfirmationEmailTemplate } from '../mail/templates/waitlist-confirmation.email';
 
 @Injectable()
 export class WaitlistService {

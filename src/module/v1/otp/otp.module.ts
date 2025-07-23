@@ -5,7 +5,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { OTP, OTPSchema } from './schemas/otp.schema';
 import { OtpMailService } from './services/otp-mail.service';
 import { UserModule } from '../user/user.module';
-import { MailModule } from '../mail /mail.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
