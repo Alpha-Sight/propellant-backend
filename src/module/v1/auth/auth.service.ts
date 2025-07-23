@@ -22,7 +22,7 @@ import {
 import { BaseHelper } from '../../../common/utils/helper/helper.util';
 import { OtpService } from '../otp/services/otp.service';
 import { ENVIRONMENT } from '../../../common/configs/environment';
-import { AuthSourceEnum } from '../../../common/enums/user.enum';
+import { AuthSourceEnum, UserRoleEnum } from '../../../common/enums/user.enum';
 import { OtpTypeEnum } from '../../../common/enums/otp.enum';
 import { MailService } from '../mail/mail.service';
 import { welcomeEmailTemplate } from '../mail/templates/welcome.email';

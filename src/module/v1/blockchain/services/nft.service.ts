@@ -66,7 +66,7 @@ export class NftService implements OnModuleInit {
 
       // Queue the minting transaction through the relayer
       const transactionResult = await this.relayerService.queueTransaction({
-        userAddress: credential.issuer,  // The issuer pays for the gas via the paymaster
+        userAddress: credential.issuer.toString(),  // The issuer pays for the gas via the paymaster
         target: this.configService.get<string>('NFT_CONTRACT_ADDRESS'),
         value: '0',
         data,
