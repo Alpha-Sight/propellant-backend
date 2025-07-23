@@ -53,31 +53,26 @@ export class AuthService {
   }
 
   async login(payload: LoginDto) {
-    const { email, password } = payload;
+    const { email, password, role } = payload;
 
     if (!email) {
       throw new BadRequestException('Email is required');
     }
 
-    // const user = await this.userService.getUserDetailsWithPassword({ email });
+    let account;
+    let actualRole;
 
-    // Try to find the user in both models
-    const [user, org] = await Promise.all([
-      this.userService.getUserDetailsWithPassword({ email }),
-      this.userService.getOrgDetailsWithPassword({ email }),
-    ]);
-
-    // if (!user) {
-    //   throw new BadRequestException('Invalid Credential');
-    // }
-
-    if (!user && !org) {
-      throw new BadRequestException('Invalid Credential');
+    if (role === UserRoleEnum.ORGANIZATION) {
+      account = await this.userService.getOrgDetailsWithPassword({ email });
+      actualRole = UserRoleEnum.ORGANIZATION;
+    } else {
+      account = await this.userService.getUserDetailsWithPassword({ email });
+      actualRole = UserRoleEnum.TALENT;
     }
 
-    // Determine which account matched
-    const account = user || org;
-    const role = user ? UserRoleEnum.TALENT : UserRoleEnum.ORGANIZATION;
+    if (!account) {
+      throw new BadRequestException('Invalid Credential');
+    }
 
     const passwordMatch = await BaseHelper.compareHashedData(
       password,
@@ -90,18 +85,19 @@ export class AuthService {
 
     if (!account.emailVerified) {
       throw new AppError(
-        'kindly verify your email to login',
+        'Kindly verify your email to login',
         HttpStatus.BAD_REQUEST,
         ERROR_CODES.EMAIL_NOT_VERIFIED,
       );
     }
 
     const token = this.jwtService.sign(
-      { _id: account._id, role },
+      { _id: account._id, role: actualRole },
       {
         secret: ENVIRONMENT.JWT.SECRET,
       },
     );
+
     delete account['_doc'].password;
 
     return {
@@ -162,7 +158,7 @@ export class AuthService {
       throw new BadRequestException('Invalid Email');
     }
 
-    if (user?.emailVerified || org?.emailVerified) {
+    if (user?.emailVerified && org?.emailVerified) {
       throw new UnprocessableEntityException('Email already verified');
     }
 

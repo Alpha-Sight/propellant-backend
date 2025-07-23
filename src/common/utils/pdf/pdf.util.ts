@@ -66,7 +66,7 @@
 // utils/pdf.util.ts
 import * as fs from 'fs';
 import * as path from 'path';
-import * as puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer';
 
 export class PDFHelper {
   static async generatePDFfromHTML(

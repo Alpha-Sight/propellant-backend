@@ -8,12 +8,14 @@ import {
 import { UserRoleEnum } from 'src/common/enums/user.enum';
 
 export class LoginDto {
-  @IsOptional()
   @IsEmail()
   email: string;
 
   @IsString()
   password: string;
+
+  @IsString()
+  role: string;
 }
 
 export class VerifyEmailDto {
