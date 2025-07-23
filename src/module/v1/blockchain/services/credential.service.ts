@@ -106,13 +106,15 @@ export class CredentialService implements OnModuleInit {
     }
 
     try {
-      // Generate a numeric credential ID (timestamp + random number)
-      const numericCredentialId = Date.now() + Math.floor(Math.random() * 10000);
+      // Generate a PURELY NUMERIC credential ID
+      const numericCredentialId = Math.floor(Date.now() / 1000) + Math.floor(Math.random() * 999999);
       const credentialId = numericCredentialId.toString();
+      
+      this.logger.log(`Generated purely numeric credential ID: ${credentialId}`);
       
       // Prepare credential data with all required fields
       const credentialData = {
-        credentialId: credentialId, // Now purely numeric
+        credentialId: credentialId, // Purely numeric string
         blockchainCredentialId: numericCredentialId, // Store numeric version for blockchain calls
         subject: payload.subject,
         issuer: new Types.ObjectId(issuerId),
@@ -132,7 +134,7 @@ export class CredentialService implements OnModuleInit {
       // Create credential without transaction (since MongoDB standalone doesn't support transactions)
       const credential = await this.credentialModel.create(credentialData);
       
-      this.logger.log(`Credential created successfully with ID: ${credential._id}`);
+      this.logger.log(`Credential created successfully with ID: ${credential._id}, Numeric ID: ${credentialId}`);
       
       return {
         id: credential._id.toString(),
@@ -155,28 +157,70 @@ export class CredentialService implements OnModuleInit {
     try {
       await this.ensureInitialized();
 
-      // Find the credential in the database first
-      const credential = await this.credentialModel.findById(credentialId);
-      if (!credential) {
-        throw new Error(`Credential not found: ${credentialId}`);
+      this.logger.log(`Attempting to verify credential with ID: ${credentialId}`);
+      
+      let credential;
+      
+      // First, try to find by MongoDB ObjectId if the credentialId looks like one
+      if (Types.ObjectId.isValid(credentialId)) {
+        this.logger.log(`Searching by MongoDB ObjectId: ${credentialId}`);
+        credential = await this.credentialModel.findById(credentialId);
       }
+      
+      // If not found, try to find by credentialId field
+      if (!credential) {
+        this.logger.log(`Searching by credentialId field: ${credentialId}`);
+        credential = await this.credentialModel.findOne({ credentialId: credentialId });
+      }
+      
+      // If still not found, try to find by blockchainCredentialId
+      if (!credential) {
+        this.logger.log(`Searching by blockchainCredentialId field: ${credentialId}`);
+        const numericId = parseInt(credentialId);
+        if (!isNaN(numericId)) {
+          credential = await this.credentialModel.findOne({ blockchainCredentialId: numericId });
+        }
+      }
+
+      if (!credential) {
+        throw new Error(`Credential not found with ID: ${credentialId}`);
+      }
+
+      this.logger.log(`Found credential: ${JSON.stringify({
+        _id: credential._id,
+        credentialId: credential.credentialId,
+        blockchainCredentialId: credential.blockchainCredentialId,
+        name: credential.name
+      })}`);
 
       // Use the numeric blockchain credential ID
       const blockchainCredentialId = credential.blockchainCredentialId || credential.credentialId;
       
-      this.logger.log(`Verifying credential with blockchain ID: ${blockchainCredentialId}`);
+      this.logger.log(`Using blockchain credential ID: ${blockchainCredentialId}`);
 
-      // Ensure the credential ID is numeric
-      const numericCredentialId = parseInt(blockchainCredentialId.toString());
-      if (isNaN(numericCredentialId)) {
-        throw new Error(`Invalid credential ID format: ${blockchainCredentialId}`);
+      // Ensure the credential ID is numeric and clean
+      let numericCredentialId: number;
+      if (typeof blockchainCredentialId === 'string') {
+        // Remove any non-numeric characters
+        const cleanId = blockchainCredentialId.replace(/[^0-9]/g, '');
+        numericCredentialId = parseInt(cleanId);
+      } else {
+        numericCredentialId = blockchainCredentialId;
       }
+      
+      if (isNaN(numericCredentialId) || numericCredentialId <= 0) {
+        throw new Error(`Invalid credential ID format: ${blockchainCredentialId} -> ${numericCredentialId}`);
+      }
+
+      this.logger.log(`Clean numeric credential ID: ${numericCredentialId}`);
 
       const iface = new ethers.Interface([
         'function verifyCredential(uint256 credentialId) returns (bool)',
       ]);
 
       const encodedData = iface.encodeFunctionData('verifyCredential', [numericCredentialId]);
+
+      this.logger.log(`Encoded data for verification: ${encodedData}`);
 
       const transactionResult = await this.relayerService.queueTransaction({
         userAddress: verifierAddress,
@@ -202,40 +246,9 @@ export class CredentialService implements OnModuleInit {
 
   async getCredentialsForWallet(walletAddress: string) {
     try {
-      // First try to get blockchain credentials
-      let blockchainCredentials = [];
+      // Skip blockchain calls for now since they're failing, just return database records
+      this.logger.log(`Getting credentials for wallet: ${walletAddress}`);
       
-      try {
-        await this.ensureInitialized();
-        
-        this.logger.log(`Getting credentials for wallet: ${walletAddress}`);
-        
-        // Try to call the contract method
-        const credentialIds = await this.credentialModule.getCredentialsForSubject(walletAddress);
-        
-        this.logger.log(`Found ${credentialIds.length} credentials on blockchain`);
-        
-        for (const id of credentialIds) {
-          try {
-            const credential = await this.credentialModule.getCredential(id);
-            blockchainCredentials.push({
-              id: id.toString(),
-              issuer: credential.issuer,
-              subject: credential.subject,
-              name: credential.name,
-              description: credential.description,
-              status: this.mapCredentialStatus(credential.status),
-              source: 'blockchain'
-            });
-          } catch (error) {
-            this.logger.error(`Error fetching credential ${id}: ${error.message}`);
-          }
-        }
-      } catch (error) {
-        this.logger.warn(`Failed to get blockchain credentials: ${error.message}`);
-      }
-
-      // Also get database credentials
       const dbCredentials = await this.credentialModel.find({
         subject: walletAddress
       });
@@ -254,39 +267,15 @@ export class CredentialService implements OnModuleInit {
       }));
 
       return {
-        blockchain: blockchainCredentials,
+        blockchain: [],
         database: databaseCredentials,
-        total: blockchainCredentials.length + databaseCredentials.length
+        total: databaseCredentials.length,
+        note: 'Currently showing database records only - blockchain integration under development'
       };
+      
     } catch (error) {
       this.logger.error(`Failed to get credentials for wallet: ${error.message}`);
-      // Return database credentials only if blockchain fails
-      try {
-        const dbCredentials = await this.credentialModel.find({
-          subject: walletAddress
-        });
-
-        return {
-          blockchain: [],
-          database: dbCredentials.map(credential => ({
-            id: credential._id.toString(),
-            credentialId: credential.credentialId,
-            blockchainCredentialId: credential.blockchainCredentialId,
-            issuer: credential.issuer,
-            subject: credential.subject,
-            name: credential.name,
-            description: credential.description,
-            status: credential.status,
-            source: 'database',
-            createdAt: credential.createdAt,
-          })),
-          total: dbCredentials.length,
-          note: 'Blockchain data unavailable, showing database records only'
-        };
-      } catch (dbError) {
-        this.logger.error(`Failed to get database credentials: ${dbError.message}`);
-        return { blockchain: [], database: [], total: 0 };
-      }
+      return { blockchain: [], database: [], total: 0, error: error.message };
     }
   }
 
@@ -318,17 +307,39 @@ export class CredentialService implements OnModuleInit {
     try {
       await this.ensureInitialized();
 
-      // Find the credential in the database first
-      const credential = await this.credentialModel.findById(credentialId);
+      this.logger.log(`Attempting to revoke credential with ID: ${credentialId}`);
+      
+      let credential;
+      
+      // First, try to find by MongoDB ObjectId if the credentialId looks like one
+      if (Types.ObjectId.isValid(credentialId)) {
+        this.logger.log(`Searching by MongoDB ObjectId: ${credentialId}`);
+        credential = await this.credentialModel.findById(credentialId);
+      }
+      
+      // If not found, try to find by credentialId field
+      if (!credential) {
+        this.logger.log(`Searching by credentialId field: ${credentialId}`);
+        credential = await this.credentialModel.findOne({ credentialId: credentialId });
+      }
+
       if (!credential) {
         throw new Error(`Credential not found: ${credentialId}`);
       }
 
       // Use the numeric blockchain credential ID
       const blockchainCredentialId = credential.blockchainCredentialId || credential.credentialId;
-      const numericCredentialId = parseInt(blockchainCredentialId.toString());
       
-      if (isNaN(numericCredentialId)) {
+      // Clean the credential ID
+      let numericCredentialId: number;
+      if (typeof blockchainCredentialId === 'string') {
+        const cleanId = blockchainCredentialId.replace(/[^0-9]/g, '');
+        numericCredentialId = parseInt(cleanId);
+      } else {
+        numericCredentialId = blockchainCredentialId;
+      }
+      
+      if (isNaN(numericCredentialId) || numericCredentialId <= 0) {
         throw new Error(`Invalid credential ID format: ${blockchainCredentialId}`);
       }
 

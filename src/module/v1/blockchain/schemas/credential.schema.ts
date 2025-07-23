@@ -1,21 +1,21 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 export type CredentialDocument = Credential & Document;
 
 @Schema({ timestamps: true })
 export class Credential {
-  @Prop({ required: true, unique: true, index: true })
+  @Prop({ required: true, unique: true })
   credentialId: string;
 
-  @Prop({ type: Number, index: true })
-  blockchainCredentialId?: number; // Numeric ID for blockchain operations
+  @Prop({ type: Number })
+  blockchainCredentialId?: number;
 
-  @Prop({ required: true, index: true })
+  @Prop({ required: true })
   subject: string;
 
-  @Prop({ required: true, index: true })
-  issuer: string;
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  issuer: Types.ObjectId;
 
   @Prop({ required: true })
   name: string;
@@ -29,16 +29,16 @@ export class Credential {
   @Prop({ required: true })
   credentialType: number;
 
-  @Prop({ required: true })
-  validUntil: number;
-
   @Prop()
-  evidenceHash?: string;
+  validUntil?: number;
+
+  @Prop({ required: true })
+  evidenceHash: string;
 
   @Prop({ required: true })
   revocable: boolean;
 
-  @Prop({ required: true, enum: ['PENDING', 'ISSUED', 'VERIFIED', 'REVOKED', 'FAILED'] })
+  @Prop({ required: true })
   status: string;
 
   @Prop()
@@ -64,3 +64,9 @@ export class Credential {
 }
 
 export const CredentialSchema = SchemaFactory.createForClass(Credential);
+
+// Create indexes for better performance
+CredentialSchema.index({ subject: 1, status: 1 });
+CredentialSchema.index({ credentialId: 1 });
+CredentialSchema.index({ blockchainCredentialId: 1 });
+CredentialSchema.index({ issuer: 1 });
