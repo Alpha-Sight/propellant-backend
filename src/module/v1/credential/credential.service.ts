@@ -55,20 +55,32 @@ export class CredentialService {
   file: Express.Multer.File,
 ): Promise<CredentialDocument> {
   try {
+    console.log('[CredentialService] Starting uploadCredential');
+    console.log('[CredentialService] User:', user?._id);
+    console.log('[CredentialService] Payload:', payload);
     if (!user || !user._id) {
+      console.error('[CredentialService] User not found or invalid');
       throw new BadRequestException('User not found or invalid');
     }
     if (!file) {
+      console.error('[CredentialService] File not Found');
       throw new BadRequestException('File not Found');
     }
-    const ipfsHash = await this.pinataService.uploadFile(file);
+    console.log('[CredentialService] Uploading file to Pinata...');
+    let ipfsHash;
+    try {
+      ipfsHash = await this.pinataService.uploadFile(file);
+      console.log('[CredentialService] Pinata upload successful, IPFS hash:', ipfsHash);
+    } catch (pinataError) {
+      console.error('[CredentialService] Pinata upload failed:', pinataError);
+      throw new Error(`Failed to upload file to Pinata IPFS: ${JSON.stringify(pinataError)}`);
+    }
 
     // Set defaults for required fields
     const now = new Date();
     // Convert credentialType to number if it's an enum string
     let credentialTypeValue = payload.type;
     if (typeof credentialTypeValue === 'string') {
-      // Map string to number if needed (update this mapping as per your enum)
       const typeMap = {
         DEGREE: 0,
         CERTIFICATE: 1,
@@ -87,9 +99,9 @@ export class CredentialService {
       user: user._id,
       ipfsHash,
       createdAt: now,
-      status: 'PENDING', // or CredentialStatusEnum.PENDING if imported
+      status: 'PENDING',
       revocable: true,
-      evidenceHash: ipfsHash, // Use IPFS hash as evidenceHash
+      evidenceHash: ipfsHash,
       credentialType: credentialTypeValue,
       name: payload.title || '',
       issuer: user._id,
@@ -97,9 +109,12 @@ export class CredentialService {
       credentialId: `${user._id}-${now.getTime()}`,
       ...payload,
     };
-
-    return await this.credentialModel.create(credentialData);
+    console.log('[CredentialService] Creating credential in DB:', credentialData);
+    const createdCredential = await this.credentialModel.create(credentialData);
+    console.log('[CredentialService] Credential created:', createdCredential?._id);
+    return createdCredential;
   } catch (error) {
+    console.error('[CredentialService] Failed to create credential with IPFS:', error);
     throw new Error(
       `Failed to create credential with IPFS: ${error.message}`,
     );

@@ -37,10 +37,19 @@ export class CredentialController {
     @Body() payload: UploadCredentialDto,
     @UploadedFile() file: Express.Multer.File,
   ) {
+    console.log('uploadCredential called');
+    console.log('User:', user?._id);
+    console.log('Payload:', payload);
+    if (file) {
+      console.log('File received:', file.originalname, file.size, file.mimetype);
+    } else {
+      console.log('No file received');
+    }
     return await this.credentialService.uploadCredential(user, payload, file);
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard)
   @ResponseMessage(RESPONSE_CONSTANT.CREDENTIAL.GET_SUCCESS)
   async getSingleUserCredentials(
     @LoggedInUserDecorator() user: UserDocument,
