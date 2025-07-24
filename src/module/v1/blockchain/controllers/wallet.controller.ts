@@ -1,7 +1,7 @@
 import { Controller, Post, Body, UseGuards, Req } from '@nestjs/common';
 import { WalletService } from '../services/wallet.service';
 import { ResponseMessage } from '../../../../common/decorators/response.decorator';
-import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../auth/guards/jwt.guard'; // Fix import path
 import { Request } from 'express';
 
 @Controller('wallet')

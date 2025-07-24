@@ -22,10 +22,10 @@ import {
 import { BaseHelper } from '../../../common/utils/helper/helper.util';
 import { OtpService } from '../otp/services/otp.service';
 import { ENVIRONMENT } from '../../../common/configs/environment';
-import { AuthSourceEnum } from '../../../common/enums/user.enum';
+import { AuthSourceEnum, UserRoleEnum } from '../../../common/enums/user.enum';
 import { OtpTypeEnum } from '../../../common/enums/otp.enum';
-import { MailService } from '../mail /mail.service';
-import { welcomeEmailTemplate } from '../mail /templates/welcome.email';
+import { MailService } from '../mail/mail.service';
+import { welcomeEmailTemplate } from '../mail/templates/welcome.email';
 import { JwtService } from '@nestjs/jwt';
 import { ERROR_CODES } from 'src/common/constants/error-codes.constant';
 import { AppError } from 'src/common/filter/app-error.filter';
@@ -34,121 +34,221 @@ import { CacheHelperUtil } from 'src/common/utils/cache-helper.util';
 import { UserDocument } from '../user/schemas/user.schema';
 import { authConstants } from 'src/common/constants/authConstant';
 import { WalletService } from '../blockchain/services/wallet.service';
+import { ethers } from 'ethers'; // Import ethers
+import { ConfigService } from '@nestjs/config';
+import * as AccountFactoryABI from '../blockchain/abis/AccountFactory.json';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name); // Initialize logger
+  private provider: ethers.JsonRpcProvider; // Declare provider
+  private accountFactory: ethers.Contract; // Declare accountFactory
 
   constructor(
+    @Inject(forwardRef(() => UserService))
     private userService: UserService,
-    private jwtService: JwtService,
-    @Inject(forwardRef(() => OtpService))
-    private readonly otpService: OtpService,
+    private otpService: OtpService,
     private mailService: MailService,
-    @Inject(forwardRef(() => WalletService))
-    private walletService: WalletService,
-  ) {}
+    private jwtService: JwtService,
+    private configService: ConfigService, // Add this injection
+    private walletService: WalletService, // Inject WalletService
+  ) {
+    this.initializeProvider(); // Initialize provider in the constructor
+  }
 
-  async register(payload: CreateUserDto) {
-    const user = await this.userService.createUser(payload);
 
-    // Auto-generate wallet for the user using email
+  private async initializeProvider() {
+    const rpcUrl = this.configService.get<string>('BLOCKCHAIN_RPC_URL');
+    const accountFactoryAddress = this.configService.get<string>('ACCOUNT_FACTORY_ADDRESS');
+    
+    this.provider = new ethers.JsonRpcProvider(rpcUrl);
+    
+    // Force disable ENS to avoid resolution errors
+    const originalGetNetwork = this.provider.getNetwork.bind(this.provider);
+    this.provider.getNetwork = async () => {
+      const network = await originalGetNetwork();
+      Object.defineProperty(network, 'ensAddress', { value: null });
+      return network;
+    };
+    
+    this.accountFactory = new ethers.Contract(
+      accountFactoryAddress,
+      AccountFactoryABI.abi,
+      this.provider,
+    );
+  }
+
+async register(payload: CreateUserDto) {
+  // Create the user
+  const user = await this.userService.createUser(payload);
+
+  // Auto-generate wallet for the user using email
+  this.autoGenerateWalletForUser(user);
+
+  // Send OTP for email verification
+  await this.otpService.sendOTP({
+    email: payload.email,
+    type: OtpTypeEnum.VERIFY_EMAIL,
+  });
+
+  return user;
+}
+
+  private async autoGenerateWalletForUser(user: any) {
     try {
-      const walletResult = await this.walletService.createWallet(
-        user._id.toString(),
-        user.email, // Pass the email for deterministic generation
-      );
-      const wallet = walletResult as unknown as { walletAddress?: string; accountAddress?: string } | null | undefined;
+      const rpcUrl = this.configService.get<string>('BLOCKCHAIN_RPC_URL');
+      const accountFactoryAddress = this.configService.get<string>('ACCOUNT_FACTORY_ADDRESS');
       
-      if (wallet && wallet.walletAddress && wallet.accountAddress) {
-        // Update user with wallet information
-        await this.userService.updateQuery(
-          { _id: user._id },
-          { 
-            walletAddress: wallet.walletAddress,
-            accountAddress: wallet.accountAddress 
-          }
-        );
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      
+      const accountFactory = new ethers.Contract(
+        accountFactoryAddress,
+        AccountFactoryABI.abi,
+        provider,
+      );
 
-        this.logger.log(`Auto-generated wallet ${wallet.walletAddress} for user ${user.email}`);
-      } else if (wallet) {
-        this.logger.warn(`Wallet created for user ${user.email}, but some properties (walletAddress/accountAddress) might be missing. Wallet object: ${JSON.stringify(wallet)}`);
+      // Generate wallet using the wallet service
+      const walletResult = await this.walletService.createWallet(
+        user.user._id.toString(),
+        user.user.email,
+      );
+
+      // Update user with wallet information
+      await this.userService.updateQuery(
+        { _id: user.user._id },
+        {
+          $set: {
+            walletAddress: walletResult.walletAddress,
+            accountAddress: walletResult.accountAddress,
+          },
+        },
+      );
+
+      this.logger.log(`Auto-generated wallet ${walletResult.walletAddress} for user ${user.user.email}`);
+      
+      if (walletResult.walletAddress && walletResult.accountAddress) {
+        // Success case
       } else {
-         this.logger.warn(`Wallet creation did not return a wallet object for user ${user.email}.`);
+        this.logger.warn(`Wallet created for user ${user.user.email}, but some properties (walletAddress/accountAddress) might be missing. Wallet object: ${JSON.stringify(walletResult)}`);
       }
     } catch (error) {
       this.logger.error(
-        `Failed to auto-generate wallet for user ${user.email}: ${error instanceof Error ? error.message : String(error)}`,
-        error instanceof Error ? error.stack : undefined // Log stack trace if available
+        `Failed to auto-generate wallet for user ${user.user.email}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
-
-    // Send OTP as usual
-    await this.otpService.sendOTP({
-      email: payload.email,
-      type: OtpTypeEnum.VERIFY_EMAIL,
-    });
-
-    return user;
   }
 
   async login(payload: LoginDto) {
-    const { email, password } = payload;
+    const { email, password, role } = payload;
 
     if (!email) {
       throw new BadRequestException('Email is required');
     }
 
-    const user = await this.userService.getUserDetailsWithPassword({ email });
+    let account;
+    let actualRole;
 
-    if (!user) {
+    if (role === UserRoleEnum.ORGANIZATION) {
+      account = await this.userService.getOrgDetailsWithPassword({ email });
+      actualRole = UserRoleEnum.ORGANIZATION;
+    } else {
+      account = await this.userService.getUserDetailsWithPassword({ email });
+      actualRole = UserRoleEnum.TALENT;
+    }
+
+    if (!account) {
       throw new BadRequestException('Invalid Credential');
     }
 
     const passwordMatch = await BaseHelper.compareHashedData(
       password,
-      user.password,
+      account.password,
     );
 
     if (!passwordMatch) {
       throw new BadRequestException('Incorrect Password');
     }
 
-    if (!user.emailVerified) {
+    if (!account.emailVerified) {
       throw new AppError(
-        'kindly verify your email to login',
+        'Kindly verify your email to login',
         HttpStatus.BAD_REQUEST,
         ERROR_CODES.EMAIL_NOT_VERIFIED,
       );
     }
 
     const token = this.jwtService.sign(
-      { _id: user._id },
+      { _id: account._id, role: actualRole },
       {
         secret: ENVIRONMENT.JWT.SECRET,
       },
     );
-    delete user['_doc'].password;
+
+    delete account['_doc'].password;
 
     return {
-      ...user['_doc'],
+      ...account['_doc'],
       accessToken: token,
     };
   }
 
+  // async verifyEmail(payload: VerifyEmailDto) {
+  //   const { code, email } = payload;
+
+  //   const user = await this.userService.getUserByEmail(email);
+
+  //   if (!user) {
+  //     throw new BadRequestException('Invalid Email');
+  //   }
+
+  //   if (user.emailVerified) {
+  //     throw new UnprocessableEntityException('Email already verified');
+  //   }
+
+  //   await this.otpService.verifyOTP(
+  //     {
+  //       code,
+  //       email,
+  //       type: OtpTypeEnum.VERIFY_EMAIL,
+  //     },
+  //     true,
+  //   );
+
+  //   await this.userService.updateQuery(
+  //     { email },
+  //     {
+  //       emailVerified: true,
+  //     },
+  //   );
+
+  //   const welcomeEmailName = user?.email || 'User';
+  //   await this.mailService.sendEmail(
+  //     user.email,
+  //     `Welcome To ${ENVIRONMENT.APP.NAME}`,
+  //     welcomeEmailTemplate({
+  //       name: welcomeEmailName,
+  //     }),
+  //   );
+  // }
+
   async verifyEmail(payload: VerifyEmailDto) {
     const { code, email } = payload;
 
-    const user = await this.userService.getUserByEmail(email);
+    // Try to find the user in both models
+    const [user, org] = await Promise.all([
+      this.userService.getUserByEmail(email),
+      this.userService.getOrgByEmail(email),
+    ]);
 
-    if (!user) {
+    if (!user && !org) {
       throw new BadRequestException('Invalid Email');
     }
 
-    if (user.emailVerified) {
+    if (user?.emailVerified && org?.emailVerified) {
       throw new UnprocessableEntityException('Email already verified');
     }
 
+    // Verify OTP
     await this.otpService.verifyOTP(
       {
         code,
@@ -158,19 +258,22 @@ export class AuthService {
       true,
     );
 
-    await this.userService.updateQuery(
-      { email },
-      {
-        emailVerified: true,
-      },
-    );
+    // Update emailVerified in the correct document
+    if (user) {
+      await this.userService.updateQuery({ email }, { emailVerified: true });
+    }
 
-    const welcomeEmailName = user?.email || 'User';
+    if (org) {
+      await this.userService.updateOrgQuery({ email }, { emailVerified: true });
+    }
+
+    const recipientName = user?.email || org?.email || 'User';
+
     await this.mailService.sendEmail(
-      user.email,
+      email,
       `Welcome To ${ENVIRONMENT.APP.NAME}`,
       welcomeEmailTemplate({
-        name: welcomeEmailName,
+        name: recipientName,
       }),
     );
   }
@@ -211,7 +314,10 @@ export class AuthService {
 
     const hashedPassword = await BaseHelper.hashData(password);
 
-    await this.userService.updateQuery({ email }, { password: hashedPassword });
+    await this.userService.updateUsersQuery(
+      { email },
+      { password: hashedPassword },
+    );
   }
 
   async logout(userId: string): Promise<void> {

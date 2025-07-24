@@ -26,28 +26,85 @@ export class CredentialService {
     private pinataService: PinataService,
   ) {}
 
-  async uploadCredential(
-    user: UserDocument,
-    payload: UploadCredentialDto,
-    file: Express.Multer.File,
-  ): Promise<CredentialDocument> {
-    try {
-      if (!file) {
-        throw new BadRequestException(' File not Found');
-      }
-      const ipfsHash = await this.pinataService.uploadFile(file);
+  // async uploadCredential(
+  //   user: UserDocument,
+  //   payload: UploadCredentialDto,
+  //   file: Express.Multer.File,
+  // ): Promise<CredentialDocument> {
+  //   try {
+  //     if (!file) {
+  //       throw new BadRequestException(' File not Found');
+  //     }
+  //     const ipfsHash = await this.pinataService.uploadFile(file);
 
-      return await this.credentialModel.create({
-        user: user._id,
-        ipfsHash,
-        ...payload,
-      });
-    } catch (error) {
-      throw new Error(
-        `Failed to create credential with IPFS: ${error.message}`,
-      );
+  //     return await this.credentialModel.create({
+  //       user: user._id,
+  //       ipfsHash,
+  //       ...payload,
+  //     });
+  //   } catch (error) {
+  //     throw new Error(
+  //       `Failed to create credential with IPFS: ${error.message}`,
+  //     );
+  //   }
+  // }
+
+  async uploadCredential(
+  user: UserDocument,
+  payload: UploadCredentialDto,
+  file: Express.Multer.File,
+): Promise<CredentialDocument> {
+  try {
+    if (!user || !user._id) {
+      throw new BadRequestException('User not found or invalid');
     }
+    if (!file) {
+      throw new BadRequestException('File not Found');
+    }
+    const ipfsHash = await this.pinataService.uploadFile(file);
+
+    // Set defaults for required fields
+    const now = new Date();
+    // Convert credentialType to number if it's an enum string
+    let credentialTypeValue = payload.type;
+    if (typeof credentialTypeValue === 'string') {
+      // Map string to number if needed (update this mapping as per your enum)
+      const typeMap = {
+        DEGREE: 0,
+        CERTIFICATE: 1,
+        LICENSE: 2,
+        AWARD: 3,
+        TRAINING: 4,
+        WORK_EXPERIENCE: 5,
+        PROJECT_PORTFOLIO: 6,
+        RECOMMENDATION_LETTER: 7,
+        OTHER: 8,
+      };
+      credentialTypeValue = typeMap[payload.type] ?? 8 as any;
+    }
+
+    const credentialData = {
+      user: user._id,
+      ipfsHash,
+      createdAt: now,
+      status: 'PENDING', // or CredentialStatusEnum.PENDING if imported
+      revocable: true,
+      evidenceHash: ipfsHash, // Use IPFS hash as evidenceHash
+      credentialType: credentialTypeValue,
+      name: payload.title || '',
+      issuer: user._id,
+      subject: user._id,
+      credentialId: `${user._id}-${now.getTime()}`,
+      ...payload,
+    };
+
+    return await this.credentialModel.create(credentialData);
+  } catch (error) {
+    throw new Error(
+      `Failed to create credential with IPFS: ${error.message}`,
+    );
   }
+}
 
   async adminGetAllCredentials(query: GetAllCredentialsDto) {
     const {

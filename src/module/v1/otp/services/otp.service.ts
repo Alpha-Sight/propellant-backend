@@ -14,12 +14,12 @@ import { BaseHelper } from '../../../../common/utils/helper/helper.util';
 import { OtpMailService } from './otp-mail.service';
 import { TwilioSms } from 'src/common/utils/twillio.utils';
 import { UserService } from '../../user/services/user.service';
-import { MailService } from '../../mail /mail.service';
+import { MailService } from '../../mail/mail.service';
 import {
   VerifyEmailTemplate,
   VerifyPhoneTemplate,
-} from '../../mail /templates/verify-email.email';
-import { ForgotPasswordTemplate } from '../../mail /templates/forgot-password.email';
+} from '../../mail/templates/verify-email.email';
+import { ForgotPasswordTemplate } from '../../mail/templates/forgot-password.email';
 
 @Injectable()
 export class OtpService {
@@ -76,16 +76,16 @@ export class OtpService {
     const { email, phone, type } = payload;
 
     // check if user with email or phone exists
-    const user = await this.userService.findOneQuery({
-      $or: [{ email }, { phone }],
-    });
+    // const user = await this.userService.findOneQuery({
+    //   $or: [{ email }, { phone }],
+    // });
 
-    if (!user) {
-      const message = email
-        ? 'No User found with the email you provided'
-        : 'No User found with the phone number you provided';
-      throw new NotFoundException(message);
-    }
+    // if (!user) {
+    //   const message = email
+    //     ? 'No User found with the email you provided'
+    //     : 'No User found with the phone number you provided';
+    //   throw new NotFoundException(message);
+    // }
 
     const code = BaseHelper.generateOTP();
 

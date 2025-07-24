@@ -8,7 +8,9 @@ import {
   UseInterceptors,
   UploadedFile,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from 'src/module/v1/auth/guards/jwt.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { LoggedInUserDecorator } from 'src/common/decorators/logged-in-user.decorator';
 import { UserDocument } from '../user/schemas/user.schema';
@@ -27,6 +29,7 @@ export class CredentialController {
   constructor(private readonly credentialService: CredentialService) {}
 
   @Post('upload')
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('file'))
   @ResponseMessage(RESPONSE_CONSTANT.CREDENTIAL.UPLOAD_SUCCESS)
   async uploadCredential(

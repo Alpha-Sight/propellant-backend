@@ -1,5 +1,5 @@
 import { forwardRef, Module } from '@nestjs/common';
-import { MailModule } from '../mail /mail.module';
+import { MailModule } from '../mail/mail.module';
 import { PaymentModule } from '../payment/payment.module';
 import { TransactionModule } from '../transaction/transaction.module';
 import { UserModule } from '../user/user.module';

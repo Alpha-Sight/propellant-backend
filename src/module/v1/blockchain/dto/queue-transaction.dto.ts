@@ -1,34 +1,31 @@
-import { IsString, IsNumber, IsBoolean, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, IsNumber, IsOptional } from 'class-validator';
 
 export class QueueTransactionDto {
+  @IsNotEmpty()
   @IsString()
   userAddress: string;
 
+  @IsNotEmpty()
   @IsString()
   target: string;
 
+  @IsNotEmpty()
   @IsString()
-  @IsOptional()
-  value?: string;
+  value: string;
 
+  @IsNotEmpty()
   @IsString()
   data: string;
 
+  @IsNotEmpty()
   @IsNumber()
-  @IsOptional()
-  operation?: number;
-
-  @IsString()
-
-  @IsOptional()
-  description?: string;
-
-  @IsBoolean()
-  @IsOptional()
-  isAccountCreation?: boolean;
-}
+  operation: number;
 
   @IsNotEmpty()
+  @IsString()
   description: string;
+
+  @IsOptional()
+  isAccountCreation?: boolean;
 }
 

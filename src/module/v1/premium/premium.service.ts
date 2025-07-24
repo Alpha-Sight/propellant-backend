@@ -21,8 +21,8 @@ import { UserDocument } from '../user/schemas/user.schema';
 import { PaymentService } from '../payment/services/payment.service';
 import { PaymentProvidersEnum } from 'src/common/enums/payment.enum';
 import { PlanTypeEnum } from 'src/common/enums/premium.enum';
-import { MailService } from '../mail /mail.service';
-import { premiumPlanNotificationEmailTemplate } from '../mail /templates/premium.email';
+import { MailService } from '../mail/mail.service';
+import { premiumPlanNotificationEmailTemplate } from '../mail/templates/premium.email';
 import { SelectPlanDto } from './dto/premium.dto';
 import { SettingService } from '../setting/setting.service';
 import { ISettings } from 'src/common/interfaces/setting.interface';
@@ -58,7 +58,7 @@ export class PremiumService {
       options: {
         user: userId,
         type: TransactionTypeEnum.Premium,
-        status: TransactionStatusEnum.Pending,
+        status: TransactionStatusEnum.PENDING,
       },
     });
 
@@ -71,7 +71,7 @@ export class PremiumService {
     if (!transaction) {
       transaction = await this.transactionService.create({
         user: userId,
-        status: TransactionStatusEnum.Pending,
+        status: TransactionStatusEnum.PENDING,
         totalAmount: 1000,
         description: 'premium plan subscription payment',
         type: TransactionTypeEnum.Premium,
@@ -95,7 +95,7 @@ export class PremiumService {
       await this.transactionService.updateQuery(
         { _id: transaction._id },
         {
-          status: TransactionStatusEnum.Completed,
+          status: TransactionStatusEnum.COMPLETED,
         },
         session,
       );

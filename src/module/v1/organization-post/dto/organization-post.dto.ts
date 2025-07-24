@@ -4,6 +4,7 @@ import {
   IsEnum,
   IsArray,
   IsOptional,
+  IsBoolean,
 } from 'class-validator';
 import { JobTypeEnum } from 'src/common/enums/organization.enum';
 import { PaginationDto } from '../../repository/dto/repository.dto';
@@ -74,4 +75,16 @@ export class UpdateJobPostDto {
   @IsArray()
   @IsString({ each: true })
   requiredSkills: string[];
+
+  @IsBoolean()
+  @IsOptional()
+  isActive: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isRemote: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isVisible: boolean;
 }
