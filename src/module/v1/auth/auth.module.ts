@@ -10,7 +10,6 @@ import { BlockchainModule } from '../blockchain/blockchain.module';
 import { ENVIRONMENT } from '../../../common/configs/environment';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
-
 @Module({
   imports: [
     ConfigModule, // Add ConfigModule here

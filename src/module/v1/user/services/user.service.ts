@@ -3,7 +3,6 @@ import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
-  NotFoundException,
   // UnprocessableEntityException,
 } from '@nestjs/common';
 import { User, UserDocument } from '../schemas/user.schema';
@@ -22,29 +21,24 @@ import { InjectModel } from '@nestjs/mongoose';
 import { BaseHelper } from '../../../../common/utils/helper/helper.util';
 import { OtpTypeEnum } from '../../../../common/enums/otp.enum';
 import { OtpService } from '../../otp/services/otp.service';
-import { AuthSourceEnum, UserRoleEnum } from '../../../../common/enums/user.enum';
+import {
+  AuthSourceEnum,
+  UserRoleEnum,
+} from '../../../../common/enums/user.enum';
 import { GoogleAuthDto } from '../../auth/dto/auth.dto';
 import { PinataService } from 'src/common/utils/pinata.util';
 import { PaginationDto } from '../../repository/dto/repository.dto';
 import { RepositoryService } from '../../repository/repository.service';
 import { WalletService } from '../../blockchain/services/wallet.service';
 import {
-  Organization,
-  OrganizationDocument,
-} from '../schemas/organization.schema';
-import {
   OrganizationPost,
   OrganizationPostDocument,
 } from '../../organization-post/schema/organization-post.schema';
-import { OrganizationVisibilityEnum } from 'src/common/enums/organization.enum';
-import { LoggedInUser } from 'src/common/interfaces/user.interface';
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
-    @InjectModel(Organization.name)
-    private organizationModel: Model<OrganizationDocument>,
     @InjectModel(OrganizationPost.name)
     private organizationPostModel: Model<OrganizationPostDocument>,
     private otpService: OtpService,
@@ -52,7 +46,6 @@ export class UserService {
     private repositoryService: RepositoryService,
     private walletService: WalletService,
   ) {}
-
 
   async createUser(payload: CreateUserDto) {
     try {
@@ -62,29 +55,23 @@ export class UserService {
         throw new BadRequestException('Please accept terms and conditions');
       }
 
-      const isOrganization = role === UserRoleEnum.ORGANIZATION;
-
-      const modelToCheck = isOrganization
-        ? this.organizationModel
-        : this.userModel;
-
-      const [emailExists, phoneExists] = await Promise.all([
-        modelToCheck.exists({ email: payload.email }),
-        modelToCheck.exists({ phone: payload.phone }),
+      const [userWithEmailExists, userWithPhoneExists] = await Promise.all([
+        this.userModel.exists({ email: payload.email }),
+        this.userModel.exists({ phone: payload.phone }),
       ]);
 
-      if (emailExists) {
+      if (userWithEmailExists) {
         throw new BadRequestException('User with this email already exists');
       }
 
-      if (phoneExists) {
+      if (userWithPhoneExists) {
         throw new BadRequestException('User with this phone already exists');
       }
 
-      delete payload.referralCode;
+      delete payload.referralCode; // delete the referral code to prevent persisting this as the new user referral code
 
       let referralUserId: string;
-      if (referralCode && !isOrganization) {
+      if (referralCode) {
         const referralUser = await this.userModel.findOne({ referralCode });
 
         if (!referralUser) {
@@ -96,38 +83,38 @@ export class UserService {
 
       const hashedPassword = await BaseHelper.hashData(payload.password);
       const userReferralCode = await BaseHelper.generateReferenceCode();
+
+      // this.logger.log(`Creating wallet for user`);
       const createWallet = await this.walletService.createWallet();
 
-      const commonData = {
+      const createdUser = await this.userModel.create({
         ...payload,
         password: hashedPassword,
-
         role: role,
         referredBy: referralUserId,
-
         referralCode: userReferralCode,
         walletAddress: createWallet.walletAddress,
-      };
+      });
 
-      if (!isOrganization) {
-        commonData['referredBy'] = referralUserId;
-      }
-
-      const createdEntity = isOrganization
-        ? await new this.organizationModel(commonData).save()
-        : await new this.userModel(commonData).save();
-
+      // update referral user referral count
+      // TODO: award referral point
       if (referralUserId) {
         await this.userModel.updateOne(
           { _id: referralUserId },
-          { $inc: { totalReferrals: 1 } },
+          {
+            $inc: {
+              totalReferrals: 1,
+            },
+          },
         );
       }
+      // update user referral code
 
-      delete createdEntity['_doc'].password;
+      // TODO: not important but we can send an email or push notification to notify user of new referral
 
+      delete createdUser['_doc'].password;
       return {
-        user: createdEntity,
+        user: createdUser,
         walletDetails: {
           walletAddress: createWallet.walletAddress,
           privateKey: createWallet.privateKey,
@@ -136,7 +123,7 @@ export class UserService {
         },
       };
     } catch (e) {
-      console.error('Error while creating user/organization', e);
+      console.error('Error while creating user', e);
       if (e.code === 11000) {
         throw new ConflictException(
           `${Object.keys(e.keyValue)} already exists`,
@@ -155,36 +142,11 @@ export class UserService {
     return this.userModel.findOne(query).select('+password');
   }
 
-  async getOrgDetailsWithPassword(
-    query: FilterQuery<OrganizationDocument>,
-  ): Promise<OrganizationDocument> {
-    return this.organizationModel.findOne(query).select('+password');
-  }
-
-  async getCurrentUserProfile(
-    id: string,
-    populateFields?: string,
-  ): Promise<UserDocument | OrganizationDocument | null> {
-    const [user, org] = await Promise.all([
-      this.userModel.findOne({ _id: id }).populate(populateFields),
-      this.organizationModel.findOne({ _id: id }).populate(populateFields),
-    ]);
-
-    return user || org;
-  }
-
   async getUserById(
     id: string,
     populateFields?: string,
   ): Promise<UserDocument> {
     return this.userModel.findOne({ _id: id }).populate(populateFields);
-  }
-
-  async getOrgById(
-    id: string,
-    populateFields?: string,
-  ): Promise<OrganizationDocument> {
-    return this.organizationModel.findOne({ _id: id }).populate(populateFields);
   }
 
   async getUserBySkills(skills: string[]): Promise<UserDocument[]> {
@@ -202,12 +164,6 @@ export class UserService {
     return this.userModel.findOne({ email }).populate(populateFields);
   }
 
-  async getOrgByEmail(
-    email: string,
-    populateFields?: string,
-  ): Promise<OrganizationDocument> {
-    return this.organizationModel.findOne({ email }).populate(populateFields);
-  }
   async updateUserByEmail(email: string, details: any) {
     return this.userModel.updateOne({ email }, details);
   }
@@ -231,63 +187,21 @@ export class UserService {
     return updatedUser;
   }
 
-  async updateOrgQuery(
-    filter: FilterQuery<OrganizationDocument>,
-    payload: UpdateQuery<OrganizationDocument>,
-    session?: ClientSession,
-  ): Promise<OrganizationDocument> {
-    const updatedUser = await this.organizationModel.findOneAndUpdate(
-      filter,
-      payload,
-      {
-        session,
-      },
-    );
-
-    return updatedUser;
-  }
-
-  async updateUsersQuery(
-    filter: FilterQuery<any>,
-    payload: UpdateQuery<any>,
-    session?: ClientSession,
-  ): Promise<any> {
-    let model: Model<any> | null = null;
-
-    const user = await this.userModel.findOne(filter);
-    if (user) model = this.userModel;
-
-    const org = !user ? await this.organizationModel.findOne(filter) : null;
-    if (org) model = this.organizationModel;
-
-    if (!model) {
-      throw new NotFoundException('No matching user or organization');
-    }
-
-    return await model.findOneAndUpdate(filter, payload, {
-      new: true,
-      session,
-    });
-  }
-
   async deleteUser(id: string) {
     return this.userModel.findByIdAndDelete(id);
   }
 
   async checkUserExistByEmail(email: string): Promise<boolean> {
-    const [user, org] = await Promise.all([
-      this.getUserByEmail(email),
-      this.getOrgByEmail(email),
-    ]);
+    const user = await this.getUserByEmail(email);
 
-    if (!user || !org) {
+    if (!user) {
       throw new BadRequestException('No user exist with provided email');
     }
 
     return true;
   }
 
-  async changeEmail(payload: ChangeEmailDto, user: LoggedInUser) {
+  async changeEmail(payload: ChangeEmailDto, user: UserDocument) {
     const { newEmail } = payload;
 
     if (user.email === newEmail) {
@@ -313,117 +227,44 @@ export class UserService {
     });
   }
 
-  // async updatePassword(user: UserDocument, payload: UpdatePasswordDto) {
-  //   const { password, newPassword, confirmPassword } = payload;
-
-  //   if (newPassword !== confirmPassword) {
-  //     throw new BadRequestException(
-  //       'new password and confirm password do not match',
-  //     );
-  //   }
-
-  //   if (password === newPassword) {
-  //     throw new BadRequestException(
-  //       'new password cannot be same as old password',
-  //     );
-  //   }
-
-  //   const oldPasswordMatch = await BaseHelper.compareHashedData(
-  //     password,
-  //     (await this.getUserDetailsWithPassword({ email: user.email })).password,
-  //   );
-
-  //   if (!oldPasswordMatch) {
-  //     throw new BadRequestException('Incorrect Password');
-  //   }
-
-  //   const hashedPassword = await BaseHelper.hashData(newPassword);
-
-  //   await this.updateQuery({ _id: user._id }, { password: hashedPassword });
-  // }
-
-  async updatePassword(user: LoggedInUser, payload: UpdatePasswordDto) {
+  async updatePassword(user: UserDocument, payload: UpdatePasswordDto) {
     const { password, newPassword, confirmPassword } = payload;
 
     if (newPassword !== confirmPassword) {
       throw new BadRequestException(
-        'New password and confirm password do not match',
+        'new password and confirm password do not match',
       );
     }
 
     if (password === newPassword) {
       throw new BadRequestException(
-        'New password cannot be same as old password',
+        'new password cannot be same as old password',
       );
-    }
-
-    let existingPassword: string;
-
-    if (user.role === UserRoleEnum.TALENT) {
-      const talent = await this.getUserDetailsWithPassword({
-        email: user.email,
-      });
-      existingPassword = talent.password;
-    } else if (user.role === UserRoleEnum.ORGANIZATION) {
-      const organization = await this.organizationModel
-        .findOne({ email: user.email })
-        .select('+password')
-        .lean();
-
-      if (!organization) {
-        throw new NotFoundException('Organization not found');
-      }
-
-      existingPassword = organization.password;
-    } else {
-      throw new BadRequestException('Invalid user role');
     }
 
     const oldPasswordMatch = await BaseHelper.compareHashedData(
       password,
-      existingPassword,
+      (await this.getUserDetailsWithPassword({ email: user.email })).password,
     );
 
     if (!oldPasswordMatch) {
-      throw new BadRequestException('Incorrect current password');
+      throw new BadRequestException('Incorrect Password');
     }
 
     const hashedPassword = await BaseHelper.hashData(newPassword);
 
-    if (user.role === UserRoleEnum.TALENT) {
-      await this.updateQuery({ _id: user._id }, { password: hashedPassword });
-    } else {
-      await this.organizationModel.updateOne(
-        { _id: user._id },
-        { password: hashedPassword },
-      );
-    }
+    await this.updateQuery({ _id: user._id }, { password: hashedPassword });
   }
 
   async findOneById(userId: string) {
     return this.userModel.findById(userId);
   }
 
-  async updateTalentProfile(
+  async updateProfile(
     user: UserDocument,
-    payload: UpdateTalentProfileDto,
+    payload: UpdateTalentProfileDto | UpdateOrganizationProfileDto,
     file?: Express.Multer.File,
   ) {
-    // const { username } = payload;
-
-    // if (username) {
-    //   const userWithUsernameExist = await this.userModel.findOne({
-    //     username,
-    //     _id: { $ne: user._id },
-    //   });
-
-    //   if (userWithUsernameExist) {
-    //     throw new UnprocessableEntityException(
-    //       'Username already used, try another name',
-    //     );
-    //   }
-    // }
-
     let imageUrl = null;
 
     if (file) {
@@ -439,41 +280,12 @@ export class UserService {
       imageUrl = uploadResult;
     }
 
-    const updateData = {
-      ...payload,
-      // ...(username && { referralCode: username }),
-    };
-
-    // if (!user?.referralCode) {
-    //   updateData['referralCode'] = user?.username;
-    // }
+    const updateData =
+      user.role === UserRoleEnum.TALENT
+        ? (payload as UpdateTalentProfileDto)
+        : (payload as UpdateOrganizationProfileDto);
 
     return await this.userModel.findByIdAndUpdate(
-      user._id,
-      { ...payload, ...(imageUrl && { imageUrl }), ...updateData },
-      {
-        new: true,
-      },
-    );
-  }
-
-  async updateOrganizationProfile(
-    user: OrganizationDocument,
-    payload: UpdateOrganizationProfileDto,
-    file?: Express.Multer.File,
-  ) {
-    let imageUrl = null;
-
-    if (file) {
-      const uploadResult = await this.pinataService.uploadFile(file);
-      imageUrl = uploadResult;
-    }
-
-    const updateData = {
-      ...payload,
-    };
-
-    return await this.organizationModel.findByIdAndUpdate(
       user._id,
       { ...payload, ...(imageUrl && { imageUrl }), ...updateData },
       {
@@ -500,22 +312,8 @@ export class UserService {
     };
   }
 
-  // async aggregateUserStats() {
-  //   return await this.userModel.aggregate([
-  //     {
-  //       $match: { isDeleted: { $ne: true } },
-  //     },
-  //     {
-  //       $group: {
-  //         _id: '$role',
-  //         count: { $sum: 1 },
-  //       },
-  //     },
-  //   ]);
-  // }
-
   async aggregateUserStats() {
-    const userStats = await this.userModel.aggregate([
+    return await this.userModel.aggregate([
       {
         $match: { isDeleted: { $ne: true } },
       },
@@ -526,20 +324,6 @@ export class UserService {
         },
       },
     ]);
-
-    const organizationStats = await this.organizationModel.aggregate([
-      {
-        $match: { isDeleted: { $ne: true } },
-      },
-      {
-        $group: {
-          _id: '$role',
-          count: { $sum: 1 },
-        },
-      },
-    ]);
-
-    return { userStats, organizationStats };
   }
 
   async update(
@@ -549,19 +333,6 @@ export class UserService {
     return await this.userModel.findOneAndUpdate({ _id: userId }, payload, {
       new: true,
     });
-  }
-
-  async updateOrgDetails(
-    userId: string,
-    payload: UpdateQuery<OrganizationDocument>,
-  ): Promise<OrganizationDocument> {
-    return await this.organizationModel.findOneAndUpdate(
-      { _id: userId },
-      payload,
-      {
-        new: true,
-      },
-    );
   }
 
   async createUserFromGoogle(payload: GoogleAuthDto) {
@@ -698,49 +469,49 @@ export class UserService {
   //   return this.organizationPostModel.aggregate(pipeline);
   // }
 
-  async updateOrganizationUserVisibility(
-    orgId: string,
-    visibility: OrganizationVisibilityEnum,
-  ): Promise<OrganizationDocument> {
-    const updated = await this.organizationModel.findByIdAndUpdate(
-      orgId,
-      { $set: { visibility } },
-      { new: true },
-    );
+  // async updateOrganizationUserVisibility(
+  //   orgId: string,
+  //   visibility: OrganizationVisibilityEnum,
+  // ): Promise<OrganizationDocument> {
+  //   const updated = await this.organizationModel.findByIdAndUpdate(
+  //     orgId,
+  //     { $set: { visibility } },
+  //     { new: true },
+  //   );
 
-    if (!updated) {
-      throw new NotFoundException('Organization not found');
-    }
+  //   if (!updated) {
+  //     throw new NotFoundException('Organization not found');
+  //   }
 
-    return updated;
-  }
+  //   return updated;
+  // }
 
-  async deleteOrganizationUser(orgId: string): Promise<{ message: string }> {
-    const session = await this.organizationModel.db.startSession();
-    session.startTransaction();
+  // async deleteOrganizationUser(orgId: string): Promise<{ message: string }> {
+  //   const session = await this.organizationModel.db.startSession();
+  //   session.startTransaction();
 
-    try {
-      const org = await this.organizationModel.findByIdAndUpdate(
-        orgId,
-        { $set: { isDeleted: true } },
-        { new: true, session },
-      );
+  //   try {
+  //     const org = await this.organizationModel.findByIdAndUpdate(
+  //       orgId,
+  //       { $set: { isDeleted: true } },
+  //       { new: true, session },
+  //     );
 
-      if (!org) throw new NotFoundException('Organization not found');
+  //     if (!org) throw new NotFoundException('Organization not found');
 
-      await this.organizationPostModel.updateMany(
-        { organization: orgId },
-        { $set: { isDeleted: true } },
-        { session },
-      );
+  //     await this.organizationPostModel.updateMany(
+  //       { organization: orgId },
+  //       { $set: { isDeleted: true } },
+  //       { session },
+  //     );
 
-      await session.commitTransaction();
-      return { message: 'Organization and its job posts deleted successfully' };
-    } catch (err) {
-      await session.abortTransaction();
-      throw err;
-    } finally {
-      await session.endSession();
-    }
-  }
+  //     await session.commitTransaction();
+  //     return { message: 'Organization and its job posts deleted successfully' };
+  //   } catch (err) {
+  //     await session.abortTransaction();
+  //     throw err;
+  //   } finally {
+  //     await session.endSession();
+  //   }
+  // }
 }

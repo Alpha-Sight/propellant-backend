@@ -43,3 +43,8 @@ import { OrganizationPostModule } from './module/v1/organization-post/organizati
   providers: [AppService],
 })
 export class AppModule {}
+// export class AppModule implements NestModule {
+//   configure(consumer: MiddlewareConsumer) {
+//     consumer.apply(FilterUserFieldsMiddleware).forRoutes('*'); // or specify paths
+//   }
+// }

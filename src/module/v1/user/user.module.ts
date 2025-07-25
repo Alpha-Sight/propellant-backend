@@ -14,16 +14,11 @@ import {
   OrganizationPost,
   OrganizationPostSchema,
 } from '../organization-post/schema/organization-post.schema';
-import {
-  Organization,
-  OrganizationSchema,
-} from './schemas/organization.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
-      { name: Organization.name, schema: OrganizationSchema },
       { name: OrganizationPost.name, schema: OrganizationPostSchema },
     ]),
     forwardRef(() => OtpModule),
