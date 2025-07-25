@@ -5,41 +5,19 @@ import {
   UserRoleEnum,
 } from '../../../../common/enums/user.enum';
 import { PlanTypeEnum } from 'src/common/enums/premium.enum';
+import { OrganizationVisibilityEnum } from 'src/common/enums/organization.enum';
+import { OrganizationSocialDto } from '../dto/user.dto';
 
 export type UserDocument = User & Document;
 
 @Schema({ timestamps: true })
 export class User {
-  // user profile properties
-  @Prop({ unique: true, index: true })
-  email: string;
-
-  @Prop({ default: false })
-  emailVerified: boolean;
-
-  @Prop({ select: false })
-  password: string;
-
-  @Prop({ required: false, default: '' })
-  profilePhoto: string;
-
+  // Talent profile properties
   @Prop({ required: false, trim: true, index: true })
   fullname: string;
 
   @Prop({ required: false })
   bio: string;
-
-  @Prop({ required: false })
-  phone: string;
-
-  @Prop({ required: false, sparse: true, unique: true, index: true })
-  walletAddress: string;
-
-  @Prop({ enum: UserRoleEnum })
-  role: UserRoleEnum;
-
-  @Prop({ default: AuthSourceEnum.EMAIL, enum: AuthSourceEnum })
-  authSource: AuthSourceEnum;
 
   @Prop({ required: false })
   linkedin?: string;
@@ -56,35 +34,6 @@ export class User {
   @Prop({ required: false, type: [String] })
   skills?: string[];
 
-  @Prop({ required: false })
-  location?: string;
-
-  // // organization profile properties
-  // @Prop({ required: false })
-  // companyName?: string;
-
-  // @Prop({ required: false })
-  // tagline?: string;
-
-  // @Prop({ required: false })
-  // description?: string;
-
-  // @Prop({ required: false })
-  // industry?: string;
-
-  // @Prop({ required: false })
-  // companySize?: string;
-
-  // @Prop({ required: false, type: [String] })
-  // offers?: string[];
-
-  // @Prop({ required: false, type: [OrganizationSocialDto] })
-  // socials?: OrganizationSocialDto[];
-
-  // @Prop({ default: 0 })
-  // totalJobPost: number;
-
-  // general profile properties
   @Prop({ default: null, index: true })
   referralCode: string;
 
@@ -94,6 +43,81 @@ export class User {
   @Prop({ default: 0 })
   totalReferrals: number;
 
+  // organization profile properties
+  @Prop({ required: false })
+  companyName?: string;
+
+  @Prop({ required: false })
+  tagline?: string;
+
+  @Prop({ required: false })
+  description?: string;
+
+  @Prop({ required: false })
+  industry?: string;
+
+  @Prop({ required: false })
+  companySize?: string;
+
+  @Prop({ required: false, type: [String] })
+  offers?: string[];
+
+  @Prop({ required: false, type: [OrganizationSocialDto] })
+  socials?: OrganizationSocialDto[];
+
+  @Prop({ default: 0 })
+  totalJobPost: number;
+
+  @Prop({ default: 0 })
+  talentContacted: number;
+
+  @Prop({ default: 0 })
+  activePost: number;
+
+  @Prop({ default: 0 })
+  activeConversations: number;
+
+  @Prop({ default: 0 })
+  responseRate: number;
+
+  @Prop({ default: 0 })
+  successfulHire: number;
+
+  @Prop({
+    type: String,
+    enum: OrganizationVisibilityEnum,
+    default: OrganizationVisibilityEnum.PUBLIC,
+  })
+  visibility: OrganizationVisibilityEnum;
+
+  // general profile properties
+  @Prop({ unique: true, index: true })
+  email: string;
+
+  @Prop({ default: false })
+  emailVerified: boolean;
+
+  @Prop({ select: false })
+  password: string;
+
+  @Prop({ required: false, default: '' })
+  profilePhoto: string;
+
+  @Prop({ required: false })
+  phone: string;
+
+  @Prop({ required: false, sparse: true, unique: true, index: true })
+  walletAddress: string;
+
+  @Prop({ enum: UserRoleEnum })
+  role: UserRoleEnum;
+
+  @Prop({ default: AuthSourceEnum.EMAIL, enum: AuthSourceEnum })
+  authSource: AuthSourceEnum;
+
+  @Prop({ required: false })
+  location?: string;
+
   @Prop({ enum: PlanTypeEnum })
   plan: PlanTypeEnum;
 
@@ -102,9 +126,6 @@ export class User {
 
   @Prop({ default: null })
   lastLoginAt: Date;
-
-  @Prop({ default: false })
-  isNewUser: boolean;
 
   @Prop({ default: false })
   termsAndConditionsAccepted: boolean;

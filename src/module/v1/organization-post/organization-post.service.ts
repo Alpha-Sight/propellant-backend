@@ -13,7 +13,6 @@ import {
 import { RepositoryService } from '../repository/repository.service';
 import { BaseRepositoryService } from '../repository/base.service';
 import { UserService } from '../user/services/user.service';
-import { OrganizationDocument } from '../user/schemas/organization.schema';
 import { UserDocument } from '../user/schemas/user.schema';
 
 @Injectable()
@@ -28,7 +27,7 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
   }
 
   async createJobPost(
-    organization: OrganizationDocument,
+    organization: UserDocument,
     payload: CreateJobPostDto,
   ): Promise<OrganizationPostDocument> {
     const jobPost = await this.organizationPostModel.create({
@@ -36,7 +35,7 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
       ...payload,
     });
 
-    await this.userService.updateOrgDetails(organization._id.toString(), {
+    await this.userService.update(organization._id.toString(), {
       $inc: {
         totalJobPost: 1,
         activeJobPost: 1,
@@ -84,7 +83,7 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
   }
 
   async getOrganizationJobPosts(
-    organization: OrganizationDocument,
+    organization: UserDocument,
     query: GetAllJobPostsDto,
   ) {
     const {
@@ -133,7 +132,7 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
   }
 
   async updateJobPostById(
-    organization: OrganizationDocument,
+    organization: UserDocument,
     postId: string,
     payload: UpdateJobPostDto,
   ): Promise<OrganizationPostDocument> {
@@ -156,7 +155,7 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
     );
 
     if (existingJobPost.isActive && payload.isActive === false) {
-      await this.userService.updateOrgDetails(organization._id.toString(), {
+      await this.userService.update(organization._id.toString(), {
         $inc: { activeJobPost: -1 },
       });
     }
@@ -180,7 +179,7 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
     }
 
     // Decrement totalJobPosts count
-    await this.userService.updateOrgDetails(organizationId, {
+    await this.userService.update(organizationId, {
       $inc: { totalJobPosts: -1 },
     });
 

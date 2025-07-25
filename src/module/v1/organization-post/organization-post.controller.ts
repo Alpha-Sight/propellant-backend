@@ -22,7 +22,7 @@ import { UserRoleEnum } from '../../../common/enums/user.enum';
 import { Public } from '../../../common/decorators/public.decorator';
 import { NoCache } from '../../../common/decorators/cache.decorator';
 import { IDQueryDto } from 'src/common/dto/query.dto';
-import { OrganizationDocument } from '../user/schemas/organization.schema';
+import { UserDocument } from '../user/schemas/user.schema';
 
 @NoCache()
 @Controller('job-post')
@@ -34,7 +34,7 @@ export class OrganizationPostController {
   @Roles(UserRoleEnum.ORGANIZATION)
   //   @ResponseMessage(RESPONSE_CONSTANT.ORGANIZATION_POST.CREATE_SUCCESS)
   async createJobPost(
-    @LoggedInUserDecorator() organization: OrganizationDocument,
+    @LoggedInUserDecorator() organization: UserDocument,
     @Body() payload: CreateJobPostDto,
   ) {
     return await this.organizationService.createJobPost(organization, payload);
@@ -54,7 +54,7 @@ export class OrganizationPostController {
   //     RESPONSE_CONSTANT.ORGANIZATION_POST.GET_ORGANIZATION_POSTS_SUCCESS,
   //   )
   async getOrganizationJobPosts(
-    @LoggedInUserDecorator() organization: OrganizationDocument,
+    @LoggedInUserDecorator() organization: UserDocument,
     @Query() query: GetAllJobPostsDto,
   ) {
     return await this.organizationService.getOrganizationJobPosts(
@@ -75,7 +75,7 @@ export class OrganizationPostController {
   @Roles(UserRoleEnum.ORGANIZATION)
   //   @ResponseMessage(RESPONSE_CONSTANT.ORGANIZATION_POST.UPDATE_SUCCESS)
   async updateJobPostById(
-    @LoggedInUserDecorator() organization: OrganizationDocument,
+    @LoggedInUserDecorator() organization: UserDocument,
     @Param('_id') _id: string,
     @Body() payload: UpdateJobPostDto,
   ) {
@@ -89,7 +89,7 @@ export class OrganizationPostController {
   @Delete('remove')
   async deleteJobPost(
     @Query('_id') _id: string,
-    @LoggedInUserDecorator() organization: OrganizationDocument,
+    @LoggedInUserDecorator() organization: UserDocument,
   ) {
     return await this.organizationService.deleteJobPost(
       _id,
@@ -114,7 +114,7 @@ export class OrganizationPostController {
   @Patch('status')
   async toggleJobPostActivation(
     @Query('_id') _id: string,
-    @LoggedInUserDecorator() organization: OrganizationDocument,
+    @LoggedInUserDecorator() organization: UserDocument,
   ) {
     return await this.organizationService.toggleJobPostActivation(
       _id,
@@ -123,9 +123,7 @@ export class OrganizationPostController {
   }
 
   @Get('stats')
-  async getJobPostStats(
-    @LoggedInUserDecorator() organization: OrganizationDocument,
-  ) {
+  async getJobPostStats(@LoggedInUserDecorator() organization: UserDocument) {
     return await this.organizationService.getJobPostStats(
       organization._id.toString(),
     );
@@ -143,7 +141,7 @@ export class OrganizationPostController {
 
   @Get('top-skills')
   async getTopSkillsInDemand(
-    @LoggedInUserDecorator() organization: OrganizationDocument,
+    @LoggedInUserDecorator() organization: UserDocument,
   ) {
     return this.organizationService.getTopSkillsInDemand(
       organization._id.toString(),
