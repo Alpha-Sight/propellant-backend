@@ -23,6 +23,9 @@ import {
   UploadCredentialDto,
 } from './dto/credential.dto';
 import { PaginationDto } from '../repository/dto/repository.dto';
+import { Roles } from 'src/common/decorators/role.decorator';
+import { UserRoleEnum } from 'src/common/enums/user.enum';
+import { RoleGuard } from '../auth/guards/role.guard';
 
 @Controller('credentials')
 export class CredentialController {
@@ -59,8 +62,8 @@ export class CredentialController {
   }
 
   @Get('all')
-  // @UseGuards(RoleGuard)
-  // @Roles(UserRoleEnum.ADMIN, UserRoleEnum.SUPER_ADMIN)
+  @UseGuards(RoleGuard)
+  @Roles(UserRoleEnum.ADMIN, UserRoleEnum.SUPER_ADMIN)
   @ResponseMessage(RESPONSE_CONSTANT.CREDENTIAL.GET_SUCCESS)
   async getAllCredentials(@Query() query: GetAllCredentialsDto) {
     return await this.credentialService.adminGetAllCredentials(query);

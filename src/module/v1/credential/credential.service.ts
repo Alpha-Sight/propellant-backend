@@ -26,100 +26,56 @@ export class CredentialService {
     private pinataService: PinataService,
   ) {}
 
-  // async uploadCredential(
-  //   user: UserDocument,
-  //   payload: UploadCredentialDto,
-  //   file: Express.Multer.File,
-  // ): Promise<CredentialDocument> {
-  //   try {
-  //     if (!file) {
-  //       throw new BadRequestException(' File not Found');
-  //     }
-  //     const ipfsHash = await this.pinataService.uploadFile(file);
-
-  //     return await this.credentialModel.create({
-  //       user: user._id,
-  //       ipfsHash,
-  //       ...payload,
-  //     });
-  //   } catch (error) {
-  //     throw new Error(
-  //       `Failed to create credential with IPFS: ${error.message}`,
-  //     );
-  //   }
-  // }
-
   async uploadCredential(
-  user: UserDocument,
-  payload: UploadCredentialDto,
-  file: Express.Multer.File,
-): Promise<CredentialDocument> {
-  try {
-    console.log('[CredentialService] Starting uploadCredential');
-    console.log('[CredentialService] User:', user?._id);
-    console.log('[CredentialService] Payload:', payload);
-    if (!user || !user._id) {
-      console.error('[CredentialService] User not found or invalid');
-      throw new BadRequestException('User not found or invalid');
-    }
-    if (!file) {
-      console.error('[CredentialService] File not Found');
-      throw new BadRequestException('File not Found');
-    }
-    console.log('[CredentialService] Uploading file to Pinata...');
-    let ipfsHash;
+    user: UserDocument,
+    payload: UploadCredentialDto,
+    file: Express.Multer.File,
+  ): Promise<CredentialDocument> {
     try {
-      ipfsHash = await this.pinataService.uploadFile(file);
-      console.log('[CredentialService] Pinata upload successful, IPFS hash:', ipfsHash);
-    } catch (pinataError) {
-      console.error('[CredentialService] Pinata upload failed:', pinataError);
-      throw new Error(`Failed to upload file to Pinata IPFS: ${JSON.stringify(pinataError)}`);
-    }
+      if (!file) {
+        throw new BadRequestException(' File not Found');
+      }
+      const ipfsHash = await this.pinataService.uploadFile(file);
 
-    // Set defaults for required fields
-    const now = new Date();
-    // Convert credentialType to number if it's an enum string
-    let credentialTypeValue = payload.type;
-    if (typeof credentialTypeValue === 'string') {
-      const typeMap = {
-        DEGREE: 0,
-        CERTIFICATE: 1,
-        LICENSE: 2,
-        AWARD: 3,
-        TRAINING: 4,
-        WORK_EXPERIENCE: 5,
-        PROJECT_PORTFOLIO: 6,
-        RECOMMENDATION_LETTER: 7,
-        OTHER: 8,
+      // Set all required fields for credential schema
+      const now = new Date();
+      let credentialTypeValue = payload.type;
+      if (typeof credentialTypeValue === 'string') {
+        const typeMap = {
+          DEGREE: 0,
+          CERTIFICATE: 1,
+          LICENSE: 2,
+          AWARD: 3,
+          TRAINING: 4,
+          WORK_EXPERIENCE: 5,
+          PROJECT_PORTFOLIO: 6,
+          RECOMMENDATION_LETTER: 7,
+          OTHER: 8,
+        };
+        credentialTypeValue = typeMap[payload.type] ?? 8 as any;
+      }
+
+      const credentialData = {
+        user: user._id,
+        ipfsHash,
+        createdAt: now,
+        status: 'PENDING',
+        revocable: true,
+        evidenceHash: ipfsHash,
+        credentialType: credentialTypeValue,
+        name: payload.title || '',
+        issuer: user._id,
+        subject: user._id,
+        credentialId: `${user._id}-${now.getTime()}`,
+        ...payload,
       };
-      credentialTypeValue = typeMap[payload.type] ?? 8 as any;
+      return await this.credentialModel.create(credentialData);
+    } catch (error) {
+      throw new Error(
+        `Failed to create credential with IPFS: ${error.message}`,
+      );
     }
-
-    const credentialData = {
-      user: user._id,
-      ipfsHash,
-      createdAt: now,
-      status: 'PENDING',
-      revocable: true,
-      evidenceHash: ipfsHash,
-      credentialType: credentialTypeValue,
-      name: payload.title || '',
-      issuer: user._id,
-      subject: user._id,
-      credentialId: `${user._id}-${now.getTime()}`,
-      ...payload,
-    };
-    console.log('[CredentialService] Creating credential in DB:', credentialData);
-    const createdCredential = await this.credentialModel.create(credentialData);
-    console.log('[CredentialService] Credential created:', createdCredential?._id);
-    return createdCredential;
-  } catch (error) {
-    console.error('[CredentialService] Failed to create credential with IPFS:', error);
-    throw new Error(
-      `Failed to create credential with IPFS: ${error.message}`,
-    );
   }
-}
 
   async adminGetAllCredentials(query: GetAllCredentialsDto) {
     const {
@@ -252,19 +208,52 @@ export class CredentialService {
       ...paginationQuery
     } = query;
 
-    return await this.repositoryService.paginate<CredentialDocument>({
+    const result = await this.repositoryService.paginate<CredentialDocument>({
       model: this.credentialModel,
       query: paginationQuery,
       options: {
-        user: user._id,
         isDeleted: { $ne: true },
+        issuer: user._id,
         ...(type && { type }),
         ...(verificationStatus && { verificationStatus }),
         ...(verificationLevel && { verificationLevel }),
         ...(category && { category: { $regex: category, $options: 'i' } }),
         ...(visibility !== undefined && { visibility }),
       },
-      populateFields: [{ path: 'user', select: 'username email' }],
+      populateFields: [
+        { path: 'issuer', select: 'username email' },
+        { path: 'subject', select: 'username email' }
+      ],
     });
+
+    // Return all credentials where issuer is user._id (no extra filter)
+    console.log('[CredentialService] result.data:', result.data);
+    try {
+      if (Array.isArray(result?.data) && result.data.length) {
+        let hasInvalid = false;
+        result.data.forEach((credential: any, idx: number) => {
+          console.log(`[CredentialService] credential[${idx}]:`, credential);
+          if (!credential || typeof credential !== 'object' || credential._id === undefined) {
+            hasInvalid = true;
+          }
+        });
+        if (hasInvalid) {
+          console.error('[CredentialService] Invalid credential found, skipping mapping.');
+          result.data = [];
+        } else {
+          result.data = result.data.map((credential: any) => {
+            const obj = typeof credential.toObject === 'function' ? credential.toObject() : credential;
+            return {
+              ...obj,
+              _id: obj._id,
+            };
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[CredentialService] Error mapping credentials:', err);
+      result.data = [];
+    }
+    return result;
   }
 }

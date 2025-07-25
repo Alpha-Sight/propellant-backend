@@ -17,7 +17,18 @@ export class RoleGuard implements CanActivate {
     ]);
 
     const user = request?.user;
-
-    return user && roles.includes(user.role);
+    if (user && roles.includes(user.role)) {
+      return true;
+    }
+    // Custom forbidden message for organization endpoints
+    if (roles.includes('ORGANIZATION') || roles.includes('ORG_ADMIN')) {
+      throw new (require('@nestjs/common').ForbiddenException)(
+        'This is an organization endpoint'
+      );
+    }
+    // Default admin-only message
+    throw new (require('@nestjs/common').ForbiddenException)(
+      'Only an admin can access this resource'
+    );
   }
 }

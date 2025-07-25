@@ -17,6 +17,18 @@ export class Credential {
   })
   user: UserDocument;
 
+  @Prop({
+    type: mongoose.Schema.Types.ObjectId,
+    ref: User.name,
+  })
+  issuer: UserDocument;
+
+  @Prop({
+    type: mongoose.Schema.Types.ObjectId,
+    ref: User.name,
+  })
+  subject: UserDocument;
+
   @Prop({ required: true })
   title: string;
 
