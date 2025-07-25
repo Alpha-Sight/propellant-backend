@@ -5,7 +5,7 @@ import {
   UserRoleEnum,
 } from '../../../../common/enums/user.enum';
 import { PlanTypeEnum } from 'src/common/enums/premium.enum';
-import { OrganizationVisibilityEnum } from 'src/common/enums/organization.enum';
+import { UserVisibilityEnum } from 'src/common/enums/organization.enum';
 import { OrganizationSocialDto } from '../dto/user.dto';
 
 export type UserDocument = User & Document;
@@ -85,10 +85,10 @@ export class User {
 
   @Prop({
     type: String,
-    enum: OrganizationVisibilityEnum,
-    default: OrganizationVisibilityEnum.PUBLIC,
+    enum: UserVisibilityEnum,
+    default: UserVisibilityEnum.PUBLIC,
   })
-  visibility: OrganizationVisibilityEnum;
+  visibility: UserVisibilityEnum;
 
   // general profile properties
   @Prop({ unique: true, index: true })

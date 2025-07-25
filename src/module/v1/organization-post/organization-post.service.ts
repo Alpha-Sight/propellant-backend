@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model, Types } from 'mongoose';
+import { FilterQuery, Model } from 'mongoose';
 import {
   CreateJobPostDto,
   GetAllJobPostsDto,
@@ -240,66 +240,5 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
     const jobSkills = jobPost.requiredSkills;
 
     return this.userService.getUserBySkills(jobSkills);
-  }
-
-  async getTopSkillsInDemand(organizationId: string) {
-    const pipeline = [
-      {
-        $match: {
-          organization: new Types.ObjectId(organizationId),
-          isDeleted: { $ne: true },
-        },
-      },
-      {
-        $unwind: {
-          path: '$requiredSkills',
-        },
-      },
-      {
-        $group: {
-          _id: '$requiredSkills',
-          count: { $sum: 1 },
-        },
-      },
-      {
-        $sort: {
-          count: -1,
-        } as any,
-      },
-      {
-        $group: {
-          _id: null,
-          skills: {
-            $push: {
-              skill: '$_id',
-              count: '$count',
-            },
-          },
-          maxCount: { $first: '$count' },
-        },
-      },
-      {
-        $unwind: {
-          path: '$skills',
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          skill: '$skills.skill',
-          count: '$skills.count',
-          demandRate: {
-            $multiply: [{ $divide: ['$skills.count', '$maxCount'] }, 100],
-          },
-        },
-      },
-      {
-        $sort: {
-          count: -1,
-        } as any,
-      },
-    ];
-
-    return this.organizationPostModel.aggregate(pipeline);
   }
 }

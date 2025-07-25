@@ -3,10 +3,17 @@ import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
   // UnprocessableEntityException,
 } from '@nestjs/common';
 import { User, UserDocument } from '../schemas/user.schema';
-import { ClientSession, FilterQuery, Model, UpdateQuery } from 'mongoose';
+import {
+  ClientSession,
+  FilterQuery,
+  Model,
+  Types,
+  UpdateQuery,
+} from 'mongoose';
 import {
   ChangeEmailDto,
   CreateUserDto,
@@ -34,6 +41,7 @@ import {
   OrganizationPost,
   OrganizationPostDocument,
 } from '../../organization-post/schema/organization-post.schema';
+import { UserVisibilityEnum } from 'src/common/enums/organization.enum';
 
 @Injectable()
 export class UserService {
@@ -388,130 +396,110 @@ export class UserService {
     });
   }
 
-  // async deleteUser(organization: UserDocument) {
-  //   const deletedPost = await this.userModel.findOneAndUpdate(
-  //     {
-  //       user: organization._id,
-  //       isDeleted: { $ne: true },
-  //     },
-  //     { isDeleted: true },
-  //     { new: true },
-  //   );
+  async getTopSkillsInDemand(organizationId: string) {
+    const pipeline = [
+      {
+        $match: {
+          organization: new Types.ObjectId(organizationId),
+          isDeleted: { $ne: true },
+        },
+      },
+      {
+        $unwind: {
+          path: '$requiredSkills',
+        },
+      },
+      {
+        $group: {
+          _id: '$requiredSkills',
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $sort: {
+          count: -1,
+        } as any,
+      },
+      {
+        $group: {
+          _id: null,
+          skills: {
+            $push: {
+              skill: '$_id',
+              count: '$count',
+            },
+          },
+          maxCount: { $first: '$count' },
+        },
+      },
+      {
+        $unwind: {
+          path: '$skills',
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          skill: '$skills.skill',
+          count: '$skills.count',
+          demandRate: {
+            $multiply: [{ $divide: ['$skills.count', '$maxCount'] }, 100],
+          },
+        },
+      },
+      {
+        $sort: {
+          count: -1,
+        } as any,
+      },
+    ];
 
-  //   if (!deletedPost) {
-  //     throw new NotFoundException(' User not found or already deleted');
-  //   }
+    return this.organizationPostModel.aggregate(pipeline);
+  }
 
-  //   return {
-  //     message: 'User deleted successfully',
-  //     // data: deletedPost,
-  //   };
-  // }
+  async updateUserVisibility(
+    user: UserDocument,
+    visibility: UserVisibilityEnum,
+  ): Promise<UserDocument> {
+    const updated = await this.userModel.findByIdAndUpdate(
+      user._id,
+      { $set: { visibility } },
+      { new: true },
+    );
 
-  // async getTopSkillsInDemand(organizationId: string) {
-  //   const pipeline = [
-  //     {
-  //       $match: {
-  //         organization: new Types.ObjectId(organizationId),
-  //         isDeleted: { $ne: true },
-  //       },
-  //     },
-  //     {
-  //       $unwind: {
-  //         path: '$requiredSkills',
-  //       },
-  //     },
-  //     {
-  //       $group: {
-  //         _id: '$requiredSkills',
-  //         count: { $sum: 1 },
-  //       },
-  //     },
-  //     {
-  //       $sort: {
-  //         count: -1,
-  //       } as any,
-  //     },
-  //     {
-  //       $group: {
-  //         _id: null,
-  //         skills: {
-  //           $push: {
-  //             skill: '$_id',
-  //             count: '$count',
-  //           },
-  //         },
-  //         maxCount: { $first: '$count' },
-  //       },
-  //     },
-  //     {
-  //       $unwind: {
-  //         path: '$skills',
-  //       },
-  //     },
-  //     {
-  //       $project: {
-  //         _id: 0,
-  //         skill: '$skills.skill',
-  //         count: '$skills.count',
-  //         demandRate: {
-  //           $multiply: [{ $divide: ['$skills.count', '$maxCount'] }, 100],
-  //         },
-  //       },
-  //     },
-  //     {
-  //       $sort: {
-  //         count: -1,
-  //       } as any,
-  //     },
-  //   ];
+    if (!updated) {
+      throw new NotFoundException('Organization not found');
+    }
 
-  //   return this.organizationPostModel.aggregate(pipeline);
-  // }
+    return updated;
+  }
 
-  // async updateOrganizationUserVisibility(
-  //   orgId: string,
-  //   visibility: OrganizationVisibilityEnum,
-  // ): Promise<OrganizationDocument> {
-  //   const updated = await this.organizationModel.findByIdAndUpdate(
-  //     orgId,
-  //     { $set: { visibility } },
-  //     { new: true },
-  //   );
+  async deleteUserProfile(user: UserDocument): Promise<{ message: string }> {
+    const session = await this.userModel.db.startSession();
+    session.startTransaction();
 
-  //   if (!updated) {
-  //     throw new NotFoundException('Organization not found');
-  //   }
+    try {
+      const updatedUser = await this.userModel.findByIdAndUpdate(
+        user._id,
+        { $set: { isDeleted: true } },
+        { new: true, session },
+      );
 
-  //   return updated;
-  // }
+      if (!updatedUser) throw new NotFoundException('User not found');
 
-  // async deleteOrganizationUser(orgId: string): Promise<{ message: string }> {
-  //   const session = await this.organizationModel.db.startSession();
-  //   session.startTransaction();
+      await this.organizationPostModel.updateMany(
+        { organization: user._id },
+        { $set: { isDeleted: true } },
+        { session },
+      );
 
-  //   try {
-  //     const org = await this.organizationModel.findByIdAndUpdate(
-  //       orgId,
-  //       { $set: { isDeleted: true } },
-  //       { new: true, session },
-  //     );
-
-  //     if (!org) throw new NotFoundException('Organization not found');
-
-  //     await this.organizationPostModel.updateMany(
-  //       { organization: orgId },
-  //       { $set: { isDeleted: true } },
-  //       { session },
-  //     );
-
-  //     await session.commitTransaction();
-  //     return { message: 'Organization and its job posts deleted successfully' };
-  //   } catch (err) {
-  //     await session.abortTransaction();
-  //     throw err;
-  //   } finally {
-  //     await session.endSession();
-  //   }
-  // }
+      await session.commitTransaction();
+      return { message: 'User deleted successfully' };
+    } catch (err) {
+      await session.abortTransaction();
+      throw err;
+    } finally {
+      await session.endSession();
+    }
+  }
 }

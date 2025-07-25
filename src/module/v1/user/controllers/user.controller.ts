@@ -2,6 +2,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Patch,
   Query,
@@ -13,6 +14,7 @@ import { UserService } from '../services/user.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
 import {
   ChangeEmailDto,
+  UpdateOrganizationProfileDto,
   UpdatePasswordDto,
   UpdateTalentProfileDto,
   UserAvailabilityDto,
@@ -25,6 +27,7 @@ import { ResponseMessage } from '../../../../common/decorators/response.decorato
 import { LoggedInUserDecorator } from '../../../../common/decorators/logged-in-user.decorator';
 import { UserDocument } from '../schemas/user.schema';
 import { PaginationDto } from '../../repository/dto/repository.dto';
+import { UserVisibilityEnum } from 'src/common/enums/organization.enum';
 
 @NoCache()
 @Controller('users')
@@ -57,14 +60,14 @@ export class UserController {
 
   @UseInterceptors(FileInterceptor('image'))
   @Patch('profile')
-  async updateTalentProfile(
-    @Body() payload: UpdateTalentProfileDto,
+  async updateUserProfile(
+    @Body() payload: UpdateTalentProfileDto | UpdateOrganizationProfileDto,
     @LoggedInUserDecorator() user: UserDocument,
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return await this.userService.updateProfile(user, payload, file);
   }
-
+  
   @Public()
   @Get('check-email')
   async checkPhoneOrEmailExists(@Query() query: UserAvailabilityDto) {
@@ -79,21 +82,23 @@ export class UserController {
     return await this.userService.showUserReferrals(user, payload);
   }
 
-  // @Patch('visibility')
-  // async updateVisibility(
-  //   @LoggedInUserDecorator() organization: OrganizationDocument,
-  //   @Body('visibility') visibility: OrganizationVisibilityEnum,
-  // ): Promise<OrganizationDocument> {
-  //   return this.userService.updateOrganizationUserVisibility(
-  //     organization._id.toString(),
-  //     visibility,
-  //   );
-  // }
+  @Patch('visibility')
+  async updateVisibility(
+    @LoggedInUserDecorator() user: UserDocument,
+    @Body('visibility') visibility: UserVisibilityEnum,
+  ): Promise<UserDocument> {
+    return this.userService.updateUserVisibility(user, visibility);
+  }
 
-  // @Delete()
-  // async deleteOrganization(
-  //   @LoggedInUserDecorator() organization: OrganizationDocument,
-  // ): Promise<{ message: string }> {
-  //   return this.userService.deleteOrganizationUser(organization._id.toString());
-  // }
+  @Get('organization/top-skills')
+  async getTopSkillsInDemand(
+    @LoggedInUserDecorator() organization: UserDocument,
+  ) {
+    return this.userService.getTopSkillsInDemand(organization._id.toString());
+  }
+
+  @Delete()
+  async deleteUserProfile(@LoggedInUserDecorator() user: UserDocument) {
+    return this.userService.deleteUserProfile(user);
+  }
 }

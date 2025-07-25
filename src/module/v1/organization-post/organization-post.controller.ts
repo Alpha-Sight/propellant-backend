@@ -138,13 +138,4 @@ export class OrganizationPostController {
       data: talents,
     };
   }
-
-  @Get('top-skills')
-  async getTopSkillsInDemand(
-    @LoggedInUserDecorator() organization: UserDocument,
-  ) {
-    return this.organizationService.getTopSkillsInDemand(
-      organization._id.toString(),
-    );
-  }
 }
