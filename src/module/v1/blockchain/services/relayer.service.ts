@@ -111,11 +111,17 @@ export class RelayerService implements OnModuleInit {
   }) {
     try {
       this.logger.log(`Queuing transaction: ${JSON.stringify(payload)}`);
-      
-      if (!payload.target || !payload.data) {
-        throw new Error('Invalid transaction payload: missing target or data');
+      // Validate userAddress
+      if (!payload.userAddress || typeof payload.userAddress !== 'string' || payload.userAddress === ethers.ZeroAddress) {
+        throw new Error('Invalid transaction payload: missing or invalid userAddress');
       }
-
+      // Validate target
+      if (!payload.target || typeof payload.target !== 'string' || payload.target === ethers.ZeroAddress) {
+        throw new Error('Invalid transaction payload: missing or invalid target');
+      }
+      if (!payload.data) {
+        throw new Error('Invalid transaction payload: missing data');
+      }
       const {
         userAddress,
         target,
@@ -125,7 +131,6 @@ export class RelayerService implements OnModuleInit {
         description,
         isAccountCreation,
       } = payload;
-
       let accountAddress: string;
       if (isAccountCreation) {
         accountAddress = target;
@@ -133,21 +138,20 @@ export class RelayerService implements OnModuleInit {
       } else {
         try {
           accountAddress = await this.accountFactory.getAccount(userAddress);
-          if (accountAddress === ethers.ZeroAddress) {
-            throw new Error(`No account found for user: ${userAddress}`);
+          if (!accountAddress || accountAddress === ethers.ZeroAddress || accountAddress === null) {
+            this.logger.warn(`No valid smart account found for user: ${userAddress}, falling back to userAddress.`);
+            accountAddress = userAddress;
           }
         } catch (error) {
           this.logger.warn(`Could not get smart account address, using user address: ${error.message}`);
           accountAddress = userAddress;
         }
       }
-
       const transactionId = ethers.keccak256(
         ethers.toUtf8Bytes(
-          `${payload.userAddress}-${payload.target}-${Date.now()}-${Math.random()}`
+          `${userAddress}-${target}-${Date.now()}-${Math.random()}`
         )
       );
-
       const transaction = new this.transactionModel({
         transactionId,
         userAddress,
@@ -161,22 +165,17 @@ export class RelayerService implements OnModuleInit {
         description,
         createdAt: new Date(),
       });
-
       await transaction.save();
-
       this.logger.log(`Transaction queued with ID: ${transactionId}`);
-      
       this.eventEmitter.emit('transaction.queued', {
         transactionId,
         userAddress,
         status: TransactionStatusEnum.PENDING,
       });
-
       return {
         transactionId: transactionId,
         status: 'PENDING'
       };
-
     } catch (error) {
       this.logger.error(`Failed to queue transaction: ${error.message}`);
       throw error;
