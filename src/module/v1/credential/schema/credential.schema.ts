@@ -42,7 +42,15 @@ export class Credential {
   url: string;
 
   @Prop({ required: false })
+  imageUrl?: string;
+
+
+  @Prop({ required: false })
   ipfsHash?: string;
+
+
+  @Prop({ required: false })
+  evidenceHash?: string;
 
   @Prop({ required: false })
   description: string;

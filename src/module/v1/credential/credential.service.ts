@@ -13,6 +13,7 @@ import {
   UploadCredentialDto,
   GetAllCredentialsDto,
   UpdateCredentialDto,
+  CredentialResponseDto,
 } from './dto/credential.dto';
 import { PaginationDto } from '../repository/dto/repository.dto';
 import { PinataService } from 'src/common/utils/pinata.util';
@@ -67,9 +68,14 @@ export class CredentialService {
         issuer: user._id,
         subject: user._id,
         credentialId: `${user._id}-${now.getTime()}`,
+        imageUrl: ipfsHash ? `https://gateway.pinata.cloud/ipfs/${ipfsHash}` : null,
         ...payload,
       };
-      return await this.credentialModel.create(credentialData);
+      const created = await this.credentialModel.create(credentialData);
+      // Always set imageUrl in the response using ipfsHash
+      const obj = typeof created.toObject === 'function' ? created.toObject() : created;
+      obj.imageUrl = obj.evidenceHash ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}` : null;
+      return obj;
     } catch (error) {
       throw new Error(
         `Failed to create credential with IPFS: ${error.message}`,
@@ -146,7 +152,9 @@ export class CredentialService {
       throw new NotFoundException('Credential not found');
     }
 
-    return credential;
+    const obj = typeof credential.toObject === 'function' ? credential.toObject() : credential;
+    obj.imageUrl = obj.evidenceHash ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}` : null;
+    return obj;
   }
 
   async deleteCredential(
@@ -246,6 +254,7 @@ export class CredentialService {
             return {
               ...obj,
               _id: obj._id,
+              imageUrl: obj.evidenceHash ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}` : null,
             };
           });
         }
