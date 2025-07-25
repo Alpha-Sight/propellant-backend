@@ -27,7 +27,7 @@ import { ResponseMessage } from '../../../../common/decorators/response.decorato
 import { LoggedInUserDecorator } from '../../../../common/decorators/logged-in-user.decorator';
 import { UserDocument } from '../schemas/user.schema';
 import { PaginationDto } from '../../repository/dto/repository.dto';
-import { UserVisibilityEnum } from 'src/common/enums/organization.enum';
+import { UserVisibilityEnum } from 'src/common/enums/user.enum';
 
 @NoCache()
 @Controller('users')
@@ -67,7 +67,7 @@ export class UserController {
   ) {
     return await this.userService.updateProfile(user, payload, file);
   }
-  
+
   @Public()
   @Get('check-email')
   async checkPhoneOrEmailExists(@Query() query: UserAvailabilityDto) {

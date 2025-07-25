@@ -3,9 +3,9 @@ import mongoose, { Document } from 'mongoose';
 import {
   AuthSourceEnum,
   UserRoleEnum,
+  UserVisibilityEnum,
 } from '../../../../common/enums/user.enum';
 import { PlanTypeEnum } from 'src/common/enums/premium.enum';
-import { UserVisibilityEnum } from 'src/common/enums/organization.enum';
 import { OrganizationSocialDto } from '../dto/user.dto';
 
 export type UserDocument = User & Document;

@@ -12,3 +12,9 @@ export enum AuthSourceEnum {
   GITHUB = 'GITHUB',
   WALLET = 'WALLET',
 }
+
+export enum UserVisibilityEnum {
+  PUBLIC = 'PUBLIC',
+  VERIFIED_ONLY = 'VERIFIED_ONLY',
+  PRIVATE = 'PRIVATE',
+}
