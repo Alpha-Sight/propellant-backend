@@ -31,6 +31,7 @@ import { OtpService } from '../../otp/services/otp.service';
 import {
   AuthSourceEnum,
   UserRoleEnum,
+  UserVisibilityEnum,
 } from '../../../../common/enums/user.enum';
 import { GoogleAuthDto } from '../../auth/dto/auth.dto';
 import { PinataService } from 'src/common/utils/pinata.util';
@@ -41,7 +42,6 @@ import {
   OrganizationPost,
   OrganizationPostDocument,
 } from '../../organization-post/schema/organization-post.schema';
-import { UserVisibilityEnum } from 'src/common/enums/organization.enum';
 
 @Injectable()
 export class UserService {
