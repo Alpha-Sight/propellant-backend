@@ -20,7 +20,7 @@ import {
 import { UserDocument } from '../user/schemas/user.schema';
 import { PaymentService } from '../payment/services/payment.service';
 import { PaymentProvidersEnum } from 'src/common/enums/payment.enum';
-import { PlanTypeEnum } from 'src/common/enums/premium.enum';
+import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
 import { MailService } from '../mail/mail.service';
 import { premiumPlanNotificationEmailTemplate } from '../mail/templates/premium.email';
 import { SelectPlanDto } from './dto/premium.dto';
@@ -49,10 +49,6 @@ export class PremiumService {
       throw new BadRequestException('User not found');
     }
 
-    if (user.plan === PlanTypeEnum.PREMIUM) {
-      throw new BadRequestException('User already has premium subscription');
-    }
-
     // Create or find a pending transaction for the premium upgrade
     let transaction = await this.transactionService.findOneQuery({
       options: {
@@ -72,7 +68,7 @@ export class PremiumService {
       transaction = await this.transactionService.create({
         user: userId,
         status: TransactionStatusEnum.PENDING,
-        totalAmount: 1000,
+        totalAmount: paymentObject.amount,
         description: 'premium plan subscription payment',
         type: TransactionTypeEnum.Premium,
         metadata: paymentObject,
@@ -90,7 +86,7 @@ export class PremiumService {
 
     try {
       await this.userService.update(user._id.toString(), {
-        plan: PlanTypeEnum.PREMIUM,
+        plan: SubscriptionTypeEnum.BASIC,
       });
       await this.transactionService.updateQuery(
         { _id: transaction._id },
@@ -112,7 +108,7 @@ export class PremiumService {
             user: [user.email.split('@')[0]],
             reference: transaction._id.toString(),
             upgradeDate: new Date().toLocaleDateString(),
-            totalAmount: amountPaid / 1000,
+            totalAmount: amountPaid,
             currencySymbol: '₦',
           }),
         ),
@@ -123,7 +119,7 @@ export class PremiumService {
             user: [user.email.split('@')[0]],
             reference: transaction._id.toString(),
             upgradeDate: new Date().toLocaleDateString(),
-            totalAmount: amountPaid / 1000,
+            totalAmount: amountPaid,
             currencySymbol: '₦',
           }),
         ),
@@ -144,29 +140,22 @@ export class PremiumService {
       throw new NotFoundException('User not found');
     }
 
-    // If user selects the free/standard plan, just update and return
-    if (payload.plan === PlanTypeEnum.REGULAR) {
-      await this.userService.update(user._id.toString(), {
-        plan: PlanTypeEnum.REGULAR,
-      });
-
-      return {
-        message: 'User has been set to Regular plan successfully.',
-      };
-    }
-
-    // If premium is selected, get pricing and initiate payment
     const settings = (await this.settingService.getSettings()) as ISettings;
-    const premiumPricing = settings?.app?.price.premiumPricing;
+    const subscriptionPriceMap = settings?.app?.subscriptionPrice;
 
-    if (!premiumPricing) {
+    const selectedPlan = payload.plan;
+
+    const planAmount = subscriptionPriceMap?.[selectedPlan];
+
+    if (planAmount === undefined) {
       throw new NotFoundException(
-        'Premium pricing not configured. Please contact support.',
+        `${selectedPlan} pricing not configured. Please contact support.`,
       );
     }
 
-    return this.constructPaymentPayloadForUpgrade(user, Number(premiumPricing));
+    return this.constructPaymentPayloadForUpgrade(user, Number(planAmount));
   }
+
   // async initiatePremiumUpgrade(user: UserDocument) {
 
   //   const paymentUrl =

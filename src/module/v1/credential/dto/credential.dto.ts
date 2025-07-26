@@ -53,9 +53,9 @@ export class UploadCredentialDto {
 }
 
 export class UpdateCredentialDto {
-  @IsNotEmpty()
-  @IsString()
-  credentialId: string;
+  // @IsNotEmpty()
+  // @IsString()
+  // credentialId: string;
 
   @IsString()
   @IsOptional()

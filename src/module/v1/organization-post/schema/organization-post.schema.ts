@@ -1,10 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { JobTypeEnum } from 'src/common/enums/organization.enum';
 import mongoose, { Document } from 'mongoose';
-import {
-  Organization,
-  OrganizationDocument,
-} from '../../user/schemas/organization.schema';
+import { User, UserDocument } from '../../user/schemas/user.schema';
 
 export type OrganizationPostDocument = OrganizationPost & Document;
 
@@ -12,9 +9,9 @@ export type OrganizationPostDocument = OrganizationPost & Document;
 export class OrganizationPost {
   @Prop({
     type: mongoose.Schema.Types.ObjectId,
-    ref: Organization.name,
+    ref: User.name,
   })
-  organization: OrganizationDocument;
+  organization: UserDocument;
 
   @Prop({ required: true })
   title: string;

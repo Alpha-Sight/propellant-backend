@@ -30,6 +30,7 @@ export class RelayerService implements OnModuleInit {
   private paymaster: ethers.Contract; // Add this property
   private isProcessing = false;
   private pendingTransactions: Map<string, any> = new Map();
+  private ensSupportedChains = [1, 3, 4, 5, 11155111]; // mainnet, ropsten, rinkeby, goerli, sepolia
 
   constructor(
     private configService: ConfigService,
@@ -46,6 +47,25 @@ export class RelayerService implements OnModuleInit {
     this.startTransactionProcessing();
   }
 
+  private async isEnsSupported(chainId: number): Promise<boolean> {
+    return this.ensSupportedChains.includes(chainId);
+  }
+
+  private async resolveAddress(address: string): Promise<string> {
+    try {
+      const network = await this.provider.getNetwork();
+      if (await this.isEnsSupported(Number(network.chainId))) {
+        // ENS resolution only on supported networks
+        return await this.provider.resolveName(address);
+      }
+      // Return address as-is for unsupported networks
+      return address;
+    } catch (error) {
+      this.logger.warn('ENS resolution failed, using original address:', error.message);
+      return address;
+    }
+  }
+
   private async initializeProvider() {
     try {
       const rpcUrl = this.configService.get<string>('BLOCKCHAIN_RPC_URL');
@@ -56,6 +76,14 @@ export class RelayerService implements OnModuleInit {
       const paymasterAddress = this.configService.get<string>('PAYMASTER_ADDRESS');
 
       this.provider = new ethers.JsonRpcProvider(rpcUrl);
+      // Force disable ENS to avoid resolution errors
+      const originalGetNetwork = this.provider.getNetwork.bind(this.provider);
+      this.provider.getNetwork = async () => {
+        const network = await originalGetNetwork();
+        Object.defineProperty(network, 'ensAddress', { value: null });
+        return network;
+      };
+
       this.wallet = new ethers.Wallet(relayerPrivateKey, this.provider);
 
       this.entryPoint = new ethers.Contract(entryPointAddress, EntryPointABI.abi, this.wallet);
@@ -83,11 +111,17 @@ export class RelayerService implements OnModuleInit {
   }) {
     try {
       this.logger.log(`Queuing transaction: ${JSON.stringify(payload)}`);
-      
-      if (!payload.target || !payload.data) {
-        throw new Error('Invalid transaction payload: missing target or data');
+      // Validate userAddress
+      if (!payload.userAddress || typeof payload.userAddress !== 'string' || payload.userAddress === ethers.ZeroAddress) {
+        throw new Error('Invalid transaction payload: missing or invalid userAddress');
       }
-
+      // Validate target
+      if (!payload.target || typeof payload.target !== 'string' || payload.target === ethers.ZeroAddress) {
+        throw new Error('Invalid transaction payload: missing or invalid target');
+      }
+      if (!payload.data) {
+        throw new Error('Invalid transaction payload: missing data');
+      }
       const {
         userAddress,
         target,
@@ -97,7 +131,6 @@ export class RelayerService implements OnModuleInit {
         description,
         isAccountCreation,
       } = payload;
-
       let accountAddress: string;
       if (isAccountCreation) {
         accountAddress = target;
@@ -105,21 +138,20 @@ export class RelayerService implements OnModuleInit {
       } else {
         try {
           accountAddress = await this.accountFactory.getAccount(userAddress);
-          if (accountAddress === ethers.ZeroAddress) {
-            throw new Error(`No account found for user: ${userAddress}`);
+          if (!accountAddress || accountAddress === ethers.ZeroAddress || accountAddress === null) {
+            this.logger.warn(`No valid smart account found for user: ${userAddress}, falling back to userAddress.`);
+            accountAddress = userAddress;
           }
         } catch (error) {
           this.logger.warn(`Could not get smart account address, using user address: ${error.message}`);
           accountAddress = userAddress;
         }
       }
-
       const transactionId = ethers.keccak256(
         ethers.toUtf8Bytes(
-          `${payload.userAddress}-${payload.target}-${Date.now()}-${Math.random()}`
+          `${userAddress}-${target}-${Date.now()}-${Math.random()}`
         )
       );
-
       const transaction = new this.transactionModel({
         transactionId,
         userAddress,
@@ -133,22 +165,17 @@ export class RelayerService implements OnModuleInit {
         description,
         createdAt: new Date(),
       });
-
       await transaction.save();
-
       this.logger.log(`Transaction queued with ID: ${transactionId}`);
-      
       this.eventEmitter.emit('transaction.queued', {
         transactionId,
         userAddress,
         status: TransactionStatusEnum.PENDING,
       });
-
       return {
         transactionId: transactionId,
         status: 'PENDING'
       };
-
     } catch (error) {
       this.logger.error(`Failed to queue transaction: ${error.message}`);
       throw error;
@@ -234,10 +261,8 @@ export class RelayerService implements OnModuleInit {
     try {
       const transaction = await this.transactionModel.findById(transactionMongoId);
       if (!transaction) {
-        this.logger.warn(`Transaction not found by mongo ID: ${transactionMongoId}`);
-        return;
+        throw new Error(`Transaction not found: ${transactionMongoId}`);
       }
-
       this.logger.log(`Processing transaction ${transaction.transactionId}: ${transaction.description}`);
 
       const relayerPrivateKey = this.configService.get<string>('RELAYER_PRIVATE_KEY');
@@ -246,6 +271,14 @@ export class RelayerService implements OnModuleInit {
       }
 
       const provider = new ethers.JsonRpcProvider(this.configService.get<string>('BLOCKCHAIN_RPC_URL'));
+      // Force disable ENS to avoid resolution errors
+      const originalGetNetwork = provider.getNetwork.bind(provider);
+      provider.getNetwork = async () => {
+        const network = await originalGetNetwork();
+        Object.defineProperty(network, 'ensAddress', { value: null });
+        return network;
+      };
+
       const relayerWallet = new ethers.Wallet(relayerPrivateKey, provider);
 
       const tx = await relayerWallet.sendTransaction({
@@ -254,7 +287,6 @@ export class RelayerService implements OnModuleInit {
         value: transaction.value || 0,
         gasLimit: 500000,
       });
-
       this.logger.log(`Transaction sent: ${tx.hash}`);
       const receipt = await tx.wait();
       this.logger.log(`Transaction confirmed in block: ${receipt.blockNumber}`);
@@ -287,14 +319,21 @@ export class RelayerService implements OnModuleInit {
       this.logger.log(`Transaction ${transaction.transactionId} and associated credential updated to ${credentialStatus}.`);
 
     } catch (error) {
+      // Improved error handling for transaction reverts and ENS issues
       this.logger.error(`Failed to process transaction with mongo ID ${transactionMongoId}: ${error.message}`);
+      if (error.code === 'UNSUPPORTED_OPERATION' && error.operation === 'getEnsAddress') {
+        this.logger.error('Network does not support ENS. Skipping ENS resolution.');
+      }
+      if (error.reason) {
+        this.logger.error(`Transaction revert reason: ${error.reason}`);
+      }
+      // Optionally, update transaction status in DB with error info
       await this.transactionModel.updateOne(
         { _id: transactionMongoId },
         {
-          $inc: { attempts: 1 },
-          lastError: error.message,
           status: 'FAILED',
-          updatedAt: new Date(),
+          lastError: error.message,
+          processedAt: new Date(),
         }
       );
     }

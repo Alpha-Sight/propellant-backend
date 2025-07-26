@@ -33,15 +33,20 @@ export class CredentialService {
     file: Express.Multer.File,
   ): Promise<CredentialDocument> {
     try {
+      if (!user || !user._id) {
+        throw new BadRequestException('User not found or invalid');
+      }
       if (!file) {
-        throw new BadRequestException(' File not Found');
+        throw new BadRequestException('File not Found');
       }
       const ipfsHash = await this.pinataService.uploadFile(file);
 
-      // Set all required fields for credential schema
+      // Set defaults for required fields
       const now = new Date();
+      // Convert credentialType to number if it's an enum string
       let credentialTypeValue = payload.type;
       if (typeof credentialTypeValue === 'string') {
+        // Map string to number if needed (update this mapping as per your enum)
         const typeMap = {
           DEGREE: 0,
           CERTIFICATE: 1,
@@ -53,29 +58,25 @@ export class CredentialService {
           RECOMMENDATION_LETTER: 7,
           OTHER: 8,
         };
-        credentialTypeValue = typeMap[payload.type] ?? 8 as any;
+        credentialTypeValue = typeMap[payload.type] ?? (8 as any);
       }
 
       const credentialData = {
         user: user._id,
         ipfsHash,
         createdAt: now,
-        status: 'PENDING',
+        status: 'PENDING', // or CredentialStatusEnum.PENDING if imported
         revocable: true,
-        evidenceHash: ipfsHash,
+        evidenceHash: ipfsHash, // Use IPFS hash as evidenceHash
         credentialType: credentialTypeValue,
         name: payload.title || '',
         issuer: user._id,
         subject: user._id,
         credentialId: `${user._id}-${now.getTime()}`,
-        imageUrl: ipfsHash ? `https://gateway.pinata.cloud/ipfs/${ipfsHash}` : null,
         ...payload,
       };
-      const created = await this.credentialModel.create(credentialData);
-      // Always set imageUrl in the response using ipfsHash
-      const obj = typeof created.toObject === 'function' ? created.toObject() : created;
-      obj.imageUrl = obj.evidenceHash ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}` : null;
-      return obj;
+
+      return await this.credentialModel.create(credentialData);
     } catch (error) {
       throw new Error(
         `Failed to create credential with IPFS: ${error.message}`,
@@ -108,14 +109,15 @@ export class CredentialService {
   }
 
   async updateCredential(
+    _id: string,
     user: UserDocument,
     payload: UpdateCredentialDto,
     file?: Express.Multer.File,
   ): Promise<CredentialDocument> {
-    const { credentialId, ...updateFields } = payload;
+    const { ...updateFields } = payload;
 
     const existingCredential = await this.credentialModel.findOne({
-      _id: credentialId,
+      _id: _id,
       user: user._id,
     });
 
@@ -134,7 +136,7 @@ export class CredentialService {
     }
 
     const updatedCredential = await this.credentialModel.findByIdAndUpdate(
-      credentialId,
+      _id,
       { ...updateFields },
       { new: true },
     );

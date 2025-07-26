@@ -19,12 +19,13 @@ import { LoggedInUserDecorator } from '../../../common/decorators/logged-in-user
 import { RoleGuard } from '../auth/guards/role.guard';
 import { Roles } from '../../../common/decorators/role.decorator';
 import { UserRoleEnum } from '../../../common/enums/user.enum';
-import { Public } from '../../../common/decorators/public.decorator';
 import { NoCache } from '../../../common/decorators/cache.decorator';
 import { IDQueryDto } from 'src/common/dto/query.dto';
-import { OrganizationDocument } from '../user/schemas/organization.schema';
+import { UserDocument } from '../user/schemas/user.schema';
+import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 
 @NoCache()
+@UseGuards(JwtAuthGuard)
 @Controller('job-post')
 export class OrganizationPostController {
   constructor(private readonly organizationService: OrganizationPostService) {}
@@ -32,17 +33,20 @@ export class OrganizationPostController {
   @Post()
   @UseGuards(RoleGuard)
   @Roles(UserRoleEnum.ORGANIZATION)
-  //   @ResponseMessage(RESPONSE_CONSTANT.ORGANIZATION_POST.CREATE_SUCCESS)
   async createJobPost(
-    @LoggedInUserDecorator() organization: OrganizationDocument,
+    @LoggedInUserDecorator() organization: UserDocument,
     @Body() payload: CreateJobPostDto,
   ) {
-    return await this.organizationService.createJobPost(organization, payload);
+    console.log('user', organization);
+    return await this.organizationService.createJobPost(
+      organization._id.toString(),
+      payload,
+    );
   }
 
-  @Public()
+  // @UseGuards(RoleGuard)
+  // @Roles(UserRoleEnum.ADMIN)
   @Get('posts')
-  //   @ResponseMessage(RESPONSE_CONSTANT.ORGANIZATION_POST.GET_ALL_SUCCESS)
   async getAllJobPosts(@Query() query: GetAllJobPostsDto) {
     return await this.organizationService.getAllJobPosts(query);
   }
@@ -50,11 +54,8 @@ export class OrganizationPostController {
   @Get('organization')
   @UseGuards(RoleGuard)
   @Roles(UserRoleEnum.ORGANIZATION)
-  //   @ResponseMessage(
-  //     RESPONSE_CONSTANT.ORGANIZATION_POST.GET_ORGANIZATION_POSTS_SUCCESS,
-  //   )
   async getOrganizationJobPosts(
-    @LoggedInUserDecorator() organization: OrganizationDocument,
+    @LoggedInUserDecorator() organization: UserDocument,
     @Query() query: GetAllJobPostsDto,
   ) {
     return await this.organizationService.getOrganizationJobPosts(
@@ -63,9 +64,7 @@ export class OrganizationPostController {
     );
   }
 
-  @Public()
   @Get()
-  //   @ResponseMessage(RESPONSE_CONSTANT.ORGANIZATION_POST.GET_BY_ID_SUCCESS)
   async getJobPostById(@Query('_id') _id: string) {
     return await this.organizationService.getJobPostById(_id);
   }
@@ -73,9 +72,8 @@ export class OrganizationPostController {
   @Patch('/:_id/update')
   @UseGuards(RoleGuard)
   @Roles(UserRoleEnum.ORGANIZATION)
-  //   @ResponseMessage(RESPONSE_CONSTANT.ORGANIZATION_POST.UPDATE_SUCCESS)
   async updateJobPostById(
-    @LoggedInUserDecorator() organization: OrganizationDocument,
+    @LoggedInUserDecorator() organization: UserDocument,
     @Param('_id') _id: string,
     @Body() payload: UpdateJobPostDto,
   ) {
@@ -87,9 +85,11 @@ export class OrganizationPostController {
   }
 
   @Delete('remove')
+  @UseGuards(RoleGuard)
+  @Roles(UserRoleEnum.ORGANIZATION)
   async deleteJobPost(
     @Query('_id') _id: string,
-    @LoggedInUserDecorator() organization: OrganizationDocument,
+    @LoggedInUserDecorator() organization: UserDocument,
   ) {
     return await this.organizationService.deleteJobPost(
       _id,
@@ -112,9 +112,11 @@ export class OrganizationPostController {
   }
 
   @Patch('status')
+  @UseGuards(RoleGuard)
+  @Roles(UserRoleEnum.ORGANIZATION)
   async toggleJobPostActivation(
     @Query('_id') _id: string,
-    @LoggedInUserDecorator() organization: OrganizationDocument,
+    @LoggedInUserDecorator() organization: UserDocument,
   ) {
     return await this.organizationService.toggleJobPostActivation(
       _id,
@@ -123,15 +125,17 @@ export class OrganizationPostController {
   }
 
   @Get('stats')
-  async getJobPostStats(
-    @LoggedInUserDecorator() organization: OrganizationDocument,
-  ) {
+  @UseGuards(RoleGuard)
+  @Roles(UserRoleEnum.ORGANIZATION)
+  async getJobPostStats(@LoggedInUserDecorator() organization: UserDocument) {
     return await this.organizationService.getJobPostStats(
       organization._id.toString(),
     );
   }
 
   @Get(':jobPostId/talents')
+  @UseGuards(RoleGuard)
+  @Roles(UserRoleEnum.ORGANIZATION)
   async getMatchingTalents(@Param('jobPostId') jobPostId: string) {
     const talents =
       await this.organizationService.getMatchingTalentsForJob(jobPostId);
@@ -139,14 +143,5 @@ export class OrganizationPostController {
       message: 'Matching talents fetched successfully',
       data: talents,
     };
-  }
-
-  @Get('top-skills')
-  async getTopSkillsInDemand(
-    @LoggedInUserDecorator() organization: OrganizationDocument,
-  ) {
-    return this.organizationService.getTopSkillsInDemand(
-      organization._id.toString(),
-    );
   }
 }

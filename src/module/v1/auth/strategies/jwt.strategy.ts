@@ -26,20 +26,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     try {
       const { _id } = payload;
 
-      // const user = await this.userService.getUserById(_id);
-      const [user, org] = await Promise.all([
-        this.userService.getUserById(_id),
-        this.userService.getOrgById(_id),
-      ]);
+      const user = await this.userService.getUserById(_id);
 
-      if (!user && !org) {
+      if (!user) {
         errorMessage = 'Invalid auth token, please login again.';
         isError = true;
       }
 
-      const account = user || org;
-
-      if (account && !account?.emailVerified) {
+      if (user && !user?.emailVerified) {
         errorMessage = 'Please verify your email to continue.';
         isError = true;
       }
@@ -52,7 +46,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         );
       }
 
-      return account;
+      return user;
     } catch (error) {
       if (error instanceof TokenExpiredError) {
         throw new AppError(
