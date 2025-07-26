@@ -9,6 +9,7 @@ import {
   UploadedFile,
   Query,
   UseGuards,
+  Param,
 } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/module/v1/auth/guards/jwt.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -24,6 +25,7 @@ import {
 } from './dto/credential.dto';
 import { PaginationDto } from '../repository/dto/repository.dto';
 
+@UseGuards(JwtAuthGuard)
 @Controller('credentials')
 export class CredentialController {
   constructor(private readonly credentialService: CredentialService) {}
@@ -63,15 +65,21 @@ export class CredentialController {
     return await this.credentialService.getCredentialById(_id);
   }
 
-  @Patch()
+  @Patch(':_id/update')
   @UseInterceptors(FileInterceptor('file'))
   @ResponseMessage(RESPONSE_CONSTANT.CREDENTIAL.UPLOAD_SUCCESS)
   async updateCredential(
+    @Param('_id') _id: string,
     @LoggedInUserDecorator() user: UserDocument,
     @Body() payload: UpdateCredentialDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return await this.credentialService.updateCredential(user, payload, file);
+    return await this.credentialService.updateCredential(
+      _id,
+      user,
+      payload,
+      file,
+    );
   }
 
   @Delete()
