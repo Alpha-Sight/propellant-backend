@@ -1,12 +1,15 @@
 import { ISettings } from '../interfaces/setting.interface';
 import { isDevEnvironment } from '../configs/environment';
+import { SubscriptionTypeEnum } from '../enums/premium.enum';
 
 export const SETTINGS: ISettings = {
   app: {
     name: 'Propellant HR',
     supportEmail: 'support@Propellanthr.com',
-    price: {
-      premiumPricing: 1000,
+    subscriptionPrice: {
+      [SubscriptionTypeEnum.BASIC]: 49,
+      [SubscriptionTypeEnum.PROFESSIONAL]: 99,
+      [SubscriptionTypeEnum.ENTERPRISE]: 199,
     },
     urls: {
       webHomepage: isDevEnvironment

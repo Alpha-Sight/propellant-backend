@@ -98,7 +98,7 @@ export class PaystackService {
           transactionId: payload.data.metadata.transactionId,
           reference: payload.data.reference,
           paymentObject: payload,
-          fee: payload.data.amount / 1000,
+          fee: payload.data.amount,
           userId: payload.data.metadata.userId,
         };
       }
