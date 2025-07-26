@@ -131,14 +131,15 @@ export class CredentialService {
   }
 
   async updateCredential(
+    _id: string,
     user: UserDocument,
     payload: UpdateCredentialDto,
     file?: Express.Multer.File,
   ): Promise<CredentialDocument> {
-    const { credentialId, ...updateFields } = payload;
+    const { ...updateFields } = payload;
 
     const existingCredential = await this.credentialModel.findOne({
-      _id: credentialId,
+      _id: _id,
       user: user._id,
     });
 
@@ -157,7 +158,7 @@ export class CredentialService {
     }
 
     const updatedCredential = await this.credentialModel.findByIdAndUpdate(
-      credentialId,
+      _id,
       { ...updateFields },
       { new: true },
     );

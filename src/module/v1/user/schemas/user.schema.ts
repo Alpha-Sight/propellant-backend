@@ -31,16 +31,16 @@ export class User {
   @Prop({ required: false })
   instagram?: string;
 
-  @Prop({ required: false, type: [String] })
+  @Prop({ required: false, type: [String], default: undefined })
   skills?: string[];
 
-  @Prop({ default: null, index: true })
+  @Prop({ index: true })
   referralCode: string;
 
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: User.name })
   referredBy: UserDocument;
 
-  @Prop({ default: 0 })
+  @Prop()
   totalReferrals: number;
 
   // organization profile properties
@@ -59,28 +59,28 @@ export class User {
   @Prop({ required: false })
   companySize?: string;
 
-  @Prop({ required: false, type: [String] })
+  @Prop({ required: false, type: [String], default: undefined })
   offers?: string[];
 
-  @Prop({ required: false, type: [OrganizationSocialDto] })
+  @Prop({ required: false, type: [OrganizationSocialDto], default: undefined })
   socials?: OrganizationSocialDto[];
 
-  @Prop({ default: 0 })
+  @Prop()
   totalJobPost: number;
 
-  @Prop({ default: 0 })
+  @Prop()
   talentContacted: number;
 
-  @Prop({ default: 0 })
+  @Prop()
   activePost: number;
 
-  @Prop({ default: 0 })
+  @Prop()
   activeConversations: number;
 
-  @Prop({ default: 0 })
+  @Prop()
   responseRate: number;
 
-  @Prop({ default: 0 })
+  @Prop()
   successfulHire: number;
 
   @Prop({

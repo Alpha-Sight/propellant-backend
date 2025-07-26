@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { CvService } from './cv.service';
 import { UserDocument } from '../user/schemas/user.schema';
 import { LoggedInUserDecorator } from 'src/common/decorators/logged-in-user.decorator';
@@ -7,7 +15,9 @@ import { CVTemplateEnum } from 'src/common/enums/cv.enum';
 import { Response } from 'express';
 import { ResponseMessage } from 'src/common/decorators/response.decorator';
 import { RESPONSE_CONSTANT } from 'src/common/constants/response.constant';
+import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 
+@UseGuards(JwtAuthGuard)
 @Controller('cv')
 export class CvController {
   constructor(private readonly cvService: CvService) {}

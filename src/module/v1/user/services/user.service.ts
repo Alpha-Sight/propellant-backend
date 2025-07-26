@@ -95,8 +95,27 @@ export class UserService {
       // this.logger.log(`Creating wallet for user`);
       const createWallet = await this.walletService.createWallet();
 
+      const roleDefaults =
+        role === UserRoleEnum.TALENT
+          ? {
+              totalReferrals: 0,
+              referredBy: null,
+              skills: [],
+            }
+          : {
+              totalJobPost: 0,
+              activePost: 0,
+              activeConversations: 0,
+              offers: [],
+              socials: [],
+              talentContacted: 0,
+              successfulHire: 0,
+              responseRate: 0,
+            };
+
       const createdUser = await this.userModel.create({
         ...payload,
+        ...roleDefaults,
         password: hashedPassword,
         role: role,
         referredBy: referralUserId,
@@ -295,7 +314,7 @@ export class UserService {
 
     return await this.userModel.findByIdAndUpdate(
       user._id,
-      { ...payload, ...(imageUrl && { imageUrl }), ...updateData },
+      { ...(imageUrl && { imageUrl }), ...updateData },
       {
         new: true,
       },

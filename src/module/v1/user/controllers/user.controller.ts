@@ -30,14 +30,15 @@ import { PaginationDto } from '../../repository/dto/repository.dto';
 import { UserVisibilityEnum } from 'src/common/enums/user.enum';
 
 @NoCache()
+@UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @UseGuards(JwtAuthGuard)
+  // @UseGuards(JwtAuthGuard)
   @ResponseMessage(RESPONSE_CONSTANT.USER.GET_CURRENT_USER_SUCCESS)
   @Get('/')
-  async getCurrentUser(@LoggedInUserDecorator() user: { _id: string }) {
+  async getCurrentUser(@LoggedInUserDecorator() user: UserDocument) {
     return await this.userService.getUserById(user._id.toString());
   }
 
@@ -55,6 +56,7 @@ export class UserController {
     @Body() payload: UpdatePasswordDto,
     @LoggedInUserDecorator() user: UserDocument,
   ) {
+    console.log('user', user)
     return await this.userService.updatePassword(user, payload);
   }
 

@@ -27,15 +27,15 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
   }
 
   async createJobPost(
-    organization: UserDocument,
+    organizationId: string,
     payload: CreateJobPostDto,
   ): Promise<OrganizationPostDocument> {
     const jobPost = await this.organizationPostModel.create({
-      organization: organization._id,
+      organization: organizationId,
       ...payload,
     });
 
-    await this.userService.update(organization._id.toString(), {
+    await this.userService.update(organizationId, {
       $inc: {
         totalJobPost: 1,
         activeJobPost: 1,
