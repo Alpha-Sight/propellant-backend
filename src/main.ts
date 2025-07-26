@@ -67,7 +67,9 @@ async function bootstrap() {
   app.use(new AuditLoggerMiddleware().use);
   // app.use(new FilterUserFieldsMiddleware().use);
 
-  await app.listen(serverPort);
+  // await app.listen(serverPort);
+  console.log(`Listening on ${process.env.PORT || 3000} at 0.0.0.0`);
+  await app.listen(process.env.PORT || 3000, '0.0.0.0');
 }
 bootstrap().then(() =>
   console.log(

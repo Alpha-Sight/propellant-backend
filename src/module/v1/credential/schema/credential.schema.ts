@@ -17,6 +17,18 @@ export class Credential {
   })
   user: UserDocument;
 
+  @Prop({
+    type: mongoose.Schema.Types.ObjectId,
+    ref: User.name,
+  })
+  issuer: UserDocument;
+
+  @Prop({
+    type: mongoose.Schema.Types.ObjectId,
+    ref: User.name,
+  })
+  subject: UserDocument;
+
   @Prop({ required: true })
   title: string;
 
@@ -30,7 +42,15 @@ export class Credential {
   url: string;
 
   @Prop({ required: false })
+  imageUrl?: string;
+
+
+  @Prop({ required: false })
   ipfsHash?: string;
+
+
+  @Prop({ required: false })
+  evidenceHash?: string;
 
   @Prop({ required: false })
   description: string;

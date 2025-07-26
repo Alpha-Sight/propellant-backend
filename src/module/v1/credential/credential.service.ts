@@ -13,6 +13,7 @@ import {
   UploadCredentialDto,
   GetAllCredentialsDto,
   UpdateCredentialDto,
+  CredentialResponseDto,
 } from './dto/credential.dto';
 import { PaginationDto } from '../repository/dto/repository.dto';
 import { PinataService } from 'src/common/utils/pinata.util';
@@ -25,29 +26,6 @@ export class CredentialService {
     private repositoryService: RepositoryService,
     private pinataService: PinataService,
   ) {}
-
-  // async uploadCredential(
-  //   user: UserDocument,
-  //   payload: UploadCredentialDto,
-  //   file: Express.Multer.File,
-  // ): Promise<CredentialDocument> {
-  //   try {
-  //     if (!file) {
-  //       throw new BadRequestException(' File not Found');
-  //     }
-  //     const ipfsHash = await this.pinataService.uploadFile(file);
-
-  //     return await this.credentialModel.create({
-  //       user: user._id,
-  //       ipfsHash,
-  //       ...payload,
-  //     });
-  //   } catch (error) {
-  //     throw new Error(
-  //       `Failed to create credential with IPFS: ${error.message}`,
-  //     );
-  //   }
-  // }
 
   async uploadCredential(
     user: UserDocument,
@@ -176,7 +154,9 @@ export class CredentialService {
       throw new NotFoundException('Credential not found');
     }
 
-    return credential;
+    const obj = typeof credential.toObject === 'function' ? credential.toObject() : credential;
+    obj.imageUrl = obj.evidenceHash ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}` : null;
+    return obj;
   }
 
   async deleteCredential(
@@ -238,19 +218,53 @@ export class CredentialService {
       ...paginationQuery
     } = query;
 
-    return await this.repositoryService.paginate<CredentialDocument>({
+    const result = await this.repositoryService.paginate<CredentialDocument>({
       model: this.credentialModel,
       query: paginationQuery,
       options: {
-        user: user._id,
         isDeleted: { $ne: true },
+        issuer: user._id,
         ...(type && { type }),
         ...(verificationStatus && { verificationStatus }),
         ...(verificationLevel && { verificationLevel }),
         ...(category && { category: { $regex: category, $options: 'i' } }),
         ...(visibility !== undefined && { visibility }),
       },
-      populateFields: [{ path: 'user', select: 'username email' }],
+      populateFields: [
+        { path: 'issuer', select: 'username email' },
+        { path: 'subject', select: 'username email' }
+      ],
     });
+
+    // Return all credentials where issuer is user._id (no extra filter)
+    console.log('[CredentialService] result.data:', result.data);
+    try {
+      if (Array.isArray(result?.data) && result.data.length) {
+        let hasInvalid = false;
+        result.data.forEach((credential: any, idx: number) => {
+          console.log(`[CredentialService] credential[${idx}]:`, credential);
+          if (!credential || typeof credential !== 'object' || credential._id === undefined) {
+            hasInvalid = true;
+          }
+        });
+        if (hasInvalid) {
+          console.error('[CredentialService] Invalid credential found, skipping mapping.');
+          result.data = [];
+        } else {
+          result.data = result.data.map((credential: any) => {
+            const obj = typeof credential.toObject === 'function' ? credential.toObject() : credential;
+            return {
+              ...obj,
+              _id: obj._id,
+              imageUrl: obj.evidenceHash ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}` : null,
+            };
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[CredentialService] Error mapping credentials:', err);
+      result.data = [];
+    }
+    return result;
   }
 }
