@@ -5,7 +5,7 @@ import {
   UserRoleEnum,
   UserVisibilityEnum,
 } from '../../../../common/enums/user.enum';
-import { PlanTypeEnum } from 'src/common/enums/premium.enum';
+import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
 import { OrganizationSocialDto } from '../dto/user.dto';
 
 export type UserDocument = User & Document;
@@ -118,8 +118,8 @@ export class User {
   @Prop({ required: false })
   location?: string;
 
-  @Prop({ enum: PlanTypeEnum })
-  plan: PlanTypeEnum;
+  @Prop({ enum: SubscriptionTypeEnum })
+  plan: SubscriptionTypeEnum;
 
   @Prop({ default: false })
   profileCompleted?: boolean;
