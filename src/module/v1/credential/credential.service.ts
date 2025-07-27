@@ -227,7 +227,6 @@ export class CredentialService {
       options: {
         issuer: user._id,
         isDeleted: { $ne: true },
-        issuer: user._id,
         ...(type && { type }),
         ...(verificationStatus && { verificationStatus }),
         ...(verificationLevel && { verificationLevel }),
