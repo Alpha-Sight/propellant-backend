@@ -159,6 +159,7 @@ export class CredentialService {
 
     const obj = typeof credential.toObject === 'function' ? credential.toObject() : credential;
     obj.imageUrl = obj.evidenceHash ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}` : null;
+    obj.visibility = typeof obj.visibility === 'boolean' ? obj.visibility : true;
     return obj;
   }
 
@@ -259,6 +260,7 @@ export class CredentialService {
               ...obj,
               _id: obj._id,
               imageUrl: obj.evidenceHash ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}` : null,
+              visibility: typeof obj.visibility === 'boolean' ? obj.visibility : true,
             };
           });
         }
