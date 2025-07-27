@@ -76,7 +76,10 @@ export class CredentialService {
         ...payload,
       };
 
-      return await this.credentialModel.create(credentialData);
+      const created = await this.credentialModel.create(credentialData);
+      const obj = typeof created.toObject === 'function' ? created.toObject() : created;
+      obj.imageUrl = obj.evidenceHash ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}` : null;
+      return obj;
     } catch (error) {
       throw new Error(
         `Failed to create credential with IPFS: ${error.message}`,
