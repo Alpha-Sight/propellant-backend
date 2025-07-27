@@ -225,7 +225,6 @@ export class CredentialService {
       model: this.credentialModel,
       query: paginationQuery,
       options: {
-        issuer: user._id,
         isDeleted: { $ne: true },
         issuer: user._id,
         ...(type && { type }),
@@ -234,7 +233,7 @@ export class CredentialService {
         ...(category && { category: { $regex: category, $options: 'i' } }),
         ...(visibility !== undefined && { visibility }),
       },
-      populateFields: [
+      populateFields: [ 
         { path: 'issuer', select: 'username email' },
         { path: 'subject', select: 'username email' }
       ],
