@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model, Types } from 'mongoose';
+import { FilterQuery, Model } from 'mongoose';
 import {
   CreateJobPostDto,
   GetAllJobPostsDto,
@@ -13,7 +13,6 @@ import {
 import { RepositoryService } from '../repository/repository.service';
 import { BaseRepositoryService } from '../repository/base.service';
 import { UserService } from '../user/services/user.service';
-import { OrganizationDocument } from '../user/schemas/organization.schema';
 import { UserDocument } from '../user/schemas/user.schema';
 
 @Injectable()
@@ -28,15 +27,15 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
   }
 
   async createJobPost(
-    organization: OrganizationDocument,
+    organizationId: string,
     payload: CreateJobPostDto,
   ): Promise<OrganizationPostDocument> {
     const jobPost = await this.organizationPostModel.create({
-      organization: organization._id,
+      organization: organizationId,
       ...payload,
     });
 
-    await this.userService.updateOrgDetails(organization._id.toString(), {
+    await this.userService.update(organizationId, {
       $inc: {
         totalJobPost: 1,
         activeJobPost: 1,
@@ -84,7 +83,7 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
   }
 
   async getOrganizationJobPosts(
-    organization: OrganizationDocument,
+    organization: UserDocument,
     query: GetAllJobPostsDto,
   ) {
     const {
@@ -133,7 +132,7 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
   }
 
   async updateJobPostById(
-    organization: OrganizationDocument,
+    organization: UserDocument,
     postId: string,
     payload: UpdateJobPostDto,
   ): Promise<OrganizationPostDocument> {
@@ -156,7 +155,7 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
     );
 
     if (existingJobPost.isActive && payload.isActive === false) {
-      await this.userService.updateOrgDetails(organization._id.toString(), {
+      await this.userService.update(organization._id.toString(), {
         $inc: { activeJobPost: -1 },
       });
     }
@@ -180,7 +179,7 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
     }
 
     // Decrement totalJobPosts count
-    await this.userService.updateOrgDetails(organizationId, {
+    await this.userService.update(organizationId, {
       $inc: { totalJobPosts: -1 },
     });
 
@@ -241,66 +240,5 @@ export class OrganizationPostService extends BaseRepositoryService<OrganizationP
     const jobSkills = jobPost.requiredSkills;
 
     return this.userService.getUserBySkills(jobSkills);
-  }
-
-  async getTopSkillsInDemand(organizationId: string) {
-    const pipeline = [
-      {
-        $match: {
-          organization: new Types.ObjectId(organizationId),
-          isDeleted: { $ne: true },
-        },
-      },
-      {
-        $unwind: {
-          path: '$requiredSkills',
-        },
-      },
-      {
-        $group: {
-          _id: '$requiredSkills',
-          count: { $sum: 1 },
-        },
-      },
-      {
-        $sort: {
-          count: -1,
-        } as any,
-      },
-      {
-        $group: {
-          _id: null,
-          skills: {
-            $push: {
-              skill: '$_id',
-              count: '$count',
-            },
-          },
-          maxCount: { $first: '$count' },
-        },
-      },
-      {
-        $unwind: {
-          path: '$skills',
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          skill: '$skills.skill',
-          count: '$skills.count',
-          demandRate: {
-            $multiply: [{ $divide: ['$skills.count', '$maxCount'] }, 100],
-          },
-        },
-      },
-      {
-        $sort: {
-          count: -1,
-        } as any,
-      },
-    ];
-
-    return this.organizationPostModel.aggregate(pipeline);
   }
 }

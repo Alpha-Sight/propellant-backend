@@ -13,9 +13,6 @@ export class LoginDto {
 
   @IsString()
   password: string;
-
-  @IsString()
-  role: string;
 }
 
 export class VerifyEmailDto {

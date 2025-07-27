@@ -8,6 +8,7 @@ import { ResponseTransformerInterceptor } from './common/interceptors/response.i
 import { HttpExceptionFilter } from './common/filter/filter';
 import { AuditLoggerMiddleware } from './common/middleware/auditLogger.middleware';
 import { CleanRequestMiddleware } from './common/middleware/cleanRequest.middleware';
+// import { FilterUserFieldsMiddleware } from './common/middleware/userFields.midleware';
 
 const serverPort = ENVIRONMENT.APP.PORT || 3000;
 
@@ -36,6 +37,7 @@ async function bootstrap() {
    */
   app.useGlobalInterceptors(
     new ResponseTransformerInterceptor(app.get(Reflector)),
+    // new RoleBasedFieldInterceptor(app.get(Reflector)),
     // new CacheInterceptor(app.get(Reflector)), // enable when need cache
   );
 
@@ -63,8 +65,11 @@ async function bootstrap() {
   // Middlewares
   app.use(new CleanRequestMiddleware().use);
   app.use(new AuditLoggerMiddleware().use);
+  // app.use(new FilterUserFieldsMiddleware().use);
 
-  await app.listen(serverPort);
+  // await app.listen(serverPort);
+  console.log(`Listening on ${process.env.PORT || 3000} at 0.0.0.0`);
+  await app.listen(process.env.PORT || 3000, '0.0.0.0');
 }
 bootstrap().then(() =>
   console.log(

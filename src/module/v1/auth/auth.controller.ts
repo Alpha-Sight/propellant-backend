@@ -1,4 +1,12 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CreateUserDto } from '../user/dto/user.dto';
 import { ResponseMessage } from '../../../common/decorators/response.decorator';
@@ -16,6 +24,7 @@ import { RESPONSE_CONSTANT } from '../../../common/constants/response.constant';
 import { NoCache } from '../../../common/decorators/cache.decorator';
 import { LoggedInUserDecorator } from '../../../common/decorators/logged-in-user.decorator';
 import { UserDocument } from '../user/schemas/user.schema';
+import { JwtAuthGuard } from './guards/jwt.guard';
 
 @NoCache()
 @Controller('auth')
@@ -84,6 +93,7 @@ export class AuthController {
     return await this.authService.generateWalletAuthNonce(walletAddress);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Delete('logout')
   async logout(@LoggedInUserDecorator() user: UserDocument) {
     return await this.authService.logout(user._id.toString());

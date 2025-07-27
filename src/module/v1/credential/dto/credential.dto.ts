@@ -1,3 +1,19 @@
+export class CredentialResponseDto {
+  _id: string;
+  credentialId: string;
+  subject: any;
+  issuer: any;
+  name: string;
+  description?: string;
+  credentialType: any;
+  evidenceHash?: string;
+  revocable: boolean;
+  status: string;
+  createdAt: Date;
+  updatedAt?: Date;
+  ipfsHash?: string;
+  imageUrl?: string;
+}
 import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import {
   CredentialCategoryEnum,
@@ -37,9 +53,9 @@ export class UploadCredentialDto {
 }
 
 export class UpdateCredentialDto {
-  @IsNotEmpty()
-  @IsString()
-  credentialId: string;
+  // @IsNotEmpty()
+  // @IsString()
+  // credentialId: string;
 
   @IsString()
   @IsOptional()

@@ -5,7 +5,9 @@ import { Public } from '../../../common/decorators/public.decorator';
 import { Roles } from '../../../common/decorators/role.decorator';
 import { UserRoleEnum } from '../../../common/enums/user.enum';
 import { DeleteFromSettingsDto, UpdateSettingsDto } from './dto/setting.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 
+@UseGuards(JwtAuthGuard)
 @Controller('settings')
 export class SettingController {
   constructor(private readonly storeService: SettingService) {}

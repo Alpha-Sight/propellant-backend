@@ -27,30 +27,26 @@ import { ResponseMessage } from '../../../../common/decorators/response.decorato
 import { LoggedInUserDecorator } from '../../../../common/decorators/logged-in-user.decorator';
 import { UserDocument } from '../schemas/user.schema';
 import { PaginationDto } from '../../repository/dto/repository.dto';
-import { OrganizationDocument } from '../schemas/organization.schema';
-import { Roles } from 'src/common/decorators/role.decorator';
-import { UserRoleEnum } from 'src/common/enums/user.enum';
-import { RoleGuard } from '../../auth/guards/role.guard';
-import { OrganizationVisibilityEnum } from 'src/common/enums/organization.enum';
-import { LoggedInUser } from 'src/common/interfaces/user.interface';
+import { UserVisibilityEnum } from 'src/common/enums/user.enum';
 
 @NoCache()
+@UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @UseGuards(JwtAuthGuard)
+  // @UseGuards(JwtAuthGuard)
   @ResponseMessage(RESPONSE_CONSTANT.USER.GET_CURRENT_USER_SUCCESS)
   @Get('/')
-  async getCurrentUser(@LoggedInUserDecorator() user: { _id: string }) {
-    return await this.userService.getCurrentUserProfile(user._id.toString());
+  async getCurrentUser(@LoggedInUserDecorator() user: UserDocument) {
+    return await this.userService.getUserById(user._id.toString());
   }
 
   @ResponseMessage(RESPONSE_CONSTANT.USER.CHANGE_EMAIL_SUCCESS)
   @Patch('email')
   async updateEmail(
     @Body() payload: ChangeEmailDto,
-    @LoggedInUserDecorator() user: LoggedInUser,
+    @LoggedInUserDecorator() user: UserDocument,
   ) {
     return await this.userService.changeEmail(payload, user);
   }
@@ -58,35 +54,20 @@ export class UserController {
   @Patch('password')
   async updatePassword(
     @Body() payload: UpdatePasswordDto,
-    @LoggedInUserDecorator() user: LoggedInUser,
+    @LoggedInUserDecorator() user: UserDocument,
   ) {
+    console.log('user', user)
     return await this.userService.updatePassword(user, payload);
   }
 
   @UseInterceptors(FileInterceptor('image'))
-  @Patch('profile/talent')
-  async updateTalentProfile(
-    @Body() payload: UpdateTalentProfileDto,
+  @Patch('profile')
+  async updateUserProfile(
+    @Body() payload: UpdateTalentProfileDto | UpdateOrganizationProfileDto,
     @LoggedInUserDecorator() user: UserDocument,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return await this.userService.updateTalentProfile(user, payload, file);
-  }
-
-  @UseGuards(RoleGuard)
-  @Roles(UserRoleEnum.ORGANIZATION)
-  @UseInterceptors(FileInterceptor('image'))
-  @Patch('profile/organization')
-  async updateOrganizationProfile(
-    @Body() payload: UpdateOrganizationProfileDto,
-    @LoggedInUserDecorator() organization: OrganizationDocument,
-    @UploadedFile() file?: Express.Multer.File,
-  ) {
-    return await this.userService.updateOrganizationProfile(
-      organization,
-      payload,
-      file,
-    );
+    return await this.userService.updateProfile(user, payload, file);
   }
 
   @Public()
@@ -105,19 +86,21 @@ export class UserController {
 
   @Patch('visibility')
   async updateVisibility(
-    @LoggedInUserDecorator() organization: OrganizationDocument,
-    @Body('visibility') visibility: OrganizationVisibilityEnum,
-  ): Promise<OrganizationDocument> {
-    return this.userService.updateOrganizationUserVisibility(
-      organization._id.toString(),
-      visibility,
-    );
+    @LoggedInUserDecorator() user: UserDocument,
+    @Body('visibility') visibility: UserVisibilityEnum,
+  ): Promise<UserDocument> {
+    return this.userService.updateUserVisibility(user, visibility);
+  }
+
+  @Get('organization/top-skills')
+  async getTopSkillsInDemand(
+    @LoggedInUserDecorator() organization: UserDocument,
+  ) {
+    return this.userService.getTopSkillsInDemand(organization._id.toString());
   }
 
   @Delete()
-  async deleteOrganization(
-    @LoggedInUserDecorator() organization: OrganizationDocument,
-  ): Promise<{ message: string }> {
-    return this.userService.deleteOrganizationUser(organization._id.toString());
+  async deleteUserProfile(@LoggedInUserDecorator() user: UserDocument) {
+    return this.userService.deleteUserProfile(user);
   }
 }

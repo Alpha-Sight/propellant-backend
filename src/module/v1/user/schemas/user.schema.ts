@@ -3,14 +3,94 @@ import mongoose, { Document } from 'mongoose';
 import {
   AuthSourceEnum,
   UserRoleEnum,
+  UserVisibilityEnum,
 } from '../../../../common/enums/user.enum';
-import { PlanTypeEnum } from 'src/common/enums/premium.enum';
+import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
+import { OrganizationSocialDto } from '../dto/user.dto';
 
 export type UserDocument = User & Document;
 
 @Schema({ timestamps: true })
 export class User {
-  // user profile properties
+  // Talent profile properties
+  @Prop({ required: false, trim: true, index: true })
+  fullname: string;
+
+  @Prop({ required: false })
+  bio: string;
+
+  @Prop({ required: false })
+  linkedin?: string;
+
+  @Prop({ required: false })
+  github?: string;
+
+  @Prop({ required: false })
+  twitter?: string;
+
+  @Prop({ required: false })
+  instagram?: string;
+
+  @Prop({ required: false, type: [String], default: undefined })
+  skills?: string[];
+
+  @Prop({ index: true })
+  referralCode: string;
+
+  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: User.name })
+  referredBy: UserDocument;
+
+  @Prop()
+  totalReferrals: number;
+
+  // organization profile properties
+  @Prop({ required: false })
+  companyName?: string;
+
+  @Prop({ required: false })
+  tagline?: string;
+
+  @Prop({ required: false })
+  description?: string;
+
+  @Prop({ required: false })
+  industry?: string;
+
+  @Prop({ required: false })
+  companySize?: string;
+
+  @Prop({ required: false, type: [String], default: undefined })
+  offers?: string[];
+
+  @Prop({ required: false, type: [OrganizationSocialDto], default: undefined })
+  socials?: OrganizationSocialDto[];
+
+  @Prop()
+  totalJobPost: number;
+
+  @Prop()
+  talentContacted: number;
+
+  @Prop()
+  activePost: number;
+
+  @Prop()
+  activeConversations: number;
+
+  @Prop()
+  responseRate: number;
+
+  @Prop()
+  successfulHire: number;
+
+  @Prop({
+    type: String,
+    enum: UserVisibilityEnum,
+    default: UserVisibilityEnum.PUBLIC,
+  })
+  visibility: UserVisibilityEnum;
+
+  // general profile properties
   @Prop({ unique: true, index: true })
   email: string;
 
@@ -22,12 +102,6 @@ export class User {
 
   @Prop({ required: false, default: '' })
   profilePhoto: string;
-
-  @Prop({ required: false, trim: true, index: true })
-  fullname: string;
-
-  @Prop({ required: false })
-  bio: string;
 
   @Prop({ required: false })
   phone: string;
@@ -42,69 +116,16 @@ export class User {
   authSource: AuthSourceEnum;
 
   @Prop({ required: false })
-  linkedin?: string;
-
-  @Prop({ required: false })
-  github?: string;
-
-  @Prop({ required: false })
-  twitter?: string;
-
-  @Prop({ required: false })
-  instagram?: string;
-
-  @Prop({ required: false, type: [String] })
-  skills?: string[];
-
-  @Prop({ required: false })
   location?: string;
 
-  // // organization profile properties
-  // @Prop({ required: false })
-  // companyName?: string;
-
-  // @Prop({ required: false })
-  // tagline?: string;
-
-  // @Prop({ required: false })
-  // description?: string;
-
-  // @Prop({ required: false })
-  // industry?: string;
-
-  // @Prop({ required: false })
-  // companySize?: string;
-
-  // @Prop({ required: false, type: [String] })
-  // offers?: string[];
-
-  // @Prop({ required: false, type: [OrganizationSocialDto] })
-  // socials?: OrganizationSocialDto[];
-
-  // @Prop({ default: 0 })
-  // totalJobPost: number;
-
-  // general profile properties
-  @Prop({ default: null, index: true })
-  referralCode: string;
-
-  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: User.name })
-  referredBy: UserDocument;
-
-  @Prop({ default: 0 })
-  totalReferrals: number;
-
-  @Prop({ enum: PlanTypeEnum })
-  plan: PlanTypeEnum;
+  @Prop({ enum: SubscriptionTypeEnum })
+  plan: SubscriptionTypeEnum;
 
   @Prop({ default: false })
   profileCompleted?: boolean;
 
   @Prop({ default: null })
   lastLoginAt: Date;
-
-  @Prop({ default: false })
-  isNewUser: boolean;
 
   @Prop({ default: false })
   termsAndConditionsAccepted: boolean;
