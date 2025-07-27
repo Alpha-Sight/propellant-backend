@@ -5,7 +5,7 @@ import { SkillLevelEnum } from 'src/common/enums/cv.enum';
 
 export type CVDocument = CV & Document;
 
-@Schema()
+@Schema({ _id: false })
 export class Experience {
   @Prop({ required: true })
   company: string;
@@ -32,7 +32,7 @@ export class Experience {
   isCurrentRole?: boolean;
 }
 
-@Schema()
+@Schema({ _id: false })
 export class Education {
   @Prop({ required: true })
   institution: string;
@@ -68,7 +68,7 @@ export class Skill {
   category?: string;
 }
 
-@Schema()
+@Schema({ _id: false })
 export class Certification {
   @Prop({ required: true })
   name: string;
@@ -89,7 +89,7 @@ export class Certification {
   credentialUrl?: string;
 }
 
-@Schema()
+@Schema({ _id: false })
 export class Project {
   @Prop({ required: true })
   name: string;
@@ -113,7 +113,7 @@ export class Project {
   github?: string;
 }
 
-@Schema()
+@Schema({ _id: false })
 export class Socials {
   @Prop({ default: '' })
   twitter?: string;
