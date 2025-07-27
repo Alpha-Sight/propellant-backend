@@ -121,7 +121,7 @@ export class CredentialService {
 
     const existingCredential = await this.credentialModel.findOne({
       _id: _id,
-      user: user._id,
+      issuer: user._id,
     });
 
     if (!existingCredential) {
@@ -169,7 +169,7 @@ export class CredentialService {
     try {
       const credential = await this.credentialModel.findOne({
         _id: credentialId,
-        user: user._id,
+        issuer: user._id,
       });
 
       if (!credential) {
@@ -225,6 +225,7 @@ export class CredentialService {
       model: this.credentialModel,
       query: paginationQuery,
       options: {
+        issuer: user._id,
         isDeleted: { $ne: true },
         issuer: user._id,
         ...(type && { type }),
