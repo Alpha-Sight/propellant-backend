@@ -42,52 +42,64 @@ export class PremiumService {
     userId: string,
     amountPaid: number,
     paymentObject: any,
+    plan: SubscriptionTypeEnum,
   ) {
     const user = await this.userService.findOneById(userId);
 
     if (!user) {
-      throw new BadRequestException('User not found');
+      throw new BadRequestException(
+        'Invalid payment metadata: missing user or plan',
+      );
     }
+
+    console.log('Processing upgrade for:', { user, plan, amountPaid });
 
     // Create or find a pending transaction for the premium upgrade
     let transaction = await this.transactionService.findOneQuery({
       options: {
         user: userId,
-        type: TransactionTypeEnum.Premium,
+        plan,
+        type: TransactionTypeEnum.SUBSCRIPTION,
         status: TransactionStatusEnum.PENDING,
       },
     });
 
-    if (!transaction) {
-      throw new BadRequestException(
-        'User does not have a premium subscription',
-      );
-    }
+    // if (!transaction) {
+    //   throw new BadRequestException(
+    //     'User does not have a premium subscription',
+    //   );
+    // }
 
     if (!transaction) {
       transaction = await this.transactionService.create({
         user: userId,
         status: TransactionStatusEnum.PENDING,
         totalAmount: paymentObject.amount,
-        description: 'premium plan subscription payment',
-        type: TransactionTypeEnum.Premium,
+        description: 'subscription plan subscription payment',
+        type: TransactionTypeEnum.SUBSCRIPTION,
+        plan: plan,
         metadata: paymentObject,
         settlement: 0,
         paymentMethod: paymentObject?.provider,
+        reference: `upgrade-${user._id}-${Date.now()}`,
       });
       if (!transaction) {
         return;
       }
     }
-
+    console.log('transaction', transaction);
     let sessionCommitted = false;
     const session = await this.transactionService.startSession();
     session.startTransaction();
 
     try {
-      await this.userService.update(user._id.toString(), {
-        plan: SubscriptionTypeEnum.BASIC,
-      });
+      await this.userService.update(
+        user._id.toString(),
+        {
+          plan,
+        },
+        // session,
+      );
       await this.transactionService.updateQuery(
         { _id: transaction._id },
         {
@@ -103,24 +115,26 @@ export class PremiumService {
       await Promise.all([
         this.mailService.sendEmail(
           user.email,
-          'Premium plan Successful',
+          'Subscription plan Successfully upgraded',
           premiumPlanNotificationEmailTemplate({
             user: [user.email.split('@')[0]],
             reference: transaction._id.toString(),
             upgradeDate: new Date().toLocaleDateString(),
             totalAmount: amountPaid,
             currencySymbol: '₦',
+            plan,
           }),
         ),
         this.mailService.sendEmail(
           'propellant@gmail.com',
-          'New Premium Subscription',
+          'New Plan Subscription',
           premiumPlanNotificationEmailTemplate({
             user: [user.email.split('@')[0]],
             reference: transaction._id.toString(),
             upgradeDate: new Date().toLocaleDateString(),
             totalAmount: amountPaid,
             currencySymbol: '₦',
+            plan,
           }),
         ),
       ]);
@@ -140,6 +154,18 @@ export class PremiumService {
       throw new NotFoundException('User not found');
     }
 
+    if (payload.plan === SubscriptionTypeEnum.FREE) {
+      // If the user selects the free plan, update their plan and return
+      await this.userService.update(user._id.toString(), {
+        plan: SubscriptionTypeEnum.FREE,
+      });
+      return {
+        message: 'You have successfully selected the free plan.',
+        plan: SubscriptionTypeEnum.FREE,
+      };
+    }
+    // If the user selects a paid plan, proceed with payment initialization
+
     const settings = (await this.settingService.getSettings()) as ISettings;
     const subscriptionPriceMap = settings?.app?.subscriptionPrice;
 
@@ -153,26 +179,31 @@ export class PremiumService {
       );
     }
 
-    return this.constructPaymentPayloadForUpgrade(user, Number(planAmount));
+    const transaction = await this.transactionService.create({
+      user: user._id.toString(),
+      totalAmount: planAmount,
+      status: TransactionStatusEnum.PENDING,
+      description: `Upgrade to ${selectedPlan}`,
+      type: TransactionTypeEnum.SUBSCRIPTION,
+      paymentMethod: 'paystack',
+      reference: `upgrade-${user._id}-${Date.now()}`,
+      plan: selectedPlan,
+    });
+
+    return this.constructPaymentPayloadForUpgrade(
+      user,
+      Number(planAmount),
+      payload.plan,
+      transaction.reference,
+    );
   }
 
-  // async initiatePremiumUpgrade(user: UserDocument) {
-
-  //   const paymentUrl =
-  //     await this.paymentService.initializePaymentByActiveProvider({
-  //       reference: `upgrade-${user._id}-${Date.now()}`,
-  //       amount: premiumPricing,
-  //       email: user.email,
-  //       metadata: {
-  //         user: user._id.toString(),
-  //         upgradeType: 'premium',
-  //       },
-  //     });
-
-  //   return { paymentUrl };
-  // }
-
-  async constructPaymentPayloadForUpgrade(user: UserDocument, amount: number) {
+  async constructPaymentPayloadForUpgrade(
+    user: UserDocument,
+    amount: number,
+    plan: SubscriptionTypeEnum,
+    reference: string,
+  ) {
     const activePaymentProvider = await this.paymentService.findOneQuery({
       options: { active: true },
     });
@@ -194,11 +225,14 @@ export class PremiumService {
               amount,
               email: user.email,
               metadata: {
-                user: user._id.toString(),
+                userId: user._id.toString(),
+                plan,
                 upgradeType: 'premium',
+                transactionId: `txn-${user._id}-${Date.now()}`, // optional
               },
             } as IBaseInitializePayment,
           );
+
         break;
       case PaymentProvidersEnum.FLUTTERWAVE:
         paymentUrl =

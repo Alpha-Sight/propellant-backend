@@ -1,9 +1,11 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { TransactionService } from './transaction.service';
 import { UserDocument } from '../user/schemas/user.schema';
 import { GetUserTransactionsDto } from './dto/transaction.dto';
 import { LoggedInUserDecorator } from 'src/common/decorators/logged-in-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 
+@UseGuards(JwtAuthGuard)
 @Controller('transactions')
 export class TransactionController {
   constructor(private readonly transactionService: TransactionService) {}

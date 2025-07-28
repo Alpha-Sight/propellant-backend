@@ -99,6 +99,8 @@ export class UserService {
         role === UserRoleEnum.TALENT
           ? {
               totalReferrals: 0,
+              totalCredentialUploads: 0,
+              totalCvDownload: 0,
               referredBy: null,
               skills: [],
             }

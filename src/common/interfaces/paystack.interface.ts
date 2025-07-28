@@ -18,6 +18,7 @@ export interface Data {
   metadata: {
     transactionId?: string;
     userId?: string;
+    plan?: string;
   };
   log: Log;
   fees: null;

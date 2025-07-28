@@ -17,6 +17,7 @@ import {
 } from './dto/credential.dto';
 import { PaginationDto } from '../repository/dto/repository.dto';
 import { PinataService } from 'src/common/utils/pinata.util';
+import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
 
 @Injectable()
 export class CredentialService {
@@ -36,6 +37,13 @@ export class CredentialService {
       if (!user || !user._id) {
         throw new BadRequestException('User not found or invalid');
       }
+      if (
+        user.plan === SubscriptionTypeEnum.FREE &&
+        user.totalCredentialUploads >= 1
+      )
+        throw new BadRequestException(
+          'freemium users can only upload one credential per month',
+        );
       if (!file) {
         throw new BadRequestException('File not Found');
       }
@@ -77,8 +85,11 @@ export class CredentialService {
       };
 
       const created = await this.credentialModel.create(credentialData);
-      const obj = typeof created.toObject === 'function' ? created.toObject() : created;
-      obj.imageUrl = obj.evidenceHash ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}` : null;
+      const obj =
+        typeof created.toObject === 'function' ? created.toObject() : created;
+      obj.imageUrl = obj.evidenceHash
+        ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}`
+        : null;
       return obj;
     } catch (error) {
       throw new Error(
@@ -157,9 +168,15 @@ export class CredentialService {
       throw new NotFoundException('Credential not found');
     }
 
-    const obj = typeof credential.toObject === 'function' ? credential.toObject() : credential;
-    obj.imageUrl = obj.evidenceHash ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}` : null;
-    obj.visibility = typeof obj.visibility === 'boolean' ? obj.visibility : true;
+    const obj =
+      typeof credential.toObject === 'function'
+        ? credential.toObject()
+        : credential;
+    obj.imageUrl = obj.evidenceHash
+      ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}`
+      : null;
+    obj.visibility =
+      typeof obj.visibility === 'boolean' ? obj.visibility : true;
     return obj;
   }
 
@@ -236,7 +253,7 @@ export class CredentialService {
       },
       populateFields: [
         { path: 'issuer', select: 'username email' },
-        { path: 'subject', select: 'username email' }
+        { path: 'subject', select: 'username email' },
       ],
     });
 
@@ -247,21 +264,33 @@ export class CredentialService {
         let hasInvalid = false;
         result.data.forEach((credential: any, idx: number) => {
           console.log(`[CredentialService] credential[${idx}]:`, credential);
-          if (!credential || typeof credential !== 'object' || credential._id === undefined) {
+          if (
+            !credential ||
+            typeof credential !== 'object' ||
+            credential._id === undefined
+          ) {
             hasInvalid = true;
           }
         });
         if (hasInvalid) {
-          console.error('[CredentialService] Invalid credential found, skipping mapping.');
+          console.error(
+            '[CredentialService] Invalid credential found, skipping mapping.',
+          );
           result.data = [];
         } else {
           result.data = result.data.map((credential: any) => {
-            const obj = typeof credential.toObject === 'function' ? credential.toObject() : credential;
+            const obj =
+              typeof credential.toObject === 'function'
+                ? credential.toObject()
+                : credential;
             return {
               ...obj,
               _id: obj._id,
-              imageUrl: obj.evidenceHash ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}` : null,
-              visibility: typeof obj.visibility === 'boolean' ? obj.visibility : true,
+              imageUrl: obj.evidenceHash
+                ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}`
+                : null,
+              visibility:
+                typeof obj.visibility === 'boolean' ? obj.visibility : true,
             };
           });
         }

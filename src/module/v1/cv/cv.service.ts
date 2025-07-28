@@ -17,11 +17,11 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { HttpService } from '@nestjs/axios';
 import axios from 'axios';
+import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
 
 @Injectable()
 export class CvService {
   private readonly logger = new Logger(CvService.name);
-  private readonly AI_URL = 'https://propellant.fly.dev/api/cv-analysis';
 
   constructor(
     private mailService: MailService,
@@ -133,11 +133,106 @@ export class CvService {
 
   // import axios from 'axios';
 
-  async optimizeCV(userCvData: any) {
-    try {
-      if (!userCvData) throw new Error('userCvData is required');
+  // async optimizeCV(user: UserDocument, userCvData: any) {
+  //   try {
+  //     if (user.plan === SubscriptionTypeEnum.FREE) {
+  //       throw new BadRequestException(
+  //         'AI optimization is only available for premium users',
+  //       );
+  //     }
+  //     // Validate input
+  //     if (!userCvData) throw new Error('userCvData is required');
 
-      // Ensure arrays exist
+  //     // Ensure arrays exist
+  //     const skillsInput = Array.isArray(userCvData.skills)
+  //       ? userCvData.skills
+  //       : [];
+  //     const workInput = Array.isArray(userCvData.workExperience)
+  //       ? userCvData.workExperience
+  //       : [];
+
+  //     // Map skills
+  //     const skills = skillsInput.map((skill, index) => ({
+  //       id: `${index}`,
+  //       name: skill.name || '',
+  //       level: skill.level || '',
+  //     }));
+
+  //     // Map experiences
+  //     const experiences = workInput.map((exp, index) => ({
+  //       id: `${index}`,
+  //       company: exp.company || '',
+  //       position: exp.position || '',
+  //       startDate: exp.startDate || '',
+  //       endDate: exp.endDate || '',
+  //       current: !!exp.isCurrentRole,
+  //       location: exp.location || '',
+  //       description: exp.description || '',
+  //       achievements: exp.achievements || [], // Pass if present, else empty
+  //     }));
+
+  //     // Prepare AI payload
+  //     const aiPayload = {
+  //       skills,
+  //       jobDescription: userCvData.professionalSummary || '',
+  //       experiences,
+  //     };
+
+  //     // Optional: Log payload for debugging
+  //     console.log(
+  //       '[CvService] Sending payload to AI:',
+  //       JSON.stringify(aiPayload, null, 2),
+  //     );
+
+  //     // Send to AI service
+  //     const { data } = await axios.post(
+  //       'https://propellant.fly.dev/api/cv-analysis',
+  //       aiPayload,
+  //     );
+
+  //     console.log('[CvService] AI optimization successful');
+  //     return {
+  //       ...userCvData,
+  //       professionalSummary:
+  //         data.professionalSummary ?? userCvData.professionalSummary,
+  //       skills: (data.skills || []).map(({ name, level }) => ({ name, level })),
+  //       workExperience: (data.experiences || []).map((exp) => ({
+  //         company: exp.company,
+  //         position: exp.position,
+  //         startDate: exp.startDate,
+  //         endDate: exp.endDate,
+  //         isCurrentRole: exp.current,
+  //         location: exp.location,
+  //         description: exp.description,
+  //         achievements: exp.achievements || [],
+  //       })),
+  //     };
+  //   } catch (error) {
+  //     console.error('[CvService] AI Optimization Failed', error.message);
+  //     if (error.response) {
+  //       console.error('[CvService] AI Error Response:', error.response.data);
+  //     }
+  //     throw new Error('AI Optimization failed. Please try again.');
+  //   }
+  // }
+
+  async optimizeCV(user: UserDocument, userCvData: any) {
+    const { jobDescription, ...payload } = userCvData;
+    try {
+      // Step 1: Premium check
+      // if (user.plan === SubscriptionTypeEnum.FREE) {
+      //   throw new BadRequestException(
+      //     'AI optimization is only available for premium users',
+      //   );
+      // }
+
+      // Step 2: Validate input
+      if (!userCvData) throw new Error('userCvData is required');
+      if (!jobDescription)
+        throw new BadRequestException(
+          'Job description is required for AI optimization',
+        );
+
       const skillsInput = Array.isArray(userCvData.skills)
         ? userCvData.skills
         : [];
@@ -145,54 +240,50 @@ export class CvService {
         ? userCvData.workExperience
         : [];
 
-      // Map skills
+      // Step 3: Prepare payload for AI
       const skills = skillsInput.map((skill, index) => ({
-        id: `${index}`,
+        id: `${index + 1}`,
         name: skill.name || '',
         level: skill.level || '',
       }));
 
-      // Map experiences
       const experiences = workInput.map((exp, index) => ({
-        id: `${index}`,
+        id: `${index + 1}`,
         company: exp.company || '',
         position: exp.position || '',
+        title: exp.title || exp.position || '',
         startDate: exp.startDate || '',
         endDate: exp.endDate || '',
         current: !!exp.isCurrentRole,
         location: exp.location || '',
         description: exp.description || '',
-        achievements: exp.achievements || [], // Pass if present, else empty
+        achievements: exp.achievements || [],
       }));
 
-      // Prepare AI payload
       const aiPayload = {
+        jobDescription,
         skills,
-        jobDescription: userCvData.professionalSummary || '',
         experiences,
       };
 
-      // Optional: Log payload for debugging
       console.log(
         '[CvService] Sending payload to AI:',
         JSON.stringify(aiPayload, null, 2),
       );
 
-      // Send to AI service
-      const { data } = await axios.post(
-        'https://propellant.fly.dev/api/cv-analysis',
-        aiPayload,
-      );
+      // Step 4: Send to AI
+      const { data } = await axios.post(ENVIRONMENT.AI.URL, aiPayload);
 
-      console.log('[CvService] AI optimization successful');
+      // Step 5: Merge AI response into original user data
       return {
-        ...userCvData,
+        ...payload,
         professionalSummary:
-          data.professionalSummary ?? userCvData.professionalSummary,
+          data.professionalSummary || userCvData.professionalSummary,
         skills: (data.skills || []).map(({ name, level }) => ({ name, level })),
         workExperience: (data.experiences || []).map((exp) => ({
           company: exp.company,
           position: exp.position,
+          title: exp.title,
           startDate: exp.startDate,
           endDate: exp.endDate,
           isCurrentRole: exp.current,
@@ -223,6 +314,11 @@ export class CvService {
     if (!payload?.firstName || !payload.lastName) {
       throw new BadRequestException('Missing required fields');
     }
+
+    if (user.plan === SubscriptionTypeEnum.FREE && user.totalCvDownload >= 1)
+      throw new BadRequestException(
+        'freemium users can only upload one credential per month',
+      );
 
     const html =
       template === CVTemplateEnum.CLASSIC
