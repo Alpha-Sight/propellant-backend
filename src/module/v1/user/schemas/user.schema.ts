@@ -118,8 +118,14 @@ export class User {
   @Prop({ required: false })
   location?: string;
 
-  @Prop({ enum: SubscriptionTypeEnum })
+  @Prop({ enum: SubscriptionTypeEnum, default: SubscriptionTypeEnum.FREE })
   plan: SubscriptionTypeEnum;
+
+  @Prop({ required: false })
+  totalCredentialUploads: number;
+
+  @Prop({ required: false })
+  totalCvDownload: number;
 
   @Prop({ default: false })
   profileCompleted?: boolean;
