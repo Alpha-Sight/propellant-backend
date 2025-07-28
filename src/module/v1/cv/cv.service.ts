@@ -18,6 +18,7 @@ import { Model } from 'mongoose';
 import { HttpService } from '@nestjs/axios';
 import axios from 'axios';
 import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
+import { UserService } from '../user/services/user.service';
 
 @Injectable()
 export class CvService {
@@ -28,6 +29,7 @@ export class CvService {
     private readonly httpService: HttpService,
     @InjectModel(CV.name)
     private cvModel: Model<CVDocument>,
+    private userService: UserService,
   ) {}
 
   async generateAndSendCV(
@@ -317,7 +319,7 @@ export class CvService {
 
     if (user.plan === SubscriptionTypeEnum.FREE && user.totalCvDownload >= 1)
       throw new BadRequestException(
-        'freemium users can only upload one credential per month',
+        'Freemium users are limited to one CV download per month. Upgrade your plan to unlock unlimited downloads.',
       );
 
     const html =
@@ -336,7 +338,9 @@ export class CvService {
     const fileName = `${payload.firstName}_${payload.lastName}_CV.pdf`;
 
     const pdfBuffer = await PDFHelper.generatePDFBufferFromHTML(html);
-
+    await this.userService.update(user._id.toString(), {
+      $inc: { totalCvDownload: 1 },
+    });
     return {
       success: true,
       message: 'CV generated successfully',

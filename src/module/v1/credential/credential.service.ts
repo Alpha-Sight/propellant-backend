@@ -18,6 +18,7 @@ import {
 import { PaginationDto } from '../repository/dto/repository.dto';
 import { PinataService } from 'src/common/utils/pinata.util';
 import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
+import { UserService } from '../user/services/user.service';
 
 @Injectable()
 export class CredentialService {
@@ -26,6 +27,7 @@ export class CredentialService {
     private credentialModel: Model<CredentialDocument>,
     private repositoryService: RepositoryService,
     private pinataService: PinataService,
+    private userService: UserService,
   ) {}
 
   async uploadCredential(
@@ -42,7 +44,7 @@ export class CredentialService {
         user.totalCredentialUploads >= 1
       )
         throw new BadRequestException(
-          'freemium users can only upload one credential per month',
+          ' you’re limited to one credential upload per month. Upgrade your plan to enjoy unlimited uploads.',
         );
       if (!file) {
         throw new BadRequestException('File not Found');
@@ -90,6 +92,9 @@ export class CredentialService {
       obj.imageUrl = obj.evidenceHash
         ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}`
         : null;
+      await this.userService.update(user._id.toString(), {
+        $inc: { totalCredentialUploads: 1 },
+      });
       return obj;
     } catch (error) {
       throw new Error(
@@ -201,7 +206,9 @@ export class CredentialService {
         { _id: credentialId },
         { isDeleted: true },
       );
-
+      await this.userService.update(user._id.toString(), {
+        $inc: { totalCredentialUploads: -1 },
+      });
       // Unpin from IPFS if it exists
       if (credential.ipfsHash) {
         await this.pinataService.unpinFile(credential.ipfsHash);
