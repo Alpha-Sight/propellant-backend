@@ -5,6 +5,7 @@ import { CredentialService } from './credential.service';
 import { CredentialController } from './credential.controller';
 import { Credential, CredentialSchema } from './schema/credential.schema';
 import { PinataService } from 'src/common/utils/pinata.util';
+import { UserModule } from '../user/user.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { PinataService } from 'src/common/utils/pinata.util';
       { name: Credential.name, schema: CredentialSchema },
     ]),
     RepositoryModule,
+    UserModule,
   ],
   controllers: [CredentialController],
   providers: [CredentialService, PinataService],

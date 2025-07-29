@@ -49,7 +49,7 @@ export class CredentialService {
       if (!file) {
         throw new BadRequestException('File not Found');
       }
-      const ipfsHash = await this.pinataService.uploadFile(file);
+      const ipfsHash = await this.pinataService.uploadFile(file, 'credential');
 
       // Set defaults for required fields
       const now = new Date();
@@ -150,7 +150,10 @@ export class CredentialService {
         await this.pinataService.unpinFile(existingCredential.ipfsHash);
       }
 
-      const newIpfsHash = await this.pinataService.uploadFile(file);
+      const newIpfsHash = await this.pinataService.uploadFile(
+        file,
+        'credential',
+      );
       existingCredential.ipfsHash = newIpfsHash;
     }
 

@@ -111,113 +111,6 @@ export class CvService {
     return draft ?? {};
   }
 
-  // async optimizeCV(payload: GenerateCVDto): Promise<GenerateCVDto> {
-  //   try {
-  //     const { data } = await firstValueFrom(
-  //       this.httpService.post(this.AI_URL, {
-  //         skills: payload.skills || [],
-  //         jobDescription: payload.professionalSummary || '',
-  //         experiences: payload.workExperience || [],
-  //       }),
-  //     );
-
-  //     return {
-  //       ...payload,
-  //       workExperience: data.experiences ?? payload.workExperience,
-  //       skills: data.skills ?? payload.skills,
-  //       professionalSummary: data.jobDescription ?? payload.professionalSummary,
-  //     };
-  //   } catch (err) {
-  //     this.logger.error('AI Optimization Failed', err);
-  //     return payload;
-  //   }
-  // }
-
-  // import axios from 'axios';
-
-  // async optimizeCV(user: UserDocument, userCvData: any) {
-  //   try {
-  //     if (user.plan === SubscriptionTypeEnum.FREE) {
-  //       throw new BadRequestException(
-  //         'AI optimization is only available for premium users',
-  //       );
-  //     }
-  //     // Validate input
-  //     if (!userCvData) throw new Error('userCvData is required');
-
-  //     // Ensure arrays exist
-  //     const skillsInput = Array.isArray(userCvData.skills)
-  //       ? userCvData.skills
-  //       : [];
-  //     const workInput = Array.isArray(userCvData.workExperience)
-  //       ? userCvData.workExperience
-  //       : [];
-
-  //     // Map skills
-  //     const skills = skillsInput.map((skill, index) => ({
-  //       id: `${index}`,
-  //       name: skill.name || '',
-  //       level: skill.level || '',
-  //     }));
-
-  //     // Map experiences
-  //     const experiences = workInput.map((exp, index) => ({
-  //       id: `${index}`,
-  //       company: exp.company || '',
-  //       position: exp.position || '',
-  //       startDate: exp.startDate || '',
-  //       endDate: exp.endDate || '',
-  //       current: !!exp.isCurrentRole,
-  //       location: exp.location || '',
-  //       description: exp.description || '',
-  //       achievements: exp.achievements || [], // Pass if present, else empty
-  //     }));
-
-  //     // Prepare AI payload
-  //     const aiPayload = {
-  //       skills,
-  //       jobDescription: userCvData.professionalSummary || '',
-  //       experiences,
-  //     };
-
-  //     // Optional: Log payload for debugging
-  //     console.log(
-  //       '[CvService] Sending payload to AI:',
-  //       JSON.stringify(aiPayload, null, 2),
-  //     );
-
-  //     // Send to AI service
-  //     const { data } = await axios.post(
-  //       'https://propellant.fly.dev/api/cv-analysis',
-  //       aiPayload,
-  //     );
-
-  //     console.log('[CvService] AI optimization successful');
-  //     return {
-  //       ...userCvData,
-  //       professionalSummary:
-  //         data.professionalSummary ?? userCvData.professionalSummary,
-  //       skills: (data.skills || []).map(({ name, level }) => ({ name, level })),
-  //       workExperience: (data.experiences || []).map((exp) => ({
-  //         company: exp.company,
-  //         position: exp.position,
-  //         startDate: exp.startDate,
-  //         endDate: exp.endDate,
-  //         isCurrentRole: exp.current,
-  //         location: exp.location,
-  //         description: exp.description,
-  //         achievements: exp.achievements || [],
-  //       })),
-  //     };
-  //   } catch (error) {
-  //     console.error('[CvService] AI Optimization Failed', error.message);
-  //     if (error.response) {
-  //       console.error('[CvService] AI Error Response:', error.response.data);
-  //     }
-  //     throw new Error('AI Optimization failed. Please try again.');
-  //   }
-  // }
-
   async optimizeCV(user: UserDocument, userCvData: any) {
     const { jobDescription, ...payload } = userCvData;
     try {
@@ -317,10 +210,10 @@ export class CvService {
       throw new BadRequestException('Missing required fields');
     }
 
-    if (user.plan === SubscriptionTypeEnum.FREE && user.totalCvDownload >= 1)
-      throw new BadRequestException(
-        'Freemium users are limited to one CV download per month. Upgrade your plan to unlock unlimited downloads.',
-      );
+    // if (user.plan === SubscriptionTypeEnum.FREE && user.totalCvDownload >= 1)
+    //   throw new BadRequestException(
+    //     'Freemium users are limited to one CV download per month. Upgrade your plan to unlock unlimited downloads.',
+    //   );
 
     const html =
       template === CVTemplateEnum.CLASSIC

@@ -305,7 +305,10 @@ export class UserService {
       //   buffer,
       // };
 
-      const uploadResult = await this.pinataService.uploadFile(file);
+      const uploadResult = await this.pinataService.uploadFile(
+        file,
+        'profileImage',
+      );
       imageUrl = uploadResult;
     }
 
