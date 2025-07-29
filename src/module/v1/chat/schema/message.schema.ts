@@ -6,7 +6,6 @@ import {
   MessageMediaTypeEnum,
   MessageStatus,
 } from 'src/common/enums/message.enum';
-import { ReactionEnum } from 'src/common/enums/reaction.enum';
 
 @Schema({ timestamps: false })
 export class MessageMedia {
@@ -30,8 +29,8 @@ export class Message {
   @Prop()
   content: string;
 
-  @Prop({ type: String, enum: ReactionEnum })
-  reaction?: ReactionEnum;
+  // @Prop({ type: String, enum: ReactionEnum })
+  // reaction?: ReactionEnum;
 
   @Prop({ default: [] })
   medias?: MessageMedia[];
@@ -45,8 +44,8 @@ export class Message {
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: Message.name })
   replyTo?: MessageDocument;
 
-  @Prop({ type: String })
-  voiceMessageDuration?: string;
+  // @Prop({ type: String })
+  // voiceMessageDuration?: string;
 
   @Prop({ enum: MessageStatus, default: MessageStatus.SENT })
   status: MessageStatus;

@@ -5,12 +5,14 @@ import { CvController } from './cv.controller';
 import { HttpModule } from '@nestjs/axios';
 import { MongooseModule } from '@nestjs/mongoose';
 import { CV, CVSchema } from './schema/cv.schema';
+import { UserModule } from '../user/user.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: CV.name, schema: CVSchema }]),
     HttpModule,
     MailModule,
+    UserModule,
   ],
   controllers: [CvController],
   providers: [CvService],
