@@ -11,6 +11,7 @@ import {
   TransactionStatusEnum,
   TransactionTypeEnum,
 } from '../../../../common/enums/transaction.enum';
+import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
 
 export class CreateTransactionDto {
   @IsNotEmpty()
@@ -21,9 +22,17 @@ export class CreateTransactionDto {
   @IsEnum(TransactionTypeEnum)
   type: TransactionTypeEnum;
 
+  @IsNotEmpty()
+  @IsEnum(SubscriptionTypeEnum)
+  plan: SubscriptionTypeEnum;
+
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  reference?: string;
 
   @IsNotEmpty()
   @IsNumber()
@@ -32,14 +41,6 @@ export class CreateTransactionDto {
   @IsOptional()
   @IsNumber()
   settlement?: number;
-
-  @IsOptional()
-  @IsMongoId()
-  basket?: string;
-
-  @IsOptional()
-  @IsMongoId()
-  withdrawalAccount?: string;
 
   @IsOptional()
   @IsString()

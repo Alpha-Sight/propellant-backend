@@ -20,18 +20,4 @@ export class PremiumController {
   ) {
     return this.premiumService.selectPlan(user, payload);
   }
-
-  @Post('process-upgrade')
-  @ResponseMessage(RESPONSE_CONSTANT.PREMIUM.PROCESS_PREMIUM_PAYMENT_SUCCESS)
-  async upgradeToPremium(
-    @LoggedInUserDecorator() user: UserDocument,
-    amountPaid: number,
-    paymentObject: any,
-  ) {
-    return this.premiumService.upgradeToPremium(
-      user._id.toString(),
-      amountPaid,
-      paymentObject,
-    );
-  }
 }

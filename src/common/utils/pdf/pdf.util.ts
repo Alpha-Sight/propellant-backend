@@ -98,6 +98,7 @@ export class PDFHelper {
 
   static async generatePDFBufferFromHTML(html: string): Promise<Buffer> {
     const browser = await puppeteer.launch({
+      executablePath: '/usr/bin/chromium-browser',
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });

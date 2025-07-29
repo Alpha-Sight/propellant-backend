@@ -99,6 +99,8 @@ export class UserService {
         role === UserRoleEnum.TALENT
           ? {
               totalReferrals: 0,
+              totalCredentialUploads: 0,
+              totalCvDownload: 0,
               referredBy: null,
               skills: [],
             }
@@ -303,7 +305,10 @@ export class UserService {
       //   buffer,
       // };
 
-      const uploadResult = await this.pinataService.uploadFile(file);
+      const uploadResult = await this.pinataService.uploadFile(
+        file,
+        'profileImage',
+      );
       imageUrl = uploadResult;
     }
 

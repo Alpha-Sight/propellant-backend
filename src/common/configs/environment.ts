@@ -65,6 +65,9 @@ export interface IEnvironment {
     HOST: string;
     WEBHOOK_SECRET: string;
   };
+  AI: {
+    URL: string;
+  };
 }
 
 export const ENVIRONMENT: IEnvironment = {
@@ -132,6 +135,9 @@ export const ENVIRONMENT: IEnvironment = {
   VPAY: {
     HOST: process.env.VPAY_HOST,
     WEBHOOK_SECRET: process.env.VPAY_WEBHOOK_SECRET,
+  },
+  AI: {
+    URL: process.env.AI_URL,
   },
 };
 

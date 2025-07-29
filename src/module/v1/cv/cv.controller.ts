@@ -47,8 +47,11 @@ export class CvController {
 
   @Post('optimize')
   @ResponseMessage(RESPONSE_CONSTANT.CV.OPTIMIZED_SUCCESS)
-  async optimizeCV(@Body() payload: GenerateCVDto) {
-    return this.cvService.optimizeCV(payload);
+  async optimizeCV(
+    @LoggedInUserDecorator() user: UserDocument,
+    @Body() payload: any,
+  ) {
+    return this.cvService.optimizeCV(user, payload);
   }
 
   @Post('download/:template')

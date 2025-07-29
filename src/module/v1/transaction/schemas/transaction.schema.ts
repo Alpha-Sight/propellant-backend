@@ -5,7 +5,7 @@ import {
   TransactionStatusEnum,
   TransactionTypeEnum,
 } from '../../../../common/enums/transaction.enum';
-import { BaseHelper } from 'src/common/utils/helper/helper.util';
+import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
 
 export type TransactionDocument = Transaction & Document;
 
@@ -22,6 +22,9 @@ export class Transaction {
 
   @Prop({ enum: TransactionTypeEnum, required: true })
   type: TransactionTypeEnum;
+
+  @Prop({ enum: SubscriptionTypeEnum, required: true })
+  plan: SubscriptionTypeEnum;
 
   @Prop()
   description: string;
@@ -50,10 +53,10 @@ export class Transaction {
 
 export const TransactionSchema = SchemaFactory.createForClass(Transaction);
 
-TransactionSchema.pre('validate', function (next) {
-  this.reference = BaseHelper.generateRandomString();
-  next();
-});
+// TransactionSchema.pre('validate', function (next) {
+//   this.reference = BaseHelper.generateRandomString();
+//   next();
+// });
 
 TransactionSchema.pre(['find', 'findOne'], function (next) {
   this.populate('user paymentMethod');

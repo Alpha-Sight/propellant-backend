@@ -8,7 +8,7 @@ export class PinataService {
   private readonly logger = new Logger(PinataService.name);
   private readonly pinataApiUrl = 'https://api.pinata.cloud';
 
-  async uploadFile(file: Express.Multer.File): Promise<string> {
+  async uploadFile(file: Express.Multer.File, folder: string): Promise<string> {
     try {
       const formData = new FormData();
       formData.append('file', file.buffer, {
@@ -20,6 +20,7 @@ export class PinataService {
         name: file.originalname,
         keyvalues: {
           uploadedAt: new Date().toISOString(),
+          folder,
         },
       });
       formData.append('pinataMetadata', metadata);

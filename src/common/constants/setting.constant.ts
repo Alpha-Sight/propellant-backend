@@ -10,6 +10,8 @@ export const SETTINGS: ISettings = {
       [SubscriptionTypeEnum.BASIC]: 49,
       [SubscriptionTypeEnum.PROFESSIONAL]: 99,
       [SubscriptionTypeEnum.ENTERPRISE]: 199,
+      [SubscriptionTypeEnum.FREE]: 0,
+      [SubscriptionTypeEnum.PREMIUM]: 59,
     },
     urls: {
       webHomepage: isDevEnvironment

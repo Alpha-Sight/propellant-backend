@@ -28,4 +28,5 @@ export interface PremiumEmailTemplateProps {
   upgradeDate: string;
   totalAmount: number;
   currencySymbol?: string;
+  plan: string;
 }

@@ -17,6 +17,7 @@ import { PremiumModule } from './module/v1/premium/premium.module';
 import { PaymentModule } from './module/v1/payment/payment.module';
 import { TransactionModule } from './module/v1/transaction/transaction.module';
 import { OrganizationPostModule } from './module/v1/organization-post/organization-post.module';
+import { ChatModule } from './module/v1/chat/chat.module';
 
 @Module({
   imports: [
@@ -38,13 +39,9 @@ import { OrganizationPostModule } from './module/v1/organization-post/organizati
     TransactionModule,
     BlockchainModule,
     OrganizationPostModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}
-// export class AppModule implements NestModule {
-//   configure(consumer: MiddlewareConsumer) {
-//     consumer.apply(FilterUserFieldsMiddleware).forRoutes('*'); // or specify paths
-//   }
-// }

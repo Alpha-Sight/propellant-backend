@@ -17,6 +17,8 @@ import {
 } from './dto/credential.dto';
 import { PaginationDto } from '../repository/dto/repository.dto';
 import { PinataService } from 'src/common/utils/pinata.util';
+import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
+import { UserService } from '../user/services/user.service';
 
 @Injectable()
 export class CredentialService {
@@ -25,6 +27,7 @@ export class CredentialService {
     private credentialModel: Model<CredentialDocument>,
     private repositoryService: RepositoryService,
     private pinataService: PinataService,
+    private userService: UserService,
   ) {}
 
   async uploadCredential(
@@ -36,10 +39,17 @@ export class CredentialService {
       if (!user || !user._id) {
         throw new BadRequestException('User not found or invalid');
       }
+      if (
+        user.plan === SubscriptionTypeEnum.FREE &&
+        user.totalCredentialUploads >= 1
+      )
+        throw new BadRequestException(
+          ' you’re limited to one credential upload per month. Upgrade your plan to enjoy unlimited uploads.',
+        );
       if (!file) {
         throw new BadRequestException('File not Found');
       }
-      const ipfsHash = await this.pinataService.uploadFile(file);
+      const ipfsHash = await this.pinataService.uploadFile(file, 'credential');
 
       // Set defaults for required fields
       const now = new Date();
@@ -77,8 +87,14 @@ export class CredentialService {
       };
 
       const created = await this.credentialModel.create(credentialData);
-      const obj = typeof created.toObject === 'function' ? created.toObject() : created;
-      obj.imageUrl = obj.evidenceHash ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}` : null;
+      const obj =
+        typeof created.toObject === 'function' ? created.toObject() : created;
+      obj.imageUrl = obj.evidenceHash
+        ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}`
+        : null;
+      await this.userService.update(user._id.toString(), {
+        $inc: { totalCredentialUploads: 1 },
+      });
       return obj;
     } catch (error) {
       throw new Error(
@@ -134,7 +150,10 @@ export class CredentialService {
         await this.pinataService.unpinFile(existingCredential.ipfsHash);
       }
 
-      const newIpfsHash = await this.pinataService.uploadFile(file);
+      const newIpfsHash = await this.pinataService.uploadFile(
+        file,
+        'credential',
+      );
       existingCredential.ipfsHash = newIpfsHash;
     }
 
@@ -157,8 +176,15 @@ export class CredentialService {
       throw new NotFoundException('Credential not found');
     }
 
-    const obj = typeof credential.toObject === 'function' ? credential.toObject() : credential;
-    obj.imageUrl = obj.evidenceHash ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}` : null;
+    const obj =
+      typeof credential.toObject === 'function'
+        ? credential.toObject()
+        : credential;
+    obj.imageUrl = obj.evidenceHash
+      ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}`
+      : null;
+    obj.visibility =
+      typeof obj.visibility === 'boolean' ? obj.visibility : true;
     return obj;
   }
 
@@ -183,7 +209,9 @@ export class CredentialService {
         { _id: credentialId },
         { isDeleted: true },
       );
-
+      await this.userService.update(user._id.toString(), {
+        $inc: { totalCredentialUploads: -1 },
+      });
       // Unpin from IPFS if it exists
       if (credential.ipfsHash) {
         await this.pinataService.unpinFile(credential.ipfsHash);
@@ -227,7 +255,6 @@ export class CredentialService {
       options: {
         issuer: user._id,
         isDeleted: { $ne: true },
-        issuer: user._id,
         ...(type && { type }),
         ...(verificationStatus && { verificationStatus }),
         ...(verificationLevel && { verificationLevel }),
@@ -236,7 +263,7 @@ export class CredentialService {
       },
       populateFields: [
         { path: 'issuer', select: 'username email' },
-        { path: 'subject', select: 'username email' }
+        { path: 'subject', select: 'username email' },
       ],
     });
 
@@ -247,20 +274,33 @@ export class CredentialService {
         let hasInvalid = false;
         result.data.forEach((credential: any, idx: number) => {
           console.log(`[CredentialService] credential[${idx}]:`, credential);
-          if (!credential || typeof credential !== 'object' || credential._id === undefined) {
+          if (
+            !credential ||
+            typeof credential !== 'object' ||
+            credential._id === undefined
+          ) {
             hasInvalid = true;
           }
         });
         if (hasInvalid) {
-          console.error('[CredentialService] Invalid credential found, skipping mapping.');
+          console.error(
+            '[CredentialService] Invalid credential found, skipping mapping.',
+          );
           result.data = [];
         } else {
           result.data = result.data.map((credential: any) => {
-            const obj = typeof credential.toObject === 'function' ? credential.toObject() : credential;
+            const obj =
+              typeof credential.toObject === 'function'
+                ? credential.toObject()
+                : credential;
             return {
               ...obj,
               _id: obj._id,
-              imageUrl: obj.evidenceHash ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}` : null,
+              imageUrl: obj.evidenceHash
+                ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}`
+                : null,
+              visibility:
+                typeof obj.visibility === 'boolean' ? obj.visibility : true,
             };
           });
         }

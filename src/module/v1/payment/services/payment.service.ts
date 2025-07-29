@@ -22,6 +22,7 @@ import {
 } from 'src/common/interfaces/payment.interface';
 import { BaseRepositoryService } from '../../repository/base.service';
 import { PremiumService } from '../../premium/premium.service';
+import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
 
 @Injectable()
 export class PaymentService extends BaseRepositoryService<PaymentDocument> {
@@ -199,11 +200,13 @@ export class PaymentService extends BaseRepositoryService<PaymentDocument> {
     paymentObject: object;
     amountPaid: number;
     userIdFromMetadata?: string;
+    plan: SubscriptionTypeEnum;
   }) {
     return await this.premiumService.upgradeToPremium(
       payload.userIdFromMetadata,
       payload.amountPaid,
       payload.paymentObject,
+      payload.plan,
     );
   }
 }

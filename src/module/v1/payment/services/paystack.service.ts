@@ -94,12 +94,14 @@ export class PaystackService {
     if (hash == req.headers['x-paystack-signature']) {
       if (payload.event === 'charge.success') {
         console.log('paymentWebhook check 3');
+
         constructedPayload = {
           transactionId: payload.data.metadata.transactionId,
           reference: payload.data.reference,
           paymentObject: payload,
-          fee: payload.data.amount,
-          userId: payload.data.metadata.userId,
+          amountPaid: payload.data.amount / 100, // convert from kobo
+          userIdFromMetadata: payload.data.metadata.userId,
+          plan: payload.data.metadata.plan,
         };
       }
 

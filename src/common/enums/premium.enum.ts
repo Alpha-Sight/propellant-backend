@@ -1,6 +1,8 @@
 export enum SubscriptionTypeEnum {
+  FREE = 'FREE',
   BASIC = 'BASIC',
   PROFESSIONAL = 'PROFESSIONAL',
+  PREMIUM = 'PREMIUM',
   ENTERPRISE = 'ENTERPRISE',
 }
 export enum CardTypeEnum {

@@ -1,10 +1,10 @@
 export enum TransactionStatusEnum {
   PENDING = 'PENDING',
-  PROCESSING = 'PROCESSING', 
+  PROCESSING = 'PROCESSING',
   COMPLETED = 'COMPLETED',
   CONFIRMED = 'CONFIRMED',
   FAILED = 'FAILED',
-  Failed = "Failed",
+  Failed = 'Failed',
 }
 
 export enum PaymentStatusEnum {
@@ -18,6 +18,5 @@ export enum TransactionTypeEnum {
   CredentialIssuance = 'CREDENTIAL_ISSUANCE',
   CredentialVerification = 'CREDENTIAL_VERIFICATION',
   CredentialRevocation = 'CREDENTIAL_REVOCATION',
-  Premium = "Premium",
+  SUBSCRIPTION = 'SUBSCRIPTION',
 }
-

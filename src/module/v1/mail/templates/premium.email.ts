@@ -5,6 +5,7 @@ export const premiumPlanNotificationEmailTemplate = ({
   reference,
   upgradeDate,
   totalAmount,
+  plan,
   currencySymbol = '₦',
 }: PremiumEmailTemplateProps): string => {
   return `
@@ -19,6 +20,7 @@ export const premiumPlanNotificationEmailTemplate = ({
         <ul>
           <li><strong>Reference ID:</strong> ${reference}</li>
           <li><strong>Upgrade Date:</strong> ${upgradeDate}</li>
+          <li><strong>Upgrade Plan:</strong> ${plan}</li>
           <li><strong>Amount Paid:</strong> ${currencySymbol}${totalAmount.toLocaleString()}</li>
         </ul>
   

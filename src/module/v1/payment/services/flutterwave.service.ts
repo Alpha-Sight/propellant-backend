@@ -98,6 +98,7 @@ export class FlutterwaveService {
         paymentObject: event,
         amountPaid: event.data.amount,
         userId: event.data.meta.userId,
+        plan: event.data.plan,
       };
 
       return await this.paymentService.processPremiumPayment(
