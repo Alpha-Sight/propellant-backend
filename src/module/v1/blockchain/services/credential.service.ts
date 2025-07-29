@@ -232,10 +232,23 @@ export class CredentialService implements OnModuleInit {
         isAccountCreation: false,
       });
 
+      // Update the credential status in the database to VERIFIED
+      await this.credentialModel.updateOne(
+        { _id: credential._id },
+        { 
+          $set: { 
+            verificationStatus: 'VERIFIED',
+            verifiedAt: new Date() 
+          } 
+        }
+      );
+
+      this.logger.log(`Updated credential ${credential._id} status to VERIFIED`);
+
       return {
         transactionId: transactionResult.transactionId,
         status: transactionResult.status,
-        credentialId,
+        credentialId: credential._id.toString(),
         blockchainCredentialId: numericCredentialId.toString(),
       };
     } catch (error) {
@@ -347,9 +360,10 @@ export class CredentialService implements OnModuleInit {
         'function revokeCredential(uint256 tokenId, string reason) returns (bool)',
       ]);
 
+      const revokeReason = 'Revoked by PropellantBD administrator';
       const encodedData = iface.encodeFunctionData('revokeCredential', [
         numericCredentialId,
-        'Revoked by PropellantBD administrator',
+        revokeReason,
       ]);
 
       const transactionResult = await this.relayerService.queueTransaction({
@@ -362,10 +376,24 @@ export class CredentialService implements OnModuleInit {
         isAccountCreation: false,
       });
 
+      // Update the credential status in the database to REJECTED
+      await this.credentialModel.updateOne(
+        { _id: credential._id },
+        { 
+          $set: { 
+            verificationStatus: 'REJECTED',
+            rejectionReason: revokeReason,
+            updatedAt: new Date()
+          } 
+        }
+      );
+
+      this.logger.log(`Updated credential ${credential._id} status to REJECTED`);
+
       return {
         transactionId: transactionResult.transactionId,
         status: transactionResult.status,
-        credentialId,
+        credentialId: credential._id.toString(),
         blockchainCredentialId: numericCredentialId.toString(),
       };
     } catch (error) {
