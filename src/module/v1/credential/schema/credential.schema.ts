@@ -17,11 +17,24 @@ export class Credential {
   })
   user: UserDocument;
 
-  @Prop({
-    type: mongoose.Schema.Types.ObjectId,
-    ref: User.name,
-  })
-  issuer: UserDocument;
+  // Remove old issuer field, add new organization fields
+  @Prop({ required: false })
+  issuingOrganization?: string;
+
+  @Prop({ required: false })
+  verifyingOrganization?: string;
+
+  @Prop({ required: false })
+  verifyingEmail?: string;
+
+  @Prop({ required: false })
+  message?: string;
+
+  @Prop({ required: false })
+  issueDate?: string;
+
+  @Prop({ required: false })
+  expiryDate?: string;
 
   @Prop({
     type: mongoose.Schema.Types.ObjectId,
@@ -44,10 +57,8 @@ export class Credential {
   @Prop({ required: false })
   imageUrl?: string;
 
-
   @Prop({ required: false })
   ipfsHash?: string;
-
 
   @Prop({ required: false })
   evidenceHash?: string;
@@ -63,12 +74,6 @@ export class Credential {
 
   @Prop({ default: false })
   isDeleted: boolean;
-
-  // @Prop({ enum: CredentialStatusEnum, default: CredentialStatusEnum.PENDING })
-  // verificationStatus: CredentialStatusEnum;
-
-  // @Prop({ enum: VerificationLevelEnum, default: 'LOW' })
-  // verificationLevel: VerificationLevelEnum;
 
   @Prop({ default: null })
   verifiedAt?: Date;

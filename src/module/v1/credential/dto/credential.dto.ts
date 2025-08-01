@@ -2,7 +2,7 @@ export class CredentialResponseDto {
   _id: string;
   credentialId: string;
   subject: any;
-  issuer: any;
+  issuer: any; // uploader (user)
   name: string;
   description?: string;
   credentialType: any;
@@ -13,6 +13,13 @@ export class CredentialResponseDto {
   updatedAt?: Date;
   ipfsHash?: string;
   imageUrl?: string;
+  // New fields for organizations and verification
+  issuingOrganization?: string;
+  verifyingOrganization?: string;
+  verifyingEmail?: string;
+  message?: string;
+  issueDate?: string;
+  expiryDate?: string;
 }
 import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import {
@@ -50,6 +57,31 @@ export class UploadCredentialDto {
   @IsOptional()
   @IsString()
   file?: string;
+
+  // New fields for organizations and verification
+  @IsOptional()
+  @IsString()
+  issuingOrganization?: string;
+
+  @IsOptional()
+  @IsString()
+  verifyingOrganization?: string;
+
+  @IsOptional()
+  @IsString()
+  verifyingEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  message?: string;
+
+  @IsOptional()
+  @IsString()
+  issueDate?: string;
+
+  @IsOptional()
+  @IsString()
+  expiryDate?: string;
 }
 
 export class UpdateCredentialDto {

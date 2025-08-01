@@ -19,6 +19,9 @@ import { PaginationDto } from '../repository/dto/repository.dto';
 import { PinataService } from 'src/common/utils/pinata.util';
 import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
 import { UserService } from '../user/services/user.service';
+import { MailService } from '../mail/mail.service';
+import { CredentialVerificationRequestTemplate } from '../mail/templates/credential-verification-request.email';
+
 
 @Injectable()
 export class CredentialService {
@@ -28,6 +31,7 @@ export class CredentialService {
     private repositoryService: RepositoryService,
     private pinataService: PinataService,
     private userService: UserService,
+    private mailService: MailService,
   ) {}
 
   async uploadCredential(
@@ -75,14 +79,20 @@ export class CredentialService {
         user: user._id,
         ipfsHash,
         createdAt: now,
-        status: 'PENDING', // or CredentialStatusEnum.PENDING if imported
+        status: 'PENDING',
         revocable: true,
-        evidenceHash: ipfsHash, // Use IPFS hash as evidenceHash
+        evidenceHash: ipfsHash,
         credentialType: credentialTypeValue,
         name: payload.title || '',
         issuer: user._id,
         subject: user._id,
         credentialId: `${user._id}-${now.getTime()}`,
+        issuingOrganization: payload.issuingOrganization,
+        verifyingOrganization: payload.verifyingOrganization,
+        verifyingEmail: payload.verifyingEmail,
+        message: payload.message,
+        issueDate: payload.issueDate,
+        expiryDate: payload.expiryDate,
         ...payload,
       };
 
@@ -95,6 +105,26 @@ export class CredentialService {
       await this.userService.update(user._id.toString(), {
         $inc: { totalCredentialUploads: 1 },
       });
+
+      // Send verification email if verifyingEmail is provided
+      if (payload.verifyingEmail && payload.verifyingOrganization) {
+        const emailHtml = CredentialVerificationRequestTemplate({
+          verifyingOrganization: payload.verifyingOrganization,
+          verifyingEmail: payload.verifyingEmail,
+          issuingOrganization: payload.issuingOrganization,
+          credentialTitle: payload.title,
+          userName: user.fullname,
+          message: payload.message,
+          issueDate: payload.issueDate,
+          expiryDate: payload.expiryDate,
+          url: payload.url,
+        });
+        await this.mailService.sendEmail(
+          payload.verifyingEmail,
+          `Credential Verification Request: ${payload.title}`,
+          emailHtml,
+        );
+      }
       return obj;
     } catch (error) {
       throw new Error(
