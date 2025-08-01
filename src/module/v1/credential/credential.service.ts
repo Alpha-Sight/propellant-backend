@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { CredentialStatusEnum } from '../../../common/enums/credential.enum';
+import { CredentialStatusEnum, CredentialTypeEnum } from '../../../common/enums/credential.enum';
 import { RepositoryService } from '../repository/repository.service';
 import { CredentialDocument, Credential } from './schema/credential.schema';
 import { UserDocument } from '../user/schemas/user.schema';
@@ -14,6 +14,7 @@ import {
   GetAllCredentialsDto,
   UpdateCredentialDto,
   CredentialResponseDto,
+  PaginatedCredentialResponse,
 } from './dto/credential.dto';
 import { PaginationDto } from '../repository/dto/repository.dto';
 import { PinataService } from 'src/common/utils/pinata.util';
@@ -38,14 +39,14 @@ export class CredentialService {
     user: UserDocument,
     payload: UploadCredentialDto,
     file: Express.Multer.File,
-  ): Promise<CredentialDocument> {
+  ): Promise<CredentialResponseDto> {
     try {
       if (!user || !user._id) {
         throw new BadRequestException('User not found or invalid');
       }
       if (
         user.plan === SubscriptionTypeEnum.FREE &&
-        user.totalCredentialUploads >= 1
+        user.totalCredentialUploads >= 100
       )
         throw new BadRequestException(
           ' you’re limited to one credential upload per month. Upgrade your plan to enjoy unlimited uploads.',
@@ -76,32 +77,67 @@ export class CredentialService {
       }
 
       const credentialData = {
-        user: user._id,
-        ipfsHash,
-        createdAt: now,
-        status: 'PENDING',
-        revocable: true,
-        evidenceHash: ipfsHash,
-        credentialType: credentialTypeValue,
-        name: payload.title || '',
-        issuer: user._id,
-        subject: user._id,
         credentialId: `${user._id}-${now.getTime()}`,
+        subject: user._id.toString(),
+        issuer: user._id,
+        name: payload.title,
+        description: payload.description || '',
+        credentialType: credentialTypeValue,
+        evidenceHash: ipfsHash,
+        revocable: true,
+        status: 'PENDING',
+        createdAt: now,
+        // Additional fields for the newer schema compatibility
+        user: user._id,
+        title: payload.title,
+        type: payload.type,
+        category: payload.category,
+        url: payload.url,
+        visibility: payload.visibility !== undefined ? payload.visibility : true,
+        ipfsHash,
         issuingOrganization: payload.issuingOrganization,
         verifyingOrganization: payload.verifyingOrganization,
         verifyingEmail: payload.verifyingEmail,
         message: payload.message,
         issueDate: payload.issueDate,
         expiryDate: payload.expiryDate,
-        ...payload,
       };
 
       const created = await this.credentialModel.create(credentialData);
       const obj =
         typeof created.toObject === 'function' ? created.toObject() : created;
-      obj.imageUrl = obj.evidenceHash
-        ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}`
-        : null;
+      
+      // Format response to match frontend expectations
+      const response: CredentialResponseDto = {
+        _id: obj._id.toString(),
+        credentialId: obj.credentialId || `${user._id}-${Date.now()}`,
+        title: obj.title || payload.title,
+        description: obj.description || payload.description,
+        type: obj.type || payload.type,
+        category: obj.category || payload.category,
+        issuer: obj.issuingOrganization || payload.issuingOrganization,
+        issueDate: obj.issueDate || payload.issueDate,
+        expiryDate: obj.expiryDate || payload.expiryDate,
+        verifyingOrganization: obj.verifyingOrganization || payload.verifyingOrganization,
+        verifyingEmail: obj.verifyingEmail || payload.verifyingEmail,
+        message: obj.message || payload.message,
+        url: obj.url || payload.url,
+        visibility: obj.visibility !== undefined ? obj.visibility : true,
+        status: obj.verificationStatus || 'PENDING',
+        imageUrl: obj.evidenceHash
+          ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}`
+          : null,
+        createdAt: obj.createdAt?.toISOString() || new Date().toISOString(),
+        verifiedAt: obj.verifiedAt?.toISOString() || null,
+        
+        // Keep backward compatibility fields
+        subject: obj.subject,
+        evidenceHash: obj.evidenceHash,
+        updatedAt: obj.updatedAt || new Date(),
+        ipfsHash: obj.ipfsHash,
+        issuingOrganization: obj.issuingOrganization,
+      };
+      
       await this.userService.update(user._id.toString(), {
         $inc: { totalCredentialUploads: 1 },
       });
@@ -125,7 +161,7 @@ export class CredentialService {
           emailHtml,
         );
       }
-      return obj;
+      return response;
     } catch (error) {
       throw new Error(
         `Failed to create credential with IPFS: ${error.message}`,
@@ -196,7 +232,7 @@ export class CredentialService {
     return updatedCredential;
   }
 
-  async getCredentialById(credentialId: string): Promise<CredentialDocument> {
+  async getCredentialById(credentialId: string): Promise<CredentialResponseDto> {
     const credential = await this.credentialModel.findOne({
       _id: credentialId,
       isDeleted: { $ne: true },
@@ -210,12 +246,41 @@ export class CredentialService {
       typeof credential.toObject === 'function'
         ? credential.toObject()
         : credential;
-    obj.imageUrl = obj.evidenceHash
-      ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}`
-      : null;
-    obj.visibility =
-      typeof obj.visibility === 'boolean' ? obj.visibility : true;
-    return obj;
+    
+    // Format response to match frontend expectations
+    const response: CredentialResponseDto = {
+      _id: obj._id.toString(),
+      credentialId: obj.credentialId || `${obj._id}-${Date.now()}`,
+      title: obj.title,
+      description: obj.description,
+      type: obj.type,
+      category: obj.category,
+      issuer: obj.issuingOrganization,
+      issueDate: obj.issueDate,
+      expiryDate: obj.expiryDate,
+      verifyingOrganization: obj.verifyingOrganization,
+      verifyingEmail: obj.verifyingEmail,
+      message: obj.message,
+      url: obj.url,
+      visibility: typeof obj.visibility === 'boolean' ? obj.visibility : true,
+      status: obj.verificationStatus || 'PENDING',
+      imageUrl: obj.evidenceHash
+        ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}`
+        : null,
+      createdAt: obj.createdAt?.toISOString() || new Date().toISOString(),
+      verifiedAt: obj.verifiedAt?.toISOString() || null,
+      
+      // Keep backward compatibility fields
+      subject: obj.subject,
+      credentialType: obj.credentialType,
+      evidenceHash: obj.evidenceHash,
+      revocable: obj.revocable,
+      updatedAt: obj.updatedAt || new Date(),
+      ipfsHash: obj.ipfsHash,
+      issuingOrganization: obj.issuingOrganization,
+    };
+    
+    return response;
   }
 
   async deleteCredential(
@@ -269,7 +334,7 @@ export class CredentialService {
   async getSingleUserCredentials(
     user: UserDocument,
     query: GetAllCredentialsDto,
-  ) {
+  ): Promise<PaginatedCredentialResponse> {
     const {
       type,
       verificationStatus,
@@ -302,7 +367,7 @@ export class CredentialService {
     try {
       if (Array.isArray(result?.data) && result.data.length) {
         let hasInvalid = false;
-        result.data.forEach((credential: any, idx: number) => {
+        result.data.forEach((credential: CredentialDocument, idx: number) => {
           console.log(`[CredentialService] credential[${idx}]:`, credential);
           if (
             !credential ||
@@ -318,27 +383,58 @@ export class CredentialService {
           );
           result.data = [];
         } else {
-          result.data = result.data.map((credential: any) => {
+          const mappedData = result.data.map((credential: CredentialDocument) => {
             const obj =
               typeof credential.toObject === 'function'
                 ? credential.toObject()
                 : credential;
-            return {
-              ...obj,
-              _id: obj._id,
+            
+            // Format response to match frontend expectations
+            const formattedCredential: CredentialResponseDto = {
+              _id: obj._id.toString(),
+              credentialId: obj.credentialId || `${obj._id}-${Date.now()}`,
+              title: obj.name || obj.title,
+              description: obj.description,
+              type: obj.credentialType || obj.type,
+              category: obj.category,
+              issuer: obj.issuingOrganization,
+              issueDate: obj.issueDate,
+              expiryDate: obj.expiryDate,
+              verifyingOrganization: obj.verifyingOrganization,
+              verifyingEmail: obj.verifyingEmail,
+              message: obj.message,
+              url: obj.url,
+              visibility: typeof obj.visibility === 'boolean' ? obj.visibility : true,
+              status: obj.verificationStatus || 'PENDING',
               imageUrl: obj.evidenceHash
                 ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}`
                 : null,
-              visibility:
-                typeof obj.visibility === 'boolean' ? obj.visibility : true,
+              createdAt: obj.createdAt?.toISOString() || new Date().toISOString(),
+              verifiedAt: obj.verifiedAt?.toISOString() || null,
+              
+              // Keep backward compatibility fields
+              subject: obj.subject,
+              credentialType: obj.credentialType,
+              evidenceHash: obj.evidenceHash,
+              revocable: obj.revocable,
+              updatedAt: obj.updatedAt || new Date(),
+              ipfsHash: obj.ipfsHash,
+              issuingOrganization: obj.issuingOrganization,
             };
+            return formattedCredential;
           });
+          
+          result.data = mappedData as any;
         }
       }
     } catch (err) {
       console.error('[CredentialService] Error mapping credentials:', err);
       result.data = [];
     }
-    return result;
+    
+    return {
+      data: result.data as unknown as CredentialResponseDto[],
+      meta: result.meta,
+    };
   }
 }

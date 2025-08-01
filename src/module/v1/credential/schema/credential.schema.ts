@@ -80,6 +80,18 @@ export class Credential {
 
   @Prop({ default: null })
   rejectionReason: string;
+
+  // Timestamp fields (automatically managed by Mongoose)
+  createdAt?: Date;
+  updatedAt?: Date;
+
+  // Backward compatibility fields for blockchain schema
+  credentialId?: string;
+  credentialType?: number;
+  revocable?: boolean;
+  name?: string;
+  issuer?: mongoose.Schema.Types.ObjectId;
+  status?: string;
 }
 
 export const CredentialSchema = SchemaFactory.createForClass(Credential);

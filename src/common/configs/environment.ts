@@ -68,6 +68,9 @@ export interface IEnvironment {
   AI: {
     URL: string;
   };
+  FRONTEND: {
+    URL: string;
+  };
 }
 
 export const ENVIRONMENT: IEnvironment = {
@@ -138,6 +141,9 @@ export const ENVIRONMENT: IEnvironment = {
   },
   AI: {
     URL: process.env.AI_URL,
+  },
+  FRONTEND: {
+    URL: process.env.FRONTEND_URL || 'https://propellant.fly.dev',
   },
 };
 
