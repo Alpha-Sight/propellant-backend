@@ -17,7 +17,6 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { HttpService } from '@nestjs/axios';
 import axios from 'axios';
-import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
 import { UserService } from '../user/services/user.service';
 
 @Injectable()
