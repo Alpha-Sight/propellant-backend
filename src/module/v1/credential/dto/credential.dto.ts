@@ -11,7 +11,7 @@ export class CredentialResponseDto {
   verifyingOrganization?: string;  // Verifying org name
   verifyingEmail?: string;         // Verifying org email
   message?: string;               // Additional notes
-  url?: string;                   // External link
+  externalUrl?: string;                   // External link
   visibility: boolean;           // Visibility setting
   status: "PENDING" | "VERIFIED" | "REJECTED";  // Verification status
   imageUrl?: string;            // URL to uploaded file
@@ -61,7 +61,7 @@ export class UploadCredentialDto {
 
   @IsString()
   @IsOptional()
-  url: string;
+  externalUrl: string;
 
   @IsOptional()
   visibility?: boolean;
@@ -119,7 +119,7 @@ export class UpdateCredentialDto {
 
   @IsString()
   @IsOptional()
-  url?: string;
+  externalUrl?: string;
 
   @IsOptional()
   visibility?: boolean;
