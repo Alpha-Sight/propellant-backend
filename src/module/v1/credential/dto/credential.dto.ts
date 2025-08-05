@@ -1,18 +1,41 @@
 export class CredentialResponseDto {
   _id: string;
   credentialId: string;
-  subject: any;
-  issuer: any;
-  name: string;
-  description?: string;
-  credentialType: any;
+  title: string;              // Credential title (mapped from name)
+  description?: string;       // Description
+  type: string;              // Credential type (mapped from credentialType)
+  category: string;          // Credential category
+  issuer: string;            // Issuing organization (mapped from issuingOrganization)
+  issueDate?: string;        // Issue date
+  expiryDate?: string;       // Expiry date (optional)
+  verifyingOrganization?: string;  // Verifying org name
+  verifyingEmail?: string;         // Verifying org email
+  message?: string;               // Additional notes
+  externalUrl?: string;                   // External link
+  visibility: boolean;           // Visibility setting
+  status: "PENDING" | "VERIFIED" | "REJECTED";  // Verification status
+  imageUrl?: string;            // URL to uploaded file
+  createdAt: string;           // Creation timestamp
+  verifiedAt?: string;         // Verification timestamp (when verified)
+  
+  // Keep existing fields for backward compatibility
+  subject?: any;
+  credentialType?: any;
   evidenceHash?: string;
-  revocable: boolean;
-  status: string;
-  createdAt: Date;
+  revocable?: boolean;
   updatedAt?: Date;
   ipfsHash?: string;
-  imageUrl?: string;
+  issuingOrganization?: string;
+}
+
+export interface PaginatedCredentialResponse {
+  data: CredentialResponseDto[];
+  meta: {
+    total: number;
+    page: number;
+    size: number;
+    lastPage: number;
+  };
 }
 import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import {
@@ -38,7 +61,7 @@ export class UploadCredentialDto {
 
   @IsString()
   @IsOptional()
-  url: string;
+  externalUrl: string;
 
   @IsOptional()
   visibility?: boolean;
@@ -50,6 +73,31 @@ export class UploadCredentialDto {
   @IsOptional()
   @IsString()
   file?: string;
+
+  // New fields for organizations and verification
+  @IsOptional()
+  @IsString()
+  issuingOrganization?: string;
+
+  @IsOptional()
+  @IsString()
+  verifyingOrganization?: string;
+
+  @IsOptional()
+  @IsString()
+  verifyingEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  message?: string;
+
+  @IsOptional()
+  @IsString()
+  issueDate?: string;
+
+  @IsOptional()
+  @IsString()
+  expiryDate?: string;
 }
 
 export class UpdateCredentialDto {
@@ -71,7 +119,7 @@ export class UpdateCredentialDto {
 
   @IsString()
   @IsOptional()
-  url?: string;
+  externalUrl?: string;
 
   @IsOptional()
   visibility?: boolean;

@@ -22,6 +22,7 @@ import {
   GetAllCredentialsDto,
   UpdateCredentialDto,
   UploadCredentialDto,
+  PaginatedCredentialResponse,
 } from './dto/credential.dto';
 import { PaginationDto } from '../repository/dto/repository.dto';
 import { Roles } from 'src/common/decorators/role.decorator';
@@ -59,7 +60,7 @@ export class CredentialController {
   async getSingleUserCredentials(
     @LoggedInUserDecorator() user: UserDocument,
     @Query() query: PaginationDto,
-  ) {
+  ): Promise<PaginatedCredentialResponse> {
     return await this.credentialService.getSingleUserCredentials(user, query);
   }
 
