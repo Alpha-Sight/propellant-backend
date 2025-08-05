@@ -305,18 +305,22 @@ export class RelayerService implements OnModuleInit {
       
       if (transaction.description && transaction.description.includes('Verify credential')) {
         credentialStatus = 'VERIFIED';
+      } else if (transaction.description && transaction.description.includes('Issue credential')) {
+        credentialStatus = 'ISSUED';
       }
 
-      await this.credentialModel.updateOne(
-        { transactionId: transaction.transactionId },
-        {
-          status: credentialStatus,
-          transactionHash: tx.hash,
-          blockNumber: receipt.blockNumber,
-        }
-      );
-
-      this.logger.log(`Transaction ${transaction.transactionId} and associated credential updated to ${credentialStatus}.`);
+      // Update credential status based on transaction type
+      if (transaction.description && (transaction.description.includes('Issue credential') || transaction.description.includes('Verify credential'))) {
+        await this.credentialModel.updateOne(
+          { transactionId: transaction.transactionId },
+          {
+            status: credentialStatus,
+            transactionHash: tx.hash,
+            blockNumber: receipt.blockNumber,
+          }
+        );
+        this.logger.log(`Transaction ${transaction.transactionId} and associated credential updated to ${credentialStatus}.`);
+      }
 
     } catch (error) {
       // Improved error handling for transaction reverts and ENS issues

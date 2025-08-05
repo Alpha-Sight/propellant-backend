@@ -100,12 +100,15 @@ export class CredentialService implements OnModuleInit {
     status: string;
     message: string;
     timestamp: Date;
+    transactionId?: string;
   }> {
     if (!payload || !issuerId) {
       throw new Error('Missing required parameters');
     }
 
     try {
+      await this.ensureInitialized();
+      
       // Generate a PURELY NUMERIC credential ID
       const numericCredentialId = Math.floor(Date.now() / 1000) + Math.floor(Math.random() * 999999);
       const credentialId = numericCredentialId.toString();
@@ -131,16 +134,69 @@ export class CredentialService implements OnModuleInit {
 
       this.logger.log(`Creating credential with data:`, credentialData);
 
-      // Create credential without transaction (since MongoDB standalone doesn't support transactions)
+      // Create credential in database first
       const credential = await this.credentialModel.create(credentialData);
+      this.logger.log(`Credential created in database with ID: ${credential._id}, Numeric ID: ${credentialId}`);
+
+      // Now issue the credential on blockchain
+      const iface = new ethers.Interface([
+        'function issueCredential(address subject, string memory name, string memory description, string memory metadataURI, uint8 credentialType, uint256 validUntil, bytes32 evidenceHash, bool revocable) external returns (uint256)',
+      ]);
       
-      this.logger.log(`Credential created successfully with ID: ${credential._id}, Numeric ID: ${credentialId}`);
+      const encodedData = iface.encodeFunctionData('issueCredential', [
+        payload.subject,
+        payload.name,
+        payload.description,
+        payload.metadataURI || '',
+        payload.credentialType,
+        credentialData.validUntil,
+        payload.evidenceHash,
+        payload.revocable
+      ]);
+
+      this.logger.log(`Encoded data for credential issuance: ${encodedData}`);
+
+      // Queue the blockchain transaction
+      let transactionResult;
+      try {
+        transactionResult = await this.relayerService.queueTransaction({
+          userAddress: issuerId,
+          target: this.credentialModuleAddress,
+          value: '0',
+          data: encodedData,
+          operation: 0,
+          description: `Issue credential ID ${numericCredentialId}`,
+          isAccountCreation: false,
+        });
+
+        // Update credential with transaction ID
+        await this.credentialModel.updateOne(
+          { _id: credential._id },
+          { 
+            $set: { 
+              transactionId: transactionResult.transactionId,
+              status: 'PENDING_BLOCKCHAIN'
+            } 
+          }
+        );
+
+        this.logger.log(`Credential issuance transaction queued with ID: ${transactionResult.transactionId}`);
+      } catch (txError) {
+        this.logger.error(`Failed to queue credential issuance transaction: ${txError.message}`);
+        // Update credential status to indicate blockchain error
+        await this.credentialModel.updateOne(
+          { _id: credential._id },
+          { $set: { status: 'FAILED', lastError: txError.message } }
+        );
+        throw new Error(`Failed to issue credential on blockchain: ${txError.message}`);
+      }
       
       return {
         id: credential._id.toString(),
-        status: 'PENDING',
-        message: 'Credential issuance request received and stored in database',
-        timestamp: new Date()
+        status: 'PENDING_BLOCKCHAIN',
+        message: 'Credential issuance transaction queued for blockchain processing',
+        timestamp: new Date(),
+        transactionId: transactionResult.transactionId
       };
     } catch (error: unknown) {
       this.logger.error(`Failed to issue credential: ${error instanceof Error ? error.message : 'Unknown error'}`);
