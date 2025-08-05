@@ -76,7 +76,7 @@ export class TalentCredential {
   isDeleted: boolean;
 
   @Prop({ default: null })
-  verifiedAt?: Date;
+  reviewedAt?: Date;
 
   @Prop({ default: null })
   rejectionReason: string;

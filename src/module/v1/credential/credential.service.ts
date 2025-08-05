@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -457,7 +458,7 @@ export class CredentialService {
   }
 
   async getAllOrganizationVerifiableCredentials(
-    verifyingEmail: string,
+    user: UserDocument,
     query: PaginationDto & {
       type?: CredentialTypeEnum;
       category?: CredentialCategoryEnum;
@@ -467,7 +468,7 @@ export class CredentialService {
     const { type, category, verificationStatus } = query;
 
     const baseFilter: any = {
-      verifyingEmail: verifyingEmail.toLowerCase(),
+      verifyingEmail: user.email.toLowerCase(),
     };
 
     if (type) baseFilter.type = type;
@@ -476,7 +477,7 @@ export class CredentialService {
 
     const [stats, result] = await Promise.all([
       this.credentialModel.aggregate([
-        { $match: { verifyingEmail: verifyingEmail.toLowerCase() } },
+        { $match: { verifyingEmail: user.email.toLowerCase() } },
         {
           $group: {
             _id: '$verificationStatus',
@@ -495,5 +496,54 @@ export class CredentialService {
       stats,
       data: result,
     };
+  }
+
+  async verifyCredential(credentialId: string, user: UserDocument) {
+    const credential = await this.credentialModel.findById(credentialId);
+    if (!credential) throw new NotFoundException('Credential not found');
+
+    if (credential.verifyingEmail?.toLowerCase() !== user.email.toLowerCase()) {
+      throw new ForbiddenException('Not authorized to verify this credential');
+    }
+
+    if (credential.verificationStatus !== CredentialStatusEnum.PENDING) {
+      throw new BadRequestException('Credential has already been reviewed');
+    }
+
+    return await this.credentialModel.findByIdAndUpdate(
+      credentialId,
+      {
+        verificationStatus: CredentialStatusEnum.VERIFIED,
+        reviewedAt: new Date(),
+      },
+      { new: true },
+    );
+  }
+
+  async rejectCredential(
+    credentialId: string,
+    user: UserDocument,
+    reason?: string,
+  ) {
+    const credential = await this.credentialModel.findById(credentialId);
+    if (!credential) throw new NotFoundException('Credential not found');
+
+    if (credential.verifyingEmail?.toLowerCase() !== user.email.toLowerCase()) {
+      throw new ForbiddenException('Not authorized to reject this credential');
+    }
+
+    if (credential.verificationStatus !== CredentialStatusEnum.PENDING) {
+      throw new BadRequestException('Credential has already been reviewed');
+    }
+
+    return await this.credentialModel.findByIdAndUpdate(
+      credentialId,
+      {
+        verificationStatus: CredentialStatusEnum.REJECTED,
+        reviewedAt: new Date(),
+        rejectionReason: reason || 'No reason provided',
+      },
+      { new: true },
+    );
   }
 }

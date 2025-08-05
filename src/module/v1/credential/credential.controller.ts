@@ -114,7 +114,7 @@ export class CredentialController {
     return await this.credentialService.deleteCredential(user, _id);
   }
 
-  @Get('verify/retrieve')
+  @Get('organization/retrieve')
   @UseGuards(RoleGuard)
   @Roles(UserRoleEnum.ORGANIZATION)
   async getAllOrganizationVerifiableCredentials(
@@ -127,8 +127,29 @@ export class CredentialController {
     },
   ) {
     return this.credentialService.getAllOrganizationVerifiableCredentials(
-      user.email,
+      user,
       query,
     );
+  }
+
+  @Patch(':id/verify')
+  @UseGuards(RoleGuard)
+  @Roles(UserRoleEnum.ORGANIZATION)
+  async verifyCredential(
+    @Param('id') credentialId: string,
+    @LoggedInUserDecorator() user: UserDocument,
+  ) {
+    return this.credentialService.verifyCredential(credentialId, user);
+  }
+
+  @Patch(':id/reject')
+  @UseGuards(RoleGuard)
+  @Roles(UserRoleEnum.ORGANIZATION)
+  async rejectCredential(
+    @Param('id') credentialId: string,
+    @LoggedInUserDecorator() user: UserDocument,
+    @Body('reason') reason?: string,
+  ) {
+    return this.credentialService.rejectCredential(credentialId, user, reason);
   }
 }
