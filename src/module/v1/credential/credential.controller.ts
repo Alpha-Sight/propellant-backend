@@ -28,6 +28,11 @@ import { PaginationDto } from '../repository/dto/repository.dto';
 import { Roles } from 'src/common/decorators/role.decorator';
 import { UserRoleEnum } from 'src/common/enums/user.enum';
 import { RoleGuard } from '../auth/guards/role.guard';
+import {
+  CredentialCategoryEnum,
+  CredentialStatusEnum,
+  CredentialTypeEnum,
+} from 'src/common/enums/credential.enum';
 
 @UseGuards(JwtAuthGuard)
 @Controller('credentials')
@@ -47,7 +52,12 @@ export class CredentialController {
     console.log('User:', user?._id);
     console.log('Payload:', payload);
     if (file) {
-      console.log('File received:', file.originalname, file.size, file.mimetype);
+      console.log(
+        'File received:',
+        file.originalname,
+        file.size,
+        file.mimetype,
+      );
     } else {
       console.log('No file received');
     }
@@ -102,5 +112,23 @@ export class CredentialController {
     @Query('_id') _id: string,
   ) {
     return await this.credentialService.deleteCredential(user, _id);
+  }
+
+  @Get('verify/retrieve')
+  @UseGuards(RoleGuard)
+  @Roles(UserRoleEnum.ORGANIZATION)
+  async getAllOrganizationVerifiableCredentials(
+    @LoggedInUserDecorator() user: UserDocument,
+    @Query()
+    query: PaginationDto & {
+      type?: CredentialTypeEnum;
+      category?: CredentialCategoryEnum;
+      verificationStatus?: CredentialStatusEnum;
+    },
+  ) {
+    return this.credentialService.getAllOrganizationVerifiableCredentials(
+      user.email,
+      query,
+    );
   }
 }

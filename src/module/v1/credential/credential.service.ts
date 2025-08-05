@@ -6,6 +6,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
+  CredentialCategoryEnum,
   CredentialStatusEnum,
   CredentialTypeEnum,
 } from '../../../common/enums/credential.enum';
@@ -28,6 +29,7 @@ import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
 import { UserService } from '../user/services/user.service';
 import { MailService } from '../mail/mail.service';
 import { CredentialVerificationRequestTemplate } from '../mail/templates/credential-verification-request.email';
+import { CredentialDocument } from '../blockchain/schemas/credential.schema';
 
 @Injectable()
 export class CredentialService {
@@ -451,6 +453,47 @@ export class CredentialService {
     return {
       data: result.data as unknown as CredentialResponseDto[],
       meta: result.meta,
+    };
+  }
+
+  async getAllOrganizationVerifiableCredentials(
+    verifyingEmail: string,
+    query: PaginationDto & {
+      type?: CredentialTypeEnum;
+      category?: CredentialCategoryEnum;
+      verificationStatus?: CredentialStatusEnum;
+    },
+  ) {
+    const { type, category, verificationStatus } = query;
+
+    const baseFilter: any = {
+      verifyingEmail: verifyingEmail.toLowerCase(),
+    };
+
+    if (type) baseFilter.type = type;
+    if (category) baseFilter.category = category;
+    if (verificationStatus) baseFilter.verificationStatus = verificationStatus;
+
+    const [stats, result] = await Promise.all([
+      this.credentialModel.aggregate([
+        { $match: { verifyingEmail: verifyingEmail.toLowerCase() } },
+        {
+          $group: {
+            _id: '$verificationStatus',
+            total: { $sum: 1 },
+          },
+        },
+      ]),
+      this.repositoryService.paginate<TalentCredentialDocument>({
+        model: this.credentialModel,
+        query,
+        options: baseFilter,
+      }),
+    ]);
+
+    return {
+      stats,
+      data: result,
     };
   }
 }
