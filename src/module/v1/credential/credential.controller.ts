@@ -131,25 +131,4 @@ export class CredentialController {
       query,
     );
   }
-
-  @Patch(':id/verify')
-  @UseGuards(RoleGuard)
-  @Roles(UserRoleEnum.ORGANIZATION)
-  async verifyCredential(
-    @Param('id') credentialId: string,
-    @LoggedInUserDecorator() user: UserDocument,
-  ) {
-    return this.credentialService.verifyCredential(credentialId, user);
-  }
-
-  @Patch(':id/reject')
-  @UseGuards(RoleGuard)
-  @Roles(UserRoleEnum.ORGANIZATION)
-  async rejectCredential(
-    @Param('id') credentialId: string,
-    @LoggedInUserDecorator() user: UserDocument,
-    @Body('reason') reason?: string,
-  ) {
-    return this.credentialService.rejectCredential(credentialId, user, reason);
-  }
 }
