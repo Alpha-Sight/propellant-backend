@@ -138,7 +138,7 @@ export class CredentialService {
           ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}`
           : null,
         createdAt: obj.createdAt?.toISOString() || new Date().toISOString(),
-        verifiedAt: obj.verifiedAt?.toISOString() || null,
+        reviewedAt: obj.reviewedAt?.toISOString() || null,
 
         // Keep backward compatibility fields
         subject: obj.subject,
@@ -280,7 +280,7 @@ export class CredentialService {
         ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}`
         : null,
       createdAt: obj.createdAt?.toISOString() || new Date().toISOString(),
-      verifiedAt: obj.verifiedAt?.toISOString() || null,
+      reviewedAt: obj.reviewedAt?.toISOString() || null,
 
       // Keep backward compatibility fields
       subject: obj.subject,
@@ -428,7 +428,7 @@ export class CredentialService {
                   : null,
                 createdAt:
                   obj.createdAt?.toISOString() || new Date().toISOString(),
-                verifiedAt: obj.verifiedAt?.toISOString() || null,
+                  reviewedAt: obj.reviewedAt?.toISOString() || null,
 
                 // Keep backward compatibility fields
                 subject: obj.subject,
