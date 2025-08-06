@@ -16,7 +16,7 @@ export class CredentialResponseDto {
   status: "PENDING" | "VERIFIED" | "REJECTED";  // Verification status
   imageUrl?: string;            // URL to uploaded file
   createdAt: string;           // Creation timestamp
-  verifiedAt?: string;         // Verification timestamp (when verified)
+  reviewedAt?: string;         // Verification timestamp (when verified)
   
   // Keep existing fields for backward compatibility
   subject?: any;
