@@ -67,12 +67,13 @@ export class WalletService implements OnModuleInit {
     
     this.provider = new ethers.JsonRpcProvider(rpcUrl);
     
+    // Fixed ABI with proper function signatures
     const contractABI = [
-      'function issueCredential(address subject, string name, string description, string metadataURI, uint8 credentialType, uint256 validUntil, bytes32 evidenceHash, bool revocable) returns (uint256)',
-      'function verifyCredential(uint256 credentialId)',
-      'function getCredential(uint256 credentialId) view returns (tuple)',
-      'function getUserCredentials(address user) view returns (uint256[])',
-      'function getPendingCredentials(address user) view returns (uint256[])',
+      'function issueCredential(address subject, string memory name, string memory description, string memory metadataURI, uint8 credentialType, uint256 validUntil, bytes32 evidenceHash, bool revocable) external returns (uint256)',
+      'function verifyCredential(uint256 credentialId) external returns (bool)',
+      'function getCredential(uint256 credentialId) external view returns (tuple(address issuer, address subject, string name, string description, uint8 status))',
+      'function getUserCredentials(address user) external view returns (uint256[])',
+      'function getPendingCredentials(address user) external view returns (uint256[])',
       'event CredentialSubmitted(uint256 indexed credentialId, address indexed issuer, address indexed subject)',
       'event CredentialVerified(uint256 indexed credentialId, address indexed verifier)'
     ];

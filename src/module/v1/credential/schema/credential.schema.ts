@@ -7,10 +7,10 @@ import {
 } from 'src/common/enums/credential.enum';
 import { User, UserDocument } from '../../user/schemas/user.schema';
 
-export type CredentialDocument = Credential & Document;
+export type TalentCredentialDocument = TalentCredential & Document;
 
 @Schema({ timestamps: true })
-export class Credential {
+export class TalentCredential {
   @Prop({
     type: mongoose.Schema.Types.ObjectId,
     ref: User.name,
@@ -52,7 +52,7 @@ export class Credential {
   category: CredentialCategoryEnum;
 
   @Prop({ required: false })
-  url: string;
+  externalUrl: string;
 
   @Prop({ required: false })
   imageUrl?: string;
@@ -76,7 +76,7 @@ export class Credential {
   isDeleted: boolean;
 
   @Prop({ default: null })
-  verifiedAt?: Date;
+  reviewedAt?: Date;
 
   @Prop({ default: null })
   rejectionReason: string;
@@ -94,9 +94,10 @@ export class Credential {
   status?: string;
 }
 
-export const CredentialSchema = SchemaFactory.createForClass(Credential);
+export const TalentCredentialSchema =
+  SchemaFactory.createForClass(TalentCredential);
 
-CredentialSchema.pre(/^find/, function (next) {
+TalentCredentialSchema.pre(/^find/, function (next) {
   const preConditions = {
     isDeleted: false,
   };

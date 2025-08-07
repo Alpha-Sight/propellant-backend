@@ -2,12 +2,20 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { CredentialStatusEnum, CredentialTypeEnum } from '../../../common/enums/credential.enum';
+import {
+  CredentialCategoryEnum,
+  CredentialStatusEnum,
+  CredentialTypeEnum,
+} from '../../../common/enums/credential.enum';
 import { RepositoryService } from '../repository/repository.service';
-import { CredentialDocument, Credential } from './schema/credential.schema';
+import {
+  TalentCredentialDocument,
+  TalentCredential,
+} from './schema/credential.schema';
 import { UserDocument } from '../user/schemas/user.schema';
 import {
   UploadCredentialDto,
@@ -22,13 +30,13 @@ import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
 import { UserService } from '../user/services/user.service';
 import { MailService } from '../mail/mail.service';
 import { CredentialVerificationRequestTemplate } from '../mail/templates/credential-verification-request.email';
-
+import { CredentialDocument } from '../blockchain/schemas/credential.schema';
 
 @Injectable()
 export class CredentialService {
   constructor(
-    @InjectModel(Credential.name)
-    private credentialModel: Model<CredentialDocument>,
+    @InjectModel(TalentCredential.name)
+    private credentialModel: Model<TalentCredentialDocument>,
     private repositoryService: RepositoryService,
     private pinataService: PinataService,
     private userService: UserService,
@@ -92,8 +100,9 @@ export class CredentialService {
         title: payload.title,
         type: payload.type,
         category: payload.category,
-        url: payload.url,
-        visibility: payload.visibility !== undefined ? payload.visibility : true,
+        externalUrl: payload.externalUrl,
+        visibility:
+          payload.visibility !== undefined ? payload.visibility : true,
         ipfsHash,
         issuingOrganization: payload.issuingOrganization,
         verifyingOrganization: payload.verifyingOrganization,
@@ -106,7 +115,7 @@ export class CredentialService {
       const created = await this.credentialModel.create(credentialData);
       const obj =
         typeof created.toObject === 'function' ? created.toObject() : created;
-      
+
       // Format response to match frontend expectations
       const response: CredentialResponseDto = {
         _id: obj._id.toString(),
@@ -118,18 +127,19 @@ export class CredentialService {
         issuer: obj.issuingOrganization || payload.issuingOrganization,
         issueDate: obj.issueDate || payload.issueDate,
         expiryDate: obj.expiryDate || payload.expiryDate,
-        verifyingOrganization: obj.verifyingOrganization || payload.verifyingOrganization,
+        verifyingOrganization:
+          obj.verifyingOrganization || payload.verifyingOrganization,
         verifyingEmail: obj.verifyingEmail || payload.verifyingEmail,
         message: obj.message || payload.message,
-        url: obj.url || payload.url,
+        externalUrl: obj.externalUrl || payload.externalUrl,
         visibility: obj.visibility !== undefined ? obj.visibility : true,
         status: obj.verificationStatus || 'PENDING',
         imageUrl: obj.evidenceHash
           ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}`
           : null,
         createdAt: obj.createdAt?.toISOString() || new Date().toISOString(),
-        verifiedAt: obj.verifiedAt?.toISOString() || null,
-        
+        reviewedAt: obj.reviewedAt?.toISOString() || null,
+
         // Keep backward compatibility fields
         subject: obj.subject,
         evidenceHash: obj.evidenceHash,
@@ -137,7 +147,7 @@ export class CredentialService {
         ipfsHash: obj.ipfsHash,
         issuingOrganization: obj.issuingOrganization,
       };
-      
+
       await this.userService.update(user._id.toString(), {
         $inc: { totalCredentialUploads: 1 },
       });
@@ -153,7 +163,7 @@ export class CredentialService {
           message: payload.message,
           issueDate: payload.issueDate,
           expiryDate: payload.expiryDate,
-          url: payload.url,
+          url: payload.externalUrl,
         });
         await this.mailService.sendEmail(
           payload.verifyingEmail,
@@ -179,7 +189,7 @@ export class CredentialService {
       ...paginationQuery
     } = query;
 
-    return await this.repositoryService.paginate<CredentialDocument>({
+    return await this.repositoryService.paginate<TalentCredentialDocument>({
       model: this.credentialModel,
       query: paginationQuery,
       options: {
@@ -198,7 +208,7 @@ export class CredentialService {
     user: UserDocument,
     payload: UpdateCredentialDto,
     file?: Express.Multer.File,
-  ): Promise<CredentialDocument> {
+  ): Promise<TalentCredentialDocument> {
     const { ...updateFields } = payload;
 
     const existingCredential = await this.credentialModel.findOne({
@@ -232,7 +242,9 @@ export class CredentialService {
     return updatedCredential;
   }
 
-  async getCredentialById(credentialId: string): Promise<CredentialResponseDto> {
+  async getCredentialById(
+    credentialId: string,
+  ): Promise<CredentialResponseDto> {
     const credential = await this.credentialModel.findOne({
       _id: credentialId,
       isDeleted: { $ne: true },
@@ -246,7 +258,7 @@ export class CredentialService {
       typeof credential.toObject === 'function'
         ? credential.toObject()
         : credential;
-    
+
     // Format response to match frontend expectations
     const response: CredentialResponseDto = {
       _id: obj._id.toString(),
@@ -261,15 +273,15 @@ export class CredentialService {
       verifyingOrganization: obj.verifyingOrganization,
       verifyingEmail: obj.verifyingEmail,
       message: obj.message,
-      url: obj.url,
+      externalUrl: obj.externalUrl,
       visibility: typeof obj.visibility === 'boolean' ? obj.visibility : true,
       status: obj.verificationStatus || 'PENDING',
       imageUrl: obj.evidenceHash
         ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}`
         : null,
       createdAt: obj.createdAt?.toISOString() || new Date().toISOString(),
-      verifiedAt: obj.verifiedAt?.toISOString() || null,
-      
+      reviewedAt: obj.reviewedAt?.toISOString() || null,
+
       // Keep backward compatibility fields
       subject: obj.subject,
       credentialType: obj.credentialType,
@@ -279,7 +291,7 @@ export class CredentialService {
       ipfsHash: obj.ipfsHash,
       issuingOrganization: obj.issuingOrganization,
     };
-    
+
     return response;
   }
 
@@ -321,7 +333,7 @@ export class CredentialService {
   async getPendingCredentials(query: PaginationDto) {
     const { ...paginationQuery } = query;
 
-    return await this.repositoryService.paginate<CredentialDocument>({
+    return await this.repositoryService.paginate<TalentCredentialDocument>({
       model: this.credentialModel,
       query: paginationQuery,
       options: {
@@ -344,86 +356,93 @@ export class CredentialService {
       ...paginationQuery
     } = query;
 
-    const result = await this.repositoryService.paginate<CredentialDocument>({
-      model: this.credentialModel,
-      query: paginationQuery,
-      options: {
-        issuer: user._id,
-        isDeleted: { $ne: true },
-        ...(type && { type }),
-        ...(verificationStatus && { verificationStatus }),
-        ...(verificationLevel && { verificationLevel }),
-        ...(category && { category: { $regex: category, $options: 'i' } }),
-        ...(visibility !== undefined && { visibility }),
-      },
-      populateFields: [
-        { path: 'issuer', select: 'username email' },
-        { path: 'subject', select: 'username email' },
-      ],
-    });
+    const result =
+      await this.repositoryService.paginate<TalentCredentialDocument>({
+        model: this.credentialModel,
+        query: paginationQuery,
+        options: {
+          issuer: user._id,
+          isDeleted: { $ne: true },
+          ...(type && { type }),
+          ...(verificationStatus && { verificationStatus }),
+          ...(verificationLevel && { verificationLevel }),
+          ...(category && { category: { $regex: category, $options: 'i' } }),
+          ...(visibility !== undefined && { visibility }),
+        },
+        populateFields: [
+          { path: 'issuer', select: 'username email' },
+          { path: 'subject', select: 'username email' },
+        ],
+      });
 
     // Return all credentials where issuer is user._id (no extra filter)
     console.log('[CredentialService] result.data:', result.data);
     try {
       if (Array.isArray(result?.data) && result.data.length) {
         let hasInvalid = false;
-        result.data.forEach((credential: CredentialDocument, idx: number) => {
-          console.log(`[CredentialService] credential[${idx}]:`, credential);
-          if (
-            !credential ||
-            typeof credential !== 'object' ||
-            credential._id === undefined
-          ) {
-            hasInvalid = true;
-          }
-        });
+        result.data.forEach(
+          (credential: TalentCredentialDocument, idx: number) => {
+            console.log(`[CredentialService] credential[${idx}]:`, credential);
+            if (
+              !credential ||
+              typeof credential !== 'object' ||
+              credential._id === undefined
+            ) {
+              hasInvalid = true;
+            }
+          },
+        );
         if (hasInvalid) {
           console.error(
             '[CredentialService] Invalid credential found, skipping mapping.',
           );
           result.data = [];
         } else {
-          const mappedData = result.data.map((credential: CredentialDocument) => {
-            const obj =
-              typeof credential.toObject === 'function'
-                ? credential.toObject()
-                : credential;
-            
-            // Format response to match frontend expectations
-            const formattedCredential: CredentialResponseDto = {
-              _id: obj._id.toString(),
-              credentialId: obj.credentialId || `${obj._id}-${Date.now()}`,
-              title: obj.name || obj.title,
-              description: obj.description,
-              type: obj.credentialType || obj.type,
-              category: obj.category,
-              issuer: obj.issuingOrganization,
-              issueDate: obj.issueDate,
-              expiryDate: obj.expiryDate,
-              verifyingOrganization: obj.verifyingOrganization,
-              verifyingEmail: obj.verifyingEmail,
-              message: obj.message,
-              url: obj.url,
-              visibility: typeof obj.visibility === 'boolean' ? obj.visibility : true,
-              status: obj.verificationStatus || 'PENDING',
-              imageUrl: obj.evidenceHash
-                ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}`
-                : null,
-              createdAt: obj.createdAt?.toISOString() || new Date().toISOString(),
-              verifiedAt: obj.verifiedAt?.toISOString() || null,
-              
-              // Keep backward compatibility fields
-              subject: obj.subject,
-              credentialType: obj.credentialType,
-              evidenceHash: obj.evidenceHash,
-              revocable: obj.revocable,
-              updatedAt: obj.updatedAt || new Date(),
-              ipfsHash: obj.ipfsHash,
-              issuingOrganization: obj.issuingOrganization,
-            };
-            return formattedCredential;
-          });
-          
+          const mappedData = result.data.map(
+            (credential: TalentCredentialDocument) => {
+              const obj =
+                typeof credential.toObject === 'function'
+                  ? credential.toObject()
+                  : credential;
+
+              // Format response to match frontend expectations
+              const formattedCredential: CredentialResponseDto = {
+                _id: obj._id.toString(),
+                credentialId: obj.credentialId || `${obj._id}-${Date.now()}`,
+                title: obj.name || obj.title,
+                description: obj.description,
+                type: obj.credentialType || obj.type,
+                category: obj.category,
+                issuer: obj.issuingOrganization,
+                issueDate: obj.issueDate,
+                expiryDate: obj.expiryDate,
+                verifyingOrganization: obj.verifyingOrganization,
+                verifyingEmail: obj.verifyingEmail,
+                message: obj.message,
+                externalUrl: obj.externalUrl,
+                visibility:
+                  typeof obj.visibility === 'boolean' ? obj.visibility : true,
+                status: obj.verificationStatus || 'PENDING',
+                imageUrl: obj.evidenceHash
+                  ? `https://gateway.pinata.cloud/ipfs/${obj.evidenceHash}`
+                  : null,
+                createdAt:
+                  obj.createdAt?.toISOString() || new Date().toISOString(),
+                  reviewedAt: obj.reviewedAt?.toISOString() || null,
+
+                // Keep backward compatibility fields
+                subject: obj.subject,
+                credentialType: obj.credentialType,
+                evidenceHash: obj.evidenceHash,
+                revocable: obj.revocable,
+                updatedAt: obj.updatedAt || new Date(),
+                ipfsHash: obj.ipfsHash,
+                issuingOrganization: obj.issuingOrganization,
+              };
+              return formattedCredential;
+            },
+          );
+
           result.data = mappedData as any;
         }
       }
@@ -431,10 +450,52 @@ export class CredentialService {
       console.error('[CredentialService] Error mapping credentials:', err);
       result.data = [];
     }
-    
+
     return {
       data: result.data as unknown as CredentialResponseDto[],
       meta: result.meta,
     };
   }
+
+  async getAllOrganizationVerifiableCredentials(
+    user: UserDocument,
+    query: PaginationDto & {
+      type?: CredentialTypeEnum;
+      category?: CredentialCategoryEnum;
+      verificationStatus?: CredentialStatusEnum;
+    },
+  ) {
+    const { type, category, verificationStatus } = query;
+
+    const baseFilter: any = {
+      verifyingEmail: user.email.toLowerCase(),
+    };
+
+    if (type) baseFilter.type = type;
+    if (category) baseFilter.category = category;
+    if (verificationStatus) baseFilter.verificationStatus = verificationStatus;
+
+    const [stats, result] = await Promise.all([
+      this.credentialModel.aggregate([
+        { $match: { verifyingEmail: user.email.toLowerCase() } },
+        {
+          $group: {
+            _id: '$verificationStatus',
+            total: { $sum: 1 },
+          },
+        },
+      ]),
+      this.repositoryService.paginate<TalentCredentialDocument>({
+        model: this.credentialModel,
+        query,
+        options: baseFilter,
+      }),
+    ]);
+
+    return {
+      stats,
+      data: result,
+    };
+  }
+
 }

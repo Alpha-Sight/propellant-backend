@@ -100,12 +100,15 @@ export class CredentialService implements OnModuleInit {
     status: string;
     message: string;
     timestamp: Date;
+    transactionId?: string;
   }> {
     if (!payload || !issuerId) {
       throw new Error('Missing required parameters');
     }
 
     try {
+      await this.ensureInitialized();
+      
       // Generate a PURELY NUMERIC credential ID
       const numericCredentialId = Math.floor(Date.now() / 1000) + Math.floor(Math.random() * 999999);
       const credentialId = numericCredentialId.toString();
@@ -131,16 +134,69 @@ export class CredentialService implements OnModuleInit {
 
       this.logger.log(`Creating credential with data:`, credentialData);
 
-      // Create credential without transaction (since MongoDB standalone doesn't support transactions)
+      // Create credential in database first
       const credential = await this.credentialModel.create(credentialData);
+      this.logger.log(`Credential created in database with ID: ${credential._id}, Numeric ID: ${credentialId}`);
+
+      // Now issue the credential on blockchain
+      const iface = new ethers.Interface([
+        'function issueCredential(address subject, string memory name, string memory description, string memory metadataURI, uint8 credentialType, uint256 validUntil, bytes32 evidenceHash, bool revocable) external returns (uint256)',
+      ]);
       
-      this.logger.log(`Credential created successfully with ID: ${credential._id}, Numeric ID: ${credentialId}`);
+      const encodedData = iface.encodeFunctionData('issueCredential', [
+        payload.subject,
+        payload.name,
+        payload.description,
+        payload.metadataURI || '',
+        payload.credentialType,
+        credentialData.validUntil,
+        payload.evidenceHash,
+        payload.revocable
+      ]);
+
+      this.logger.log(`Encoded data for credential issuance: ${encodedData}`);
+
+      // Queue the blockchain transaction
+      let transactionResult;
+      try {
+        transactionResult = await this.relayerService.queueTransaction({
+          userAddress: issuerId,
+          target: this.credentialModuleAddress,
+          value: '0',
+          data: encodedData,
+          operation: 0,
+          description: `Issue credential ID ${numericCredentialId}`,
+          isAccountCreation: false,
+        });
+
+        // Update credential with transaction ID
+        await this.credentialModel.updateOne(
+          { _id: credential._id },
+          { 
+            $set: { 
+              transactionId: transactionResult.transactionId,
+              status: 'PENDING_BLOCKCHAIN'
+            } 
+          }
+        );
+
+        this.logger.log(`Credential issuance transaction queued with ID: ${transactionResult.transactionId}`);
+      } catch (txError) {
+        this.logger.error(`Failed to queue credential issuance transaction: ${txError.message}`);
+        // Update credential status to indicate blockchain error
+        await this.credentialModel.updateOne(
+          { _id: credential._id },
+          { $set: { status: 'FAILED', lastError: txError.message } }
+        );
+        throw new Error(`Failed to issue credential on blockchain: ${txError.message}`);
+      }
       
       return {
         id: credential._id.toString(),
-        status: 'PENDING',
-        message: 'Credential issuance request received and stored in database',
-        timestamp: new Date()
+        status: 'PENDING_BLOCKCHAIN',
+        message: 'Credential issuance transaction queued for blockchain processing',
+        timestamp: new Date(),
+        transactionId: transactionResult.transactionId
       };
     } catch (error: unknown) {
       this.logger.error(`Failed to issue credential: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -149,31 +205,27 @@ export class CredentialService implements OnModuleInit {
   }
 
   async verifyCredential(credentialId: string, verifierAddress: string): Promise<{
-    transactionId: string;
-    status: string;
-    credentialId: string;
+    transactionId?: string;
+    status?: string;
+    credentialId?: string;
     blockchainCredentialId?: string;
+    error?: string;
+    errorType?: string;
+    message?: string;
   }> {
     try {
       await this.ensureInitialized();
-
       this.logger.log(`Attempting to verify credential with ID: ${credentialId}`);
-      
       let credential;
-      
-      // First, try to find by MongoDB ObjectId if the credentialId looks like one
+      // Find credential by MongoDB ObjectId, credentialId, or blockchainCredentialId
       if (Types.ObjectId.isValid(credentialId)) {
         this.logger.log(`Searching by MongoDB ObjectId: ${credentialId}`);
         credential = await this.credentialModel.findById(credentialId);
       }
-      
-      // If not found, try to find by credentialId field
       if (!credential) {
         this.logger.log(`Searching by credentialId field: ${credentialId}`);
         credential = await this.credentialModel.findOne({ credentialId: credentialId });
       }
-      
-      // If still not found, try to find by blockchainCredentialId
       if (!credential) {
         this.logger.log(`Searching by blockchainCredentialId field: ${credentialId}`);
         const numericId = parseInt(credentialId);
@@ -181,67 +233,90 @@ export class CredentialService implements OnModuleInit {
           credential = await this.credentialModel.findOne({ blockchainCredentialId: numericId });
         }
       }
-
       if (!credential) {
-        throw new Error(`Credential not found with ID: ${credentialId}`);
+        const errorMsg = `Credential not found with ID: ${credentialId}`;
+        this.logger.error(errorMsg);
+        return { error: errorMsg, errorType: 'NOT_FOUND', message: errorMsg };
       }
-
-      this.logger.log(`Found credential: ${JSON.stringify({
-        _id: credential._id,
-        credentialId: credential.credentialId,
-        blockchainCredentialId: credential.blockchainCredentialId,
-        name: credential.name
-      })}`);
-
+      // Permission check: only issuer or admin can verify
+      if (!credential.issuer || (verifierAddress !== credential.issuer.toString() && !this.isAdmin(verifierAddress))) {
+        const errorMsg = `Unauthorized: Only the issuer or an admin can verify this credential.`;
+        this.logger.error(errorMsg);
+        return { error: errorMsg, errorType: 'UNAUTHORIZED', message: errorMsg };
+      }
+      // Check if already verified or revoked
+      if (credential.verificationStatus === 'VERIFIED') {
+        const errorMsg = `Credential already verified.`;
+        this.logger.error(errorMsg);
+        return { error: errorMsg, errorType: 'ALREADY_VERIFIED', message: errorMsg };
+      }
+      if (credential.verificationStatus === 'REVOKED') {
+        const errorMsg = `Credential is revoked and cannot be verified.`;
+        this.logger.error(errorMsg);
+        return { error: errorMsg, errorType: 'REVOKED', message: errorMsg };
+      }
       // Use the numeric blockchain credential ID
       const blockchainCredentialId = credential.blockchainCredentialId || credential.credentialId;
-      
       this.logger.log(`Using blockchain credential ID: ${blockchainCredentialId}`);
-
-      // Ensure the credential ID is numeric and clean
       let numericCredentialId: number;
       if (typeof blockchainCredentialId === 'string') {
-        // Remove any non-numeric characters
         const cleanId = blockchainCredentialId.replace(/[^0-9]/g, '');
         numericCredentialId = parseInt(cleanId);
       } else {
         numericCredentialId = blockchainCredentialId;
       }
-      
       if (isNaN(numericCredentialId) || numericCredentialId <= 0) {
-        throw new Error(`Invalid credential ID format: ${blockchainCredentialId} -> ${numericCredentialId}`);
+        const errorMsg = `Invalid credential ID format: ${blockchainCredentialId} -> ${numericCredentialId}`;
+        this.logger.error(errorMsg);
+        return { error: errorMsg, errorType: 'INVALID_ID', message: errorMsg };
       }
-
       this.logger.log(`Clean numeric credential ID: ${numericCredentialId}`);
-
       const iface = new ethers.Interface([
         'function verifyCredential(uint256 credentialId) returns (bool)',
       ]);
-
       const encodedData = iface.encodeFunctionData('verifyCredential', [numericCredentialId]);
-
       this.logger.log(`Encoded data for verification: ${encodedData}`);
-
-      const transactionResult = await this.relayerService.queueTransaction({
-        userAddress: verifierAddress,
-        target: this.credentialModuleAddress,
-        value: '0',
-        data: encodedData,
-        operation: 0,
-        description: `Verify credential ID ${numericCredentialId}`,
-        isAccountCreation: false,
-      });
-
+      let transactionResult;
+      try {
+        transactionResult = await this.relayerService.queueTransaction({
+          userAddress: verifierAddress,
+          target: this.credentialModuleAddress,
+          value: '0',
+          data: encodedData,
+          operation: 0,
+          description: `Verify credential ID ${numericCredentialId}`,
+          isAccountCreation: false,
+        });
+      } catch (txError) {
+        const errorMsg = `Failed to queue verification transaction: ${txError.message}`;
+        this.logger.error(errorMsg);
+        return { error: errorMsg, errorType: 'TX_ERROR', message: errorMsg };
+      }
+      // Update the credential status in the database to VERIFIED
+      await this.credentialModel.updateOne(
+        { _id: credential._id },
+        { $set: { verificationStatus: 'VERIFIED', verifiedAt: new Date() } }
+      );
+      this.logger.log(`Updated credential ${credential._id} status to VERIFIED`);
       return {
         transactionId: transactionResult.transactionId,
         status: transactionResult.status,
-        credentialId,
+        credentialId: credential._id.toString(),
         blockchainCredentialId: numericCredentialId.toString(),
+        message: 'Credential verification transaction queued successfully',
       };
     } catch (error) {
       this.logger.error(`Failed to verify credential: ${error.message}`);
-      throw error;
+      return { error: error.message, errorType: 'UNKNOWN', message: 'An unexpected error occurred during credential verification.' };
     }
+  }
+
+  // Helper to check admin role (customize as needed)
+  private isAdmin(address: string): boolean {
+    // TODO: Implement actual admin check (e.g., query user DB or check against config)
+    // For now, treat a hardcoded address as admin for demonstration
+    const adminAddresses = [process.env.ADMIN_ADDRESS];
+    return adminAddresses.includes(address);
   }
 
   async getCredentialsForWallet(walletAddress: string) {
@@ -347,9 +422,10 @@ export class CredentialService implements OnModuleInit {
         'function revokeCredential(uint256 tokenId, string reason) returns (bool)',
       ]);
 
+      const revokeReason = 'Revoked by PropellantBD administrator';
       const encodedData = iface.encodeFunctionData('revokeCredential', [
         numericCredentialId,
-        'Revoked by PropellantBD administrator',
+        revokeReason,
       ]);
 
       const transactionResult = await this.relayerService.queueTransaction({
@@ -362,10 +438,24 @@ export class CredentialService implements OnModuleInit {
         isAccountCreation: false,
       });
 
+      // Update the credential status in the database to REJECTED
+      await this.credentialModel.updateOne(
+        { _id: credential._id },
+        { 
+          $set: { 
+            verificationStatus: 'REJECTED',
+            rejectionReason: revokeReason,
+            updatedAt: new Date()
+          } 
+        }
+      );
+
+      this.logger.log(`Updated credential ${credential._id} status to REJECTED`);
+
       return {
         transactionId: transactionResult.transactionId,
         status: transactionResult.status,
-        credentialId,
+        credentialId: credential._id.toString(),
         blockchainCredentialId: numericCredentialId.toString(),
       };
     } catch (error) {
