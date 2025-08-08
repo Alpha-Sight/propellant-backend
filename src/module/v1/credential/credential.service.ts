@@ -457,6 +457,49 @@ export class CredentialService {
     };
   }
 
+  // async getAllOrganizationVerifiableCredentials(
+  //   user: UserDocument,
+  //   query: PaginationDto & {
+  //     type?: CredentialTypeEnum;
+  //     category?: CredentialCategoryEnum;
+  //     verificationStatus?: CredentialStatusEnum;
+  //   },
+  // ) {
+  //   const { type, category, verificationStatus } = query;
+
+  //   const baseFilter: any = {
+  //     verifyingEmail: user.email.toLowerCase(),
+  //   };
+
+  //   if (type) baseFilter.type = type;
+  //   if (category) baseFilter.category = category;
+  //   if (verificationStatus) baseFilter.verificationStatus = verificationStatus;
+
+  //   const [stats, result] = await Promise.all([
+  //     this.credentialModel.aggregate([
+  //       { $match: { verifyingEmail: user.email.toLowerCase() } },
+  //       {
+  //         $group: {
+  //           _id: '$verificationStatus',
+  //           total: { $sum: 1 },
+  //         },
+  //       },
+  //     ]),
+  //     this.repositoryService.paginate<TalentCredentialDocument>({
+  //       model: this.credentialModel,
+  //       query,
+  //       options: baseFilter,
+  //     }),
+  //   ]);
+
+  //   return {
+  //     stats,
+  //     data: result,
+  //   };
+  // }
+
+  // ...existing code...
+
   async getAllOrganizationVerifiableCredentials(
     user: UserDocument,
     query: PaginationDto & {
@@ -466,16 +509,21 @@ export class CredentialService {
     },
   ) {
     const { type, category, verificationStatus } = query;
-
+    const page = Number((query as any).page) || 1;
+    const limit = Number((query as any).limit) || 10;
+    
     const baseFilter: any = {
       verifyingEmail: user.email.toLowerCase(),
+      isDeleted: { $ne: true },
     };
 
     if (type) baseFilter.type = type;
     if (category) baseFilter.category = category;
     if (verificationStatus) baseFilter.verificationStatus = verificationStatus;
 
-    const [stats, result] = await Promise.all([
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const [stats, docs, total] = await Promise.all([
       this.credentialModel.aggregate([
         { $match: { verifyingEmail: user.email.toLowerCase() } },
         {
@@ -485,17 +533,62 @@ export class CredentialService {
           },
         },
       ]),
-      this.repositoryService.paginate<TalentCredentialDocument>({
-        model: this.credentialModel,
-        query,
-        options: baseFilter,
-      }),
+      this.credentialModel
+        .find(baseFilter)
+        .populate('user', 'fullname email')
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      this.credentialModel.countDocuments(baseFilter),
     ]);
+
+    // Map results to include user details in a flat structure for frontend
+    const data = docs.map((doc) => ({
+      _id: doc._id,
+      credentialId: doc.credentialId,
+      title: doc.title || doc.name,
+      description: doc.description,
+      type: doc.type || doc.credentialType,
+      category: doc.category,
+      issuer: doc.issuingOrganization,
+      issueDate: doc.issueDate,
+      expiryDate: doc.expiryDate,
+      verifyingOrganization: doc.verifyingOrganization,
+      verifyingEmail: doc.verifyingEmail,
+      message: doc.message,
+      externalUrl: doc.externalUrl,
+      visibility: typeof doc.visibility === 'boolean' ? doc.visibility : true,
+      status: doc.verificationStatus || 'PENDING',
+      imageUrl: doc.evidenceHash
+        ? `https://gateway.pinata.cloud/ipfs/${doc.evidenceHash}`
+        : null,
+      createdAt: doc.createdAt?.toISOString() || new Date().toISOString(),
+      reviewedAt: doc.reviewedAt?.toISOString() || null,
+      subject: doc.subject,
+      credentialType: doc.credentialType,
+      evidenceHash: doc.evidenceHash,
+      revocable: doc.revocable,
+      updatedAt: doc.updatedAt || new Date(),
+      ipfsHash: doc.ipfsHash,
+      issuingOrganization: doc.issuingOrganization,
+      // User details for organization dashboard
+      user: doc.user
+        ? {
+            _id: doc.user._id,
+            fullname: doc.user.fullname,
+            email: doc.user.email,
+          }
+        : null,
+    }));
 
     return {
       stats,
-      data: result,
+      data,
+      total,
+      page: Number(page),
+      limit: Number(limit),
     };
   }
+
 
 }
