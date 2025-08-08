@@ -370,7 +370,7 @@ export class CredentialService {
           ...(visibility !== undefined && { visibility }),
         },
         populateFields: [
-          { path: 'issuer', select: 'username email' },
+          // { path: 'issuer', select: 'username email' },
           { path: 'subject', select: 'username email' },
         ],
       });
