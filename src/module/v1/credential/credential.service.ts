@@ -361,7 +361,7 @@ export class CredentialService {
         model: this.credentialModel,
         query: paginationQuery,
         options: {
-          issuer: user._id,
+          user: user._id,
           isDeleted: { $ne: true },
           ...(type && { type }),
           ...(verificationStatus && { verificationStatus }),
