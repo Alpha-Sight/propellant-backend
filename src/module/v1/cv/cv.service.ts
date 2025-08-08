@@ -221,11 +221,13 @@ export class CvService {
             ...user,
             ...payload,
             fullName: `${payload.firstName} ${payload.lastName}`,
+            experience: payload.workExperience || [],
           })
         : modernCVTemplate({
             ...user,
             ...payload,
             fullName: `${payload.firstName} ${payload.lastName}`,
+            experience: payload.workExperience || [],
           });
 
     const fileName = `${payload.firstName}_${payload.lastName}_CV.pdf`;
