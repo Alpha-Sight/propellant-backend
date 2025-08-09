@@ -230,13 +230,40 @@ export class CvService {
 
     const fileName = `${payload.firstName}_${payload.lastName}_CV.pdf`;
 
+    const filePath = await PDFHelper.generatePDFfromHTML(html, fileName);
+
     const pdfBuffer = await PDFHelper.generatePDFBufferFromHTML(html);
     await this.userService.update(user._id.toString(), {
       $inc: { totalCvDownload: 1 },
     });
+
+    await this.mailService.sendEmail(
+      payload.email,
+      cvGeneratedEmailSubject(payload.firstName),
+      cvGeneratedEmailTemplate({
+        firstName: payload.firstName,
+        lastName: payload.lastName,
+        hasBio: !!payload.professionalSummary,
+        hasWorkExperience: !!payload.workExperience?.length,
+        hasSkills: !!payload.skills?.length,
+        hasCertifications: !!payload.certifications?.length,
+        // hasLanguages: !!payload.languages?.length,
+        generatedDate: new Date().toLocaleDateString(),
+        appName: ENVIRONMENT.APP.NAME,
+      }),
+      [
+        {
+          filename: fileName,
+          path: filePath,
+          contentType: 'application/pdf',
+        },
+      ],
+    );
+
+    if (existsSync(filePath)) unlinkSync(filePath);
     return {
       success: true,
-      message: 'CV generated successfully',
+      message: 'CV generated and sent successfully',
       buffer: pdfBuffer,
       fileName,
     };
