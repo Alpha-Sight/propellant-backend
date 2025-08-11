@@ -17,6 +17,9 @@ export class RoleGuard implements CanActivate {
     ]);
 
     const user = request?.user;
+    // Debug log: print user and roles
+    // eslint-disable-next-line no-console
+    console.log('[RoleGuard] user:', user, 'roles required:', roles);
     if (user && roles.includes(user.role)) {
       return true;
     }

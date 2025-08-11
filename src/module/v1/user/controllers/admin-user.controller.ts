@@ -23,8 +23,10 @@ import {
 import { UserDocument } from '../schemas/user.schema';
 import { IDQueryDto } from 'src/common/dto/query.dto';
 
+import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
+// ...existing code...
 @NoCache()
-@UseGuards(RoleGuard)
+@UseGuards(JwtAuthGuard, RoleGuard)
 @Roles(UserRoleEnum.SUPER_ADMIN, UserRoleEnum.ADMIN)
 @Controller('users/admin')
 export class AdminUserController {
