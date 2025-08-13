@@ -1,22 +1,37 @@
 export class CredentialResponseDto {
   _id: string;
   credentialId: string;
-  title: string;              // Credential title (mapped from name)
-  description?: string;       // Description
-  type: string;              // Credential type (mapped from credentialType)
-  category: string;          // Credential category
-  issuer: string;            // Issuing organization (mapped from issuingOrganization)
-  issueDate?: string;        // Issue date
-  expiryDate?: string;       // Expiry date (optional)
-  verifyingOrganization?: string;  // Verifying org name
-  verifyingEmail?: string;         // Verifying org email
-  message?: string;               // Additional notes
-  externalUrl?: string;                   // External link
-  visibility: boolean;           // Visibility setting
-  status: "PENDING" | "VERIFIED" | "REJECTED";  // Verification status
-  imageUrl?: string;            // URL to uploaded file
-  createdAt: string;           // Creation timestamp
-  reviewedAt?: string;         // Verification timestamp (when verified)
+  title: string;
+  description?: string;
+  type: string;
+  category: string;
+  issuer: string;
+  issueDate?: Date;
+  expiryDate?: Date;
+  externalUrl?: string;
+  verifyingOrganization?: string;
+  verifyingEmail?: string;
+  message?: string;
+  visibility: boolean;
+  status: "PENDING" | "VERIFIED" | "REJECTED";
+  imageUrl?: string;
+  createdAt: string;
+  reviewedAt?: string;
+  
+  // Verification tracking fields
+  verifiedBy?: string;
+  rejectedBy?: string;
+  rejectedAt?: string;
+  verificationNotes?: string;
+  attestationStatus?: string;
+  verificationRequestSentAt?: string;
+  verificationDeadline?: string;
+  
+  // Blockchain fields
+  blockchainCredentialId?: string;
+  blockchainTransactionId?: string;
+  blockchainStatus?: 'NOT_MINTED' | 'PENDING_BLOCKCHAIN' | 'MINTED' | 'MINTING_FAILED';
+  mintedAt?: string;
   
   // Keep existing fields for backward compatibility
   subject?: any;
@@ -37,7 +52,8 @@ export interface PaginatedCredentialResponse {
     lastPage: number;
   };
 }
-import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+
+import { IsEnum, IsNotEmpty, IsOptional, IsString, IsBoolean, IsDateString } from 'class-validator';
 import {
   CredentialCategoryEnum,
   CredentialStatusEnum,
@@ -61,9 +77,10 @@ export class UploadCredentialDto {
 
   @IsString()
   @IsOptional()
-  externalUrl: string;
+  url: string;
 
   @IsOptional()
+  @IsBoolean()
   visibility?: boolean;
 
   @IsOptional()
@@ -74,37 +91,42 @@ export class UploadCredentialDto {
   @IsString()
   file?: string;
 
-  // New fields for organizations and verification
-  @IsOptional()
+  // Enhanced fields for verification
   @IsString()
-  issuingOrganization?: string;
+  @IsNotEmpty()
+  issuingOrganization: string;
 
-  @IsOptional()
   @IsString()
+  @IsOptional()
   verifyingOrganization?: string;
 
-  @IsOptional()
   @IsString()
+  @IsOptional()
   verifyingEmail?: string;
 
-  @IsOptional()
   @IsString()
+  @IsOptional()
   message?: string;
 
-  @IsOptional()
-  @IsString()
-  issueDate?: string;
+  @IsDateString()
+  @IsNotEmpty()
+  issueDate: string;
 
+  @IsDateString()
   @IsOptional()
-  @IsString()
   expiryDate?: string;
+
+  @IsString()
+  @IsOptional()
+  externalUrl?: string;
+
+  // Auto-minting control
+  @IsBoolean()
+  @IsOptional()
+  autoMint?: boolean;
 }
 
 export class UpdateCredentialDto {
-  // @IsNotEmpty()
-  // @IsString()
-  // credentialId: string;
-
   @IsString()
   @IsOptional()
   title?: string;
@@ -119,14 +141,43 @@ export class UpdateCredentialDto {
 
   @IsString()
   @IsOptional()
-  externalUrl?: string;
+  url?: string;
 
   @IsOptional()
+  @IsBoolean()
   visibility?: boolean;
 
   @IsOptional()
   @IsString()
-  discription?: string;
+  description?: string;
+
+  @IsString()
+  @IsOptional()
+  issuingOrganization?: string;
+
+  @IsString()
+  @IsOptional()
+  verifyingOrganization?: string;
+
+  @IsString()
+  @IsOptional()
+  verifyingEmail?: string;
+
+  @IsString()
+  @IsOptional()
+  message?: string;
+
+  @IsDateString()
+  @IsOptional()
+  issueDate?: string;
+
+  @IsDateString()
+  @IsOptional()
+  expiryDate?: string;
+
+  @IsString()
+  @IsOptional()
+  externalUrl?: string;
 }
 
 export class UpdateCredentialStatusDto {
@@ -141,6 +192,48 @@ export class UpdateCredentialStatusDto {
   @IsOptional()
   @IsString()
   rejectionReason?: string;
+}
+
+// New DTOs for verification process
+export class VerifyCredentialDto {
+  @IsEnum(['VERIFIED', 'REJECTED'])
+  @IsNotEmpty()
+  decision: 'VERIFIED' | 'REJECTED';
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
+
+  @IsString()
+  @IsOptional()
+  verificationReference?: string;
+}
+
+export class GetPendingVerificationsDto extends PaginationDto {
+  @IsOptional()
+  @IsString()
+  organization?: string;
+
+  @IsOptional()
+  @IsString()
+  credentialType?: string;
+
+  @IsOptional()
+  @IsString()
+  sortBy?: 'createdAt' | 'verificationDeadline' | 'title';
+
+  @IsOptional()
+  @IsString()
+  sortOrder?: 'asc' | 'desc';
+}
+
+export class VerificationStatsResponseDto {
+  pending: number;
+  verified: number;
+  rejected: number;
+  total: number;
+  overdueVerifications: number;
+  averageVerificationTime: number; // in hours
 }
 
 export class GetAllCredentialsDto extends PaginationDto {
@@ -161,6 +254,18 @@ export class GetAllCredentialsDto extends PaginationDto {
   category?: string;
 
   @IsOptional()
+  @IsBoolean()
+  visibility?: boolean;
+
+  @IsOptional()
   @IsString()
-  visibility?: string;
+  blockchainStatus?: string;
+
+  @IsOptional()
+  @IsString()
+  attestationStatus?: string;
+
+  @IsOptional()
+  @IsString()
+  verifyingOrganization?: string;
 }

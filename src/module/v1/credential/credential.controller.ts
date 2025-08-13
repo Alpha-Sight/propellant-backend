@@ -10,6 +10,7 @@ import {
   Query,
   UseGuards,
   Param,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/module/v1/auth/guards/jwt.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -23,6 +24,9 @@ import {
   UpdateCredentialDto,
   UploadCredentialDto,
   PaginatedCredentialResponse,
+  VerifyCredentialDto,
+  GetPendingVerificationsDto,
+  VerificationStatsResponseDto,
 } from './dto/credential.dto';
 import { PaginationDto } from '../repository/dto/repository.dto';
 import { Roles } from 'src/common/decorators/role.decorator';
@@ -40,27 +44,22 @@ export class CredentialController {
   constructor(private readonly credentialService: CredentialService) {}
 
   @Post('upload')
-  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('file'))
-  @ResponseMessage(RESPONSE_CONSTANT.CREDENTIAL.UPLOAD_SUCCESS)
   async uploadCredential(
     @LoggedInUserDecorator() user: UserDocument,
     @Body() payload: UploadCredentialDto,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
     console.log('uploadCredential called');
-    console.log('User:', user?._id);
+    console.log('User:', user);
     console.log('Payload:', payload);
-    if (file) {
-      console.log(
-        'File received:',
-        file.originalname,
-        file.size,
-        file.mimetype,
-      );
-    } else {
-      console.log('No file received');
+    console.log('File:', file);
+    
+    // Check if the user has exceeded their upload limit
+    if (payload.title?.length > 500) {
+      throw new BadRequestException('Title is too long. Maximum 500 characters allowed.');
     }
+
     return await this.credentialService.uploadCredential(user, payload, file);
   }
 
@@ -88,6 +87,104 @@ export class CredentialController {
     return await this.credentialService.getCredentialById(_id);
   }
 
+  // 🚀 NEW VERIFICATION ENDPOINTS
+
+  /**
+   * Verify or reject a credential (for organizations)
+   */
+  @Post(':id/verify')
+  @UseGuards(JwtAuthGuard)
+  @ResponseMessage('Credential verification processed successfully')
+  async verifyCredential(
+    @Param('id') credentialId: string,
+    @Body() payload: VerifyCredentialDto,
+    @LoggedInUserDecorator() user: UserDocument,
+  ) {
+    return await this.credentialService.verifyOrRejectCredential(
+      credentialId,
+      user._id.toString(),
+      payload,
+    );
+  }
+
+  /**
+   * Get pending verifications for the logged-in organization
+   */
+  @Get('pending-verifications')
+  @UseGuards(JwtAuthGuard)
+  @ResponseMessage('Pending verifications retrieved successfully')
+  async getPendingVerifications(
+    @LoggedInUserDecorator() user: UserDocument,
+    @Query() query: GetPendingVerificationsDto,
+  ): Promise<PaginatedCredentialResponse> {
+    return await this.credentialService.getPendingVerifications(user.email, query);
+  }
+
+  /**
+   * Get verification statistics for the organization
+   */
+  @Get('verification-stats')
+  @UseGuards(JwtAuthGuard)
+  @ResponseMessage('Verification statistics retrieved successfully')
+  async getVerificationStats(
+    @LoggedInUserDecorator() user: UserDocument,
+  ): Promise<VerificationStatsResponseDto> {
+    return await this.credentialService.getVerificationStats(user.email);
+  }
+
+  /**
+   * Get overdue verifications for admin monitoring
+   */
+  @Get('overdue-verifications')
+  @UseGuards(RoleGuard)
+  @Roles(UserRoleEnum.ADMIN, UserRoleEnum.SUPER_ADMIN)
+  @ResponseMessage('Overdue verifications retrieved successfully')
+  async getOverdueVerifications(
+    @Query() query: GetPendingVerificationsDto,
+  ) {
+    return await this.credentialService.getOverdueVerifications(query);
+  }
+
+  /**
+   * Resend verification request email
+   */
+  @Post(':id/resend-verification')
+  @UseGuards(JwtAuthGuard)
+  @ResponseMessage('Verification request resent successfully')
+  async resendVerificationRequest(
+    @Param('id') credentialId: string,
+    @LoggedInUserDecorator() user: UserDocument,
+  ) {
+    return await this.credentialService.resendVerificationRequest(credentialId, user._id.toString());
+  }
+
+  /**
+   * Retry minting for verified credentials
+   */
+  @Post(':id/retry-minting')
+  @UseGuards(JwtAuthGuard)
+  @ResponseMessage('Credential minting retry initiated')
+  async retryMinting(
+    @Param('id') credentialId: string,
+    @LoggedInUserDecorator() user: UserDocument,
+  ) {
+    return await this.credentialService.retryMinting(credentialId, user._id.toString());
+  }
+
+  /**
+   * Get blockchain status for user's credentials
+   */
+  @Get('blockchain-status')
+  @UseGuards(JwtAuthGuard)
+  @ResponseMessage('Blockchain status retrieved successfully')
+  async getBlockchainStatus(
+    @LoggedInUserDecorator() user: UserDocument,
+  ) {
+    return await this.credentialService.getBlockchainStatus(user._id.toString());
+  }
+
+  // EXISTING ENDPOINTS (PRESERVED)
+
   @Patch(':_id/update')
   @UseInterceptors(FileInterceptor('file'))
   @ResponseMessage(RESPONSE_CONSTANT.CREDENTIAL.UPLOAD_SUCCESS)
@@ -106,7 +203,7 @@ export class CredentialController {
   }
 
   @Delete()
-  // @ResponseMessage(RESPONSE_CONSTANT.CREDENTIAL.DELETE_SUCCESS)
+  @ResponseMessage('Credential deleted successfully')
   async deleteCredential(
     @LoggedInUserDecorator() user: UserDocument,
     @Query('_id') _id: string,
@@ -117,6 +214,7 @@ export class CredentialController {
   @Get('organization/retrieve')
   @UseGuards(RoleGuard)
   @Roles(UserRoleEnum.ORGANIZATION)
+  @ResponseMessage('Organization verifiable credentials retrieved successfully')
   async getAllOrganizationVerifiableCredentials(
     @LoggedInUserDecorator() user: UserDocument,
     @Query()

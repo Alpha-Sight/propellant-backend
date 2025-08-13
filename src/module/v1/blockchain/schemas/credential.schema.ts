@@ -67,6 +67,6 @@ export const CredentialSchema = SchemaFactory.createForClass(Credential);
 
 // Create indexes for better performance
 CredentialSchema.index({ subject: 1, status: 1 });
-CredentialSchema.index({ credentialId: 1 });
 CredentialSchema.index({ blockchainCredentialId: 1 });
 CredentialSchema.index({ issuer: 1 });
+
