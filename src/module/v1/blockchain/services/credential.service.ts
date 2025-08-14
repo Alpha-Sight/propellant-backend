@@ -272,14 +272,22 @@ export class CredentialService implements OnModuleInit {
       }
       this.logger.log(`Clean numeric credential ID: ${numericCredentialId}`);
       const iface = new ethers.Interface([
-        'function verifyCredential(uint256 credentialId) returns (bool)',
+        'function verifyCredential(uint256 credentialId, uint8 status, string memory notes)'
       ]);
-      const encodedData = iface.encodeFunctionData('verifyCredential', [numericCredentialId]);
+      const verificationStatus = 1; // 1 = VERIFIED from your contract's enum
+      const verificationNotes = `Verified by ${verifierAddress} via PropellantBD`;
+
+      const encodedData = iface.encodeFunctionData('verifyCredential', [
+        numericCredentialId,
+        verificationStatus,
+        verificationNotes
+      ]);
+
       this.logger.log(`Encoded data for verification: ${encodedData}`);
       let transactionResult;
       try {
         transactionResult = await this.relayerService.queueTransaction({
-          userAddress: verifierAddress,
+          userAddress: '0x2Ed32Af34d80ADB200592e7e0bD6a3F761677591', // Admin address that has DEFAULT_ADMIN_ROLE
           target: this.credentialModuleAddress,
           value: '0',
           data: encodedData,

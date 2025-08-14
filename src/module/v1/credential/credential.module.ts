@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { RepositoryModule } from '../repository/repository.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { CredentialService } from './credential.service';
@@ -10,6 +10,7 @@ import {
 import { PinataService } from 'src/common/utils/pinata.util';
 import { UserModule } from '../user/user.module';
 import { MailModule } from '../mail/mail.module';
+import { BlockchainModule } from '../blockchain/blockchain.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { MailModule } from '../mail/mail.module';
     RepositoryModule,
     UserModule,
     MailModule,
+    forwardRef(() => BlockchainModule), // Import blockchain module for auto-minting
   ],
   controllers: [CredentialController],
   providers: [CredentialService, PinataService],
