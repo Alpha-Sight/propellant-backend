@@ -8,6 +8,9 @@ export enum CredentialTypeEnum {
   PROJECT_PORTFOLIO = 'PROJECT_PORTFOLIO',
   RECOMMENDATION_LETTER = 'RECOMMENDATION_LETTER',
   OTHER = 'OTHER',
+  DIPLOMA = "DIPLOMA",
+  BADGE = "BADGE",
+  ACHIEVEMENT = "ACHIEVEMENT",
 }
 
 export enum CredentialCategoryEnum {
