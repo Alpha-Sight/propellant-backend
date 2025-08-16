@@ -32,7 +32,11 @@ export class OrganizationPostController {
 
   @Post()
   @UseGuards(RoleGuard)
-  @Roles(UserRoleEnum.ORGANIZATION)
+  @Roles(
+    UserRoleEnum.ORGANIZATION,
+    UserRoleEnum.ADMIN,
+    UserRoleEnum.SUPER_ADMIN,
+  )
   async createJobPost(
     @LoggedInUserDecorator() organization: UserDocument,
     @Body() payload: CreateJobPostDto,
@@ -44,8 +48,8 @@ export class OrganizationPostController {
     );
   }
 
-  // @UseGuards(RoleGuard)
-  // @Roles(UserRoleEnum.ADMIN)
+  @UseGuards(RoleGuard)
+  @Roles(UserRoleEnum.ADMIN)
   @Get('posts')
   async getAllJobPosts(@Query() query: GetAllJobPostsDto) {
     return await this.organizationService.getAllJobPosts(query);
@@ -53,7 +57,11 @@ export class OrganizationPostController {
 
   @Get('organization')
   @UseGuards(RoleGuard)
-  @Roles(UserRoleEnum.ORGANIZATION)
+  @Roles(
+    UserRoleEnum.ORGANIZATION,
+    UserRoleEnum.ADMIN,
+    UserRoleEnum.SUPER_ADMIN,
+  )
   async getOrganizationJobPosts(
     @LoggedInUserDecorator() organization: UserDocument,
     @Query() query: GetAllJobPostsDto,
@@ -71,7 +79,11 @@ export class OrganizationPostController {
 
   @Patch('/:_id/update')
   @UseGuards(RoleGuard)
-  @Roles(UserRoleEnum.ORGANIZATION)
+  @Roles(
+    UserRoleEnum.ORGANIZATION,
+    UserRoleEnum.ADMIN,
+    UserRoleEnum.SUPER_ADMIN,
+  )
   async updateJobPostById(
     @LoggedInUserDecorator() organization: UserDocument,
     @Param('_id') _id: string,
@@ -86,7 +98,11 @@ export class OrganizationPostController {
 
   @Delete('remove')
   @UseGuards(RoleGuard)
-  @Roles(UserRoleEnum.ORGANIZATION)
+  @Roles(
+    UserRoleEnum.ORGANIZATION,
+    UserRoleEnum.ADMIN,
+    UserRoleEnum.SUPER_ADMIN,
+  )
   async deleteJobPost(
     @Query('_id') _id: string,
     @LoggedInUserDecorator() organization: UserDocument,
@@ -113,10 +129,15 @@ export class OrganizationPostController {
 
   @Patch('status')
   @UseGuards(RoleGuard)
-  @Roles(UserRoleEnum.ORGANIZATION)
+  @Roles(
+    UserRoleEnum.ORGANIZATION,
+    UserRoleEnum.ADMIN,
+    UserRoleEnum.SUPER_ADMIN,
+  )
   async toggleJobPostActivation(
     @Query('_id') _id: string,
-    @LoggedInUserDecorator() organization: UserDocument,
+    @LoggedInUserDecorator()
+    organization: UserDocument,
   ) {
     return await this.organizationService.toggleJobPostActivation(
       _id,
@@ -126,7 +147,11 @@ export class OrganizationPostController {
 
   @Get('stats')
   @UseGuards(RoleGuard)
-  @Roles(UserRoleEnum.ORGANIZATION)
+  @Roles(
+    UserRoleEnum.ORGANIZATION,
+    UserRoleEnum.ADMIN,
+    UserRoleEnum.SUPER_ADMIN,
+  )
   async getJobPostStats(@LoggedInUserDecorator() organization: UserDocument) {
     return await this.organizationService.getJobPostStats(
       organization._id.toString(),
@@ -135,7 +160,11 @@ export class OrganizationPostController {
 
   @Get(':jobPostId/talents')
   @UseGuards(RoleGuard)
-  @Roles(UserRoleEnum.ORGANIZATION)
+  @Roles(
+    UserRoleEnum.ORGANIZATION,
+    UserRoleEnum.ADMIN,
+    UserRoleEnum.SUPER_ADMIN,
+  )
   async getMatchingTalents(@Param('jobPostId') jobPostId: string) {
     const talents =
       await this.organizationService.getMatchingTalentsForJob(jobPostId);
