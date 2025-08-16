@@ -14,4 +14,8 @@ export interface App {
     webHomepage: string;
     waitlistPage: string;
   };
+  points: {
+    referral: number;
+    signup: number;
+  };
 }

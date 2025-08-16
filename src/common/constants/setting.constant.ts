@@ -21,5 +21,9 @@ export const SETTINGS: ISettings = {
         ? 'https://propellanthr.com'
         : 'https://Propellant.ng',
     },
+    points: {
+      referral: 1,
+      signup: 3,
+    },
   },
 };
