@@ -103,8 +103,10 @@ export class UserService {
         role === UserRoleEnum.TALENT
           ? {
               totalReferrals: 0,
+              totalCreditPoint: 0,
               totalCredentialUploads: 0,
               totalCvDownload: 0,
+              isReferralBonusClaimed: false,
               referredBy: null,
               skills: [],
             }
@@ -530,6 +532,4 @@ export class UserService {
       await session.endSession();
     }
   }
-
-  
 }
