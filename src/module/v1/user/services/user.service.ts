@@ -55,6 +55,10 @@ export class UserService {
     private walletService: WalletService,
   ) {}
 
+  async findById(userId: string): Promise<UserDocument | null> {
+    return await this.userModel.findById(userId);
+  }
+
   async createUser(payload: CreateUserDto) {
     try {
       const { referralCode, role } = payload;

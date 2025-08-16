@@ -33,6 +33,12 @@ export const RESPONSE_CONSTANT = {
   CREDENTIAL: {
     UPLOAD_SUCCESS: 'Credential uploaded successfully',
     GET_SUCCESS: 'Credential retrieved successfully',
+    VERIFICATION_SUCCESS: 'Credential verification processed successfully',
+    VERIFICATION_REQUEST_SENT: 'Verification request sent successfully',
+    VERIFICATION_REQUEST_RESENT: 'Verification request resent successfully',
+    MINTING_RETRY_SUCCESS: 'Credential minting retry initiated successfully',
+    DELETE_SUCCESS: 'Credential deleted successfully',
+    UPDATE_SUCCESS: 'Credential updated successfully',
   },
   SETTINGS: {
     SETTINGS_CREATED_SUCCESS: 'Settings created successfully',
