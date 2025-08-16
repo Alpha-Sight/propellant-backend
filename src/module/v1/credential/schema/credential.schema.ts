@@ -167,11 +167,15 @@ export class TalentCredential {
   createdAt?: Date;
 }
 
-export const TalentCredentialSchema = SchemaFactory.createForClass(TalentCredential);
+export const TalentCredentialSchema =
+  SchemaFactory.createForClass(TalentCredential);
 
 // Add indexes for efficient queries
 TalentCredentialSchema.index({ verifyingEmail: 1, verificationStatus: 1 });
-TalentCredentialSchema.index({ verifyingOrganization: 1, attestationStatus: 1 });
+TalentCredentialSchema.index({
+  verifyingOrganization: 1,
+  attestationStatus: 1,
+});
 TalentCredentialSchema.index({ user: 1, verificationStatus: 1 });
 
 TalentCredentialSchema.pre(/^find/, function (next) {

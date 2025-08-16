@@ -31,14 +31,9 @@ import {
 } from './dto/credential.dto';
 import { PaginationDto } from '../repository/dto/repository.dto';
 import { PinataService } from 'src/common/utils/pinata.util';
-import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
 import { UserService } from '../user/services/user.service';
 import { MailService } from '../mail/mail.service';
 import { CredentialVerificationRequestTemplate } from '../mail/templates/credential-verification-request.email';
-import { 
-  IssueCredentialDto, 
-  CredentialTypeEnum as BlockchainCredentialTypeEnum 
-} from '../blockchain/dto/issue-credential.dto';
 
 @Injectable()
 export class CredentialService {
@@ -80,7 +75,8 @@ export class CredentialService {
         description: payload.description,
         type: payload.type,
         category: payload.category,
-        visibility: payload.visibility !== undefined ? payload.visibility : true,
+        visibility:
+          payload.visibility !== undefined ? payload.visibility : true,
         ipfsHash,
         evidenceHash,
         issuingOrganization: payload.issuingOrganization,
@@ -91,13 +87,17 @@ export class CredentialService {
         expiryDate: payload.expiryDate ? new Date(payload.expiryDate) : null,
         externalUrl: payload.externalUrl,
         verificationStatus: CredentialStatusEnum.PENDING,
-        attestationStatus: payload.verifyingEmail ? 'PENDING_VERIFICATION' : 'SELF_ATTESTED',
+        attestationStatus: payload.verifyingEmail
+          ? 'PENDING_VERIFICATION'
+          : 'SELF_ATTESTED',
       };
 
       // Set verification deadline if verification is required
       if (payload.verifyingEmail) {
         credentialData['verificationRequestSentAt'] = new Date();
-        credentialData['verificationDeadline'] = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+        credentialData['verificationDeadline'] = new Date(
+          Date.now() + 7 * 24 * 60 * 60 * 1000,
+        ); // 7 days
       }
 
       // Create the credential
@@ -108,7 +108,9 @@ export class CredentialService {
         try {
           await this.sendVerificationRequest(credential, payload);
         } catch (emailError) {
-          this.logger.warn(`Failed to send verification email: ${emailError.message}`);
+          this.logger.warn(
+            `Failed to send verification email: ${emailError.message}`,
+          );
           // Don't fail the credential creation if email fails
         }
       }
@@ -117,9 +119,13 @@ export class CredentialService {
       if (this.shouldAutoMint(payload, user)) {
         try {
           // Implementation would go here when blockchain service is available
-          this.logger.log(`Auto-minting credential ${credential._id} for user ${user._id}`);
+          this.logger.log(
+            `Auto-minting credential ${credential._id} for user ${user._id}`,
+          );
         } catch (mintError) {
-          this.logger.warn(`Failed to auto-mint credential: ${mintError.message}`);
+          this.logger.warn(
+            `Failed to auto-mint credential: ${mintError.message}`,
+          );
           // Don't fail the credential creation if minting fails
         }
       }
@@ -137,7 +143,7 @@ export class CredentialService {
   async verifyOrRejectCredential(
     credentialId: string,
     verifierUserId: string,
-    payload: VerifyCredentialDto
+    payload: VerifyCredentialDto,
   ): Promise<{
     status: string;
     minted: boolean;
@@ -153,7 +159,9 @@ export class CredentialService {
       // Verify the user has permission to verify this credential
       const verifier = await this.userService.findById(verifierUserId);
       if (!this.canVerifyCredential(verifier, credential)) {
-        throw new ForbiddenException('You do not have permission to verify this credential');
+        throw new ForbiddenException(
+          'You do not have permission to verify this credential',
+        );
       }
 
       if (payload.decision === 'VERIFIED') {
@@ -167,28 +175,40 @@ export class CredentialService {
               verifiedAt: new Date(),
               verifiedBy: verifierUserId,
               verificationNotes: payload.notes,
-              rejectionReason: null
-            }
-          }
+              rejectionReason: null,
+            },
+          },
         );
 
         // Auto-mint if user has wallet
-        const user = await this.userService.findById(credential.user.toString());
-        if (user && (user as any).walletAddress && this.shouldAutoMintVerified(credential)) {
+        const user = await this.userService.findById(
+          credential.user.toString(),
+        );
+        if (
+          user &&
+          (user as any).walletAddress &&
+          this.shouldAutoMintVerified(credential)
+        ) {
           try {
-            const mintResult = await this.mintCredentialOnBlockchain(credential, user);
+            const mintResult = await this.mintCredentialOnBlockchain(
+              credential,
+              user,
+            );
             return {
               status: 'VERIFIED',
               minted: true,
               transactionId: mintResult.transactionId,
-              message: 'Credential verified and queued for blockchain minting'
+              message: 'Credential verified and queued for blockchain minting',
             };
           } catch (mintError) {
-            this.logger.warn(`Failed to mint verified credential: ${mintError.message}`);
+            this.logger.warn(
+              `Failed to mint verified credential: ${mintError.message}`,
+            );
             return {
               status: 'VERIFIED',
               minted: false,
-              message: 'Credential verified but minting failed. Can be retried later.'
+              message:
+                'Credential verified but minting failed. Can be retried later.',
             };
           }
         }
@@ -196,9 +216,9 @@ export class CredentialService {
         return {
           status: 'VERIFIED',
           minted: false,
-          message: 'Credential verified. User needs wallet address for minting.'
+          message:
+            'Credential verified. User needs wallet address for minting.',
         };
-
       } else {
         // ❌ REJECTED: Update status with rejection details
         await this.credentialModel.updateOne(
@@ -210,18 +230,17 @@ export class CredentialService {
               rejectedAt: new Date(),
               rejectedBy: verifierUserId,
               rejectionReason: payload.notes || 'No reason provided',
-              verificationNotes: payload.notes
-            }
-          }
+              verificationNotes: payload.notes,
+            },
+          },
         );
 
         return {
           status: 'REJECTED',
           minted: false,
-          message: 'Credential rejected successfully'
+          message: 'Credential rejected successfully',
         };
       }
-
     } catch (error) {
       this.logger.error(`Failed to verify/reject credential: ${error.message}`);
       throw error;
@@ -231,7 +250,10 @@ export class CredentialService {
   /**
    * Helper method to determine if a credential should be auto-minted
    */
-  private shouldAutoMint(payload: UploadCredentialDto, user: UserDocument): boolean {
+  private shouldAutoMint(
+    payload: UploadCredentialDto,
+    user: UserDocument,
+  ): boolean {
     // Auto-mint if it's a self-issued credential (no verifying email)
     return !payload.verifyingEmail;
   }
@@ -239,35 +261,47 @@ export class CredentialService {
   /**
    * Helper method to check if a user can verify a credential
    */
-  private canVerifyCredential(verifier: UserDocument, credential: TalentCredentialDocument): boolean {
+  private canVerifyCredential(
+    verifier: UserDocument,
+    credential: TalentCredentialDocument,
+  ): boolean {
     if (!verifier || !credential) return false;
-    
+
     // Check if the verifier's email matches the credential's verifying email
-    if (credential.verifyingEmail && verifier.email === credential.verifyingEmail) {
+    if (
+      credential.verifyingEmail &&
+      verifier.email === credential.verifyingEmail
+    ) {
       return true;
     }
-    
+
     // Check if the verifier's organization matches the credential's verifying organization
-    if (credential.verifyingOrganization && (verifier as any).organization === credential.verifyingOrganization) {
+    if (
+      credential.verifyingOrganization &&
+      (verifier as any).organization === credential.verifyingOrganization
+    ) {
       return true;
     }
-    
+
     return false;
   }
 
   /**
    * Helper method to determine if a verified credential should be auto-minted
    */
-  private shouldAutoMintVerified(credential: TalentCredentialDocument): boolean {
+  private shouldAutoMintVerified(
+    credential: TalentCredentialDocument,
+  ): boolean {
     // Auto-mint verified credentials by default
     return true;
   }
 
-
   /**
    * Get all credentials with admin privileges
    */
-  async adminGetAllCredentials(query: GetAllCredentialsDto): Promise<PaginatedCredentialResponse> {
+  async adminGetAllCredentials(
+    query: GetAllCredentialsDto,
+  ): Promise<PaginatedCredentialResponse> {
     const {
       page = 1,
       size = 10,
@@ -284,7 +318,7 @@ export class CredentialService {
     } = query;
 
     const filter: any = {
-      isDeleted: false
+      isDeleted: false,
     };
 
     if (type) filter.type = type;
@@ -293,24 +327,28 @@ export class CredentialService {
     if (visibility !== undefined) filter.visibility = visibility;
     if (blockchainStatus) filter.blockchainStatus = blockchainStatus;
     if (attestationStatus) filter.attestationStatus = attestationStatus;
-    if (verifyingOrganization) filter.verifyingOrganization = verifyingOrganization;
+    if (verifyingOrganization)
+      filter.verifyingOrganization = verifyingOrganization;
 
     const sortOptions: any = {};
     sortOptions[sortBy] = sortDirection === 'desc' ? -1 : 1;
 
-    const result = await this.repositoryService.paginate<TalentCredentialDocument>({
-      model: this.credentialModel,
-      query: { page, size },
-      options: filter,
-      populateFields: [
-        { path: 'user', select: 'fullname email' },
-        { path: 'verifiedBy', select: 'fullname email' }
-      ]
-    });
+    const result =
+      await this.repositoryService.paginate<TalentCredentialDocument>({
+        model: this.credentialModel,
+        query: { page, size },
+        options: filter,
+        populateFields: [
+          { path: 'user', select: 'fullname email' },
+          { path: 'verifiedBy', select: 'fullname email' },
+        ],
+      });
 
     return {
-      data: result.data.map(credential => this.transformToResponseDto(credential)),
-      meta: result.meta
+      data: result.data.map((credential) =>
+        this.transformToResponseDto(credential),
+      ),
+      meta: result.meta,
     };
   }
 
@@ -334,7 +372,9 @@ export class CredentialService {
   /**
    * Get overdue verifications for admin monitoring
    */
-  async getOverdueVerifications(query: GetPendingVerificationsDto): Promise<PaginatedCredentialResponse> {
+  async getOverdueVerifications(
+    query: GetPendingVerificationsDto,
+  ): Promise<PaginatedCredentialResponse> {
     const {
       page = 1,
       size = 10,
@@ -345,32 +385,38 @@ export class CredentialService {
     const filter = {
       verificationStatus: CredentialStatusEnum.PENDING,
       verificationDeadline: { $lt: new Date() }, // Past deadline
-      isDeleted: false
+      isDeleted: false,
     };
 
     const sortOptions: any = {};
     sortOptions[sortBy] = sortDirection === 'desc' ? -1 : 1;
 
-    const result = await this.repositoryService.paginate<TalentCredentialDocument>({
-      model: this.credentialModel,
-      query: { page, size },
-      options: filter,
-      populateFields: [
-        { path: 'user', select: 'fullname email' },
-        { path: 'verifiedBy', select: 'fullname email' }
-      ]
-    });
+    const result =
+      await this.repositoryService.paginate<TalentCredentialDocument>({
+        model: this.credentialModel,
+        query: { page, size },
+        options: filter,
+        populateFields: [
+          { path: 'user', select: 'fullname email' },
+          { path: 'verifiedBy', select: 'fullname email' },
+        ],
+      });
 
     return {
-      data: result.data.map(credential => this.transformToResponseDto(credential)),
-      meta: result.meta
+      data: result.data.map((credential) =>
+        this.transformToResponseDto(credential),
+      ),
+      meta: result.meta,
     };
   }
 
   /**
    * Resend verification request email
    */
-  async resendVerificationRequest(credentialId: string, userId: string): Promise<{ message: string }> {
+  async resendVerificationRequest(
+    credentialId: string,
+    userId: string,
+  ): Promise<{ message: string }> {
     const credential = await this.credentialModel.findById(credentialId);
     if (!credential) {
       throw new NotFoundException('Credential not found');
@@ -378,15 +424,21 @@ export class CredentialService {
 
     // Check if user owns the credential
     if (credential.user.toString() !== userId) {
-      throw new ForbiddenException('You can only resend verification for your own credentials');
+      throw new ForbiddenException(
+        'You can only resend verification for your own credentials',
+      );
     }
 
     if (!credential.verifyingEmail) {
-      throw new BadRequestException('No verification email specified for this credential');
+      throw new BadRequestException(
+        'No verification email specified for this credential',
+      );
     }
 
     if (credential.attestationStatus !== 'PENDING_VERIFICATION') {
-      throw new BadRequestException('Credential is not in pending verification status');
+      throw new BadRequestException(
+        'Credential is not in pending verification status',
+      );
     }
 
     try {
@@ -405,17 +457,21 @@ export class CredentialService {
       // Update verification request sent timestamp
       await this.credentialModel.updateOne(
         { _id: credentialId },
-        { 
-          $set: { 
+        {
+          $set: {
             verificationRequestSentAt: new Date(),
-            verificationDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // Reset 7 days deadline
-          }
-        }
+            verificationDeadline: new Date(
+              Date.now() + 7 * 24 * 60 * 60 * 1000,
+            ), // Reset 7 days deadline
+          },
+        },
       );
 
       return { message: 'Verification request resent successfully' };
     } catch (error) {
-      this.logger.error(`Failed to resend verification request: ${error.message}`);
+      this.logger.error(
+        `Failed to resend verification request: ${error.message}`,
+      );
       throw new BadRequestException('Failed to resend verification request');
     }
   }
@@ -423,7 +479,10 @@ export class CredentialService {
   /**
    * Retry minting for verified credentials
    */
-  async retryMinting(credentialId: string, userId: string): Promise<{ message: string; transactionId?: string }> {
+  async retryMinting(
+    credentialId: string,
+    userId: string,
+  ): Promise<{ message: string; transactionId?: string }> {
     const credential = await this.credentialModel.findById(credentialId);
     if (!credential) {
       throw new NotFoundException('Credential not found');
@@ -431,7 +490,9 @@ export class CredentialService {
 
     // Check if user owns the credential
     if (credential.user.toString() !== userId) {
-      throw new ForbiddenException('You can only retry minting for your own credentials');
+      throw new ForbiddenException(
+        'You can only retry minting for your own credentials',
+      );
     }
 
     if (credential.verificationStatus !== CredentialStatusEnum.VERIFIED) {
@@ -443,24 +504,33 @@ export class CredentialService {
     }
 
     if (credential.blockchainStatus === 'PENDING_BLOCKCHAIN') {
-      throw new BadRequestException('Credential minting is already in progress');
+      throw new BadRequestException(
+        'Credential minting is already in progress',
+      );
     }
 
     try {
       const user = await this.userService.findById(userId);
       if (!(user as any).walletAddress) {
-        throw new BadRequestException('User must have a wallet address to mint credentials');
+        throw new BadRequestException(
+          'User must have a wallet address to mint credentials',
+        );
       }
 
-      const mintResult = await this.mintCredentialOnBlockchain(credential, user);
-      
+      const mintResult = await this.mintCredentialOnBlockchain(
+        credential,
+        user,
+      );
+
       return {
         message: 'Credential minting retry initiated successfully',
-        transactionId: mintResult.transactionId
+        transactionId: mintResult.transactionId,
       };
     } catch (error) {
       this.logger.error(`Failed to retry minting: ${error.message}`);
-      throw new BadRequestException(`Failed to retry minting: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to retry minting: ${error.message}`,
+      );
     }
   }
 
@@ -481,21 +551,23 @@ export class CredentialService {
       mintedAt?: string;
     }>;
   }> {
-    const credentials = await this.credentialModel.find({
-      user: userId,
-      isDeleted: false,
-      verificationStatus: CredentialStatusEnum.VERIFIED
-    }).select('title blockchainStatus blockchainTransactionId mintedAt');
+    const credentials = await this.credentialModel
+      .find({
+        user: userId,
+        isDeleted: false,
+        verificationStatus: CredentialStatusEnum.VERIFIED,
+      })
+      .select('title blockchainStatus blockchainTransactionId mintedAt');
 
     const stats = {
       totalCredentials: credentials.length,
       minted: 0,
       pending: 0,
       failed: 0,
-      notMinted: 0
+      notMinted: 0,
     };
 
-    credentials.forEach(credential => {
+    credentials.forEach((credential) => {
       switch (credential.blockchainStatus) {
         case 'MINTED':
           stats.minted++;
@@ -513,13 +585,13 @@ export class CredentialService {
 
     return {
       ...stats,
-      credentials: credentials.map(credential => ({
+      credentials: credentials.map((credential) => ({
         _id: credential._id.toString(),
         title: credential.title,
         blockchainStatus: credential.blockchainStatus,
         transactionId: credential.blockchainTransactionId,
-        mintedAt: credential.mintedAt?.toISOString()
-      }))
+        mintedAt: credential.mintedAt?.toISOString(),
+      })),
     };
   }
 
@@ -548,14 +620,19 @@ export class CredentialService {
     if (payload.description) updateData.description = payload.description;
     if (payload.type) updateData.type = payload.type;
     if (payload.category) updateData.category = payload.category;
-    if (payload.visibility !== undefined) updateData.visibility = payload.visibility;
-    if (payload.issuingOrganization) updateData.issuingOrganization = payload.issuingOrganization;
-    if (payload.verifyingOrganization) updateData.verifyingOrganization = payload.verifyingOrganization;
-    if (payload.verifyingEmail) updateData.verifyingEmail = payload.verifyingEmail;
+    if (payload.visibility !== undefined)
+      updateData.visibility = payload.visibility;
+    if (payload.issuingOrganization)
+      updateData.issuingOrganization = payload.issuingOrganization;
+    if (payload.verifyingOrganization)
+      updateData.verifyingOrganization = payload.verifyingOrganization;
+    if (payload.verifyingEmail)
+      updateData.verifyingEmail = payload.verifyingEmail;
     if (payload.message) updateData.message = payload.message;
     if (payload.externalUrl) updateData.externalUrl = payload.externalUrl;
     if (payload.issueDate) updateData.issueDate = new Date(payload.issueDate);
-    if (payload.expiryDate) updateData.expiryDate = new Date(payload.expiryDate);
+    if (payload.expiryDate)
+      updateData.expiryDate = new Date(payload.expiryDate);
 
     // Handle file upload if provided
     if (file) {
@@ -569,7 +646,7 @@ export class CredentialService {
     const updatedCredential = await this.credentialModel.findByIdAndUpdate(
       _id,
       { $set: updateData },
-      { new: true }
+      { new: true },
     );
 
     return this.transformToResponseDto(updatedCredential);
@@ -578,7 +655,10 @@ export class CredentialService {
   /**
    * Delete a credential (soft delete)
    */
-  async deleteCredential(user: UserDocument, _id: string): Promise<{ message: string }> {
+  async deleteCredential(
+    user: UserDocument,
+    _id: string,
+  ): Promise<{ message: string }> {
     const credential = await this.credentialModel.findById(_id);
     if (!credential) {
       throw new NotFoundException('Credential not found');
@@ -591,12 +671,12 @@ export class CredentialService {
 
     await this.credentialModel.updateOne(
       { _id },
-      { 
-        $set: { 
+      {
+        $set: {
           isDeleted: true,
-          deletedAt: new Date()
-        }
-      }
+          deletedAt: new Date(),
+        },
+      },
     );
 
     return { message: 'Credential deleted successfully' };
@@ -626,9 +706,9 @@ export class CredentialService {
     const filter: any = {
       $or: [
         { verifyingEmail: user.email },
-        { verifyingOrganization: (user as any).organization }
+        { verifyingOrganization: (user as any).organization },
       ],
-      isDeleted: false
+      isDeleted: false,
     };
 
     if (type) filter.type = type;
@@ -638,36 +718,46 @@ export class CredentialService {
     const sortOptions: any = {};
     sortOptions[sortBy] = sortDirection === 'desc' ? -1 : 1;
 
-    const result = await this.repositoryService.paginate<TalentCredentialDocument>({
-      model: this.credentialModel,
-      query: { page, size },
-      options: filter,
-      populateFields: [
-        { path: 'user', select: 'fullname email' },
-        { path: 'verifiedBy', select: 'fullname email' }
-      ]
-    });
+    const result =
+      await this.repositoryService.paginate<TalentCredentialDocument>({
+        model: this.credentialModel,
+        query: { page, size },
+        options: filter,
+        populateFields: [
+          { path: 'user', select: 'fullname email' },
+          { path: 'verifiedBy', select: 'fullname email' },
+        ],
+      });
 
     return {
-      data: result.data.map(credential => this.transformToResponseDto(credential)),
-      meta: result.meta
+      data: result.data.map((credential) =>
+        this.transformToResponseDto(credential),
+      ),
+      meta: result.meta,
     };
   }
 
   /**
    * Fixed transform method to match CredentialResponseDto interface
    */
-  transformToResponseDto(credential: TalentCredentialDocument): CredentialResponseDto {
+  transformToResponseDto(
+    credential: TalentCredentialDocument,
+  ): CredentialResponseDto {
     return {
       _id: credential._id.toString(),
-      credentialId: credential.credentialId || `${credential.user}-${credential.createdAt?.getTime()}`,
+      credentialId:
+        credential.credentialId ||
+        `${credential.user}-${credential.createdAt?.getTime()}`,
       title: credential.title,
       description: credential.description,
       type: credential.type,
       category: credential.category,
       issuer: credential.issuer?.toString() || credential.user.toString(),
       visibility: credential.visibility,
-      status: credential.verificationStatus as "PENDING" | "VERIFIED" | "REJECTED",
+      status: credential.verificationStatus as
+        | 'PENDING'
+        | 'VERIFIED'
+        | 'REJECTED',
       ipfsHash: credential.ipfsHash,
       issuingOrganization: credential.issuingOrganization,
       verifyingOrganization: credential.verifyingOrganization,
@@ -677,7 +767,11 @@ export class CredentialService {
       expiryDate: credential.expiryDate,
       externalUrl: credential.externalUrl,
       attestationStatus: credential.attestationStatus,
-      blockchainStatus: credential.blockchainStatus as "NOT_MINTED" | "PENDING_BLOCKCHAIN" | "MINTED" | "MINTING_FAILED",
+      blockchainStatus: credential.blockchainStatus as
+        | 'NOT_MINTED'
+        | 'PENDING_BLOCKCHAIN'
+        | 'MINTED'
+        | 'MINTING_FAILED',
       createdAt: credential.createdAt?.toISOString(),
       updatedAt: (credential as any).updatedAt?.toISOString(), // Type assertion for timestamps
       // Verification fields
@@ -685,7 +779,8 @@ export class CredentialService {
       rejectedBy: credential.rejectedBy?.toString(),
       rejectedAt: credential.rejectedAt?.toISOString(),
       verificationNotes: credential.verificationNotes,
-      verificationRequestSentAt: credential.verificationRequestSentAt?.toISOString(),
+      verificationRequestSentAt:
+        credential.verificationRequestSentAt?.toISOString(),
       verificationDeadline: credential.verificationDeadline?.toISOString(),
       // Blockchain fields
       blockchainCredentialId: credential.blockchainCredentialId,
@@ -704,7 +799,7 @@ export class CredentialService {
    */
   async getPendingVerifications(
     organizationEmail: string,
-    query: GetPendingVerificationsDto
+    query: GetPendingVerificationsDto,
   ): Promise<PaginatedCredentialResponse> {
     const {
       page = 1,
@@ -716,38 +811,43 @@ export class CredentialService {
     const filter = {
       verifyingEmail: organizationEmail,
       verificationStatus: CredentialStatusEnum.PENDING,
-      isDeleted: false
+      isDeleted: false,
     };
 
     const sortOptions: any = {};
     sortOptions[sortBy] = sortDirection === 'desc' ? -1 : 1;
 
-    const result = await this.repositoryService.paginate<TalentCredentialDocument>({
-      model: this.credentialModel,
-      query: { page, size },
-      options: filter,
-      populateFields: [
-        { path: 'user', select: 'fullname email' },
-        { path: 'verifiedBy', select: 'fullname email' }
-      ]
-    });
+    const result =
+      await this.repositoryService.paginate<TalentCredentialDocument>({
+        model: this.credentialModel,
+        query: { page, size },
+        options: filter,
+        populateFields: [
+          { path: 'user', select: 'fullname email' },
+          { path: 'verifiedBy', select: 'fullname email' },
+        ],
+      });
 
     return {
-      data: result.data.map(credential => this.transformToResponseDto(credential)),
-      meta: result.meta
+      data: result.data.map((credential) =>
+        this.transformToResponseDto(credential),
+      ),
+      meta: result.meta,
     };
   }
 
   /**
    * Fixed getVerificationStats method
    */
-  async getVerificationStats(organizationIdentifier: string): Promise<VerificationStatsResponseDto> {
+  async getVerificationStats(
+    organizationIdentifier: string,
+  ): Promise<VerificationStatsResponseDto> {
     const filter = {
       $or: [
         { verifyingEmail: organizationIdentifier },
-        { verifyingOrganization: organizationIdentifier }
+        { verifyingOrganization: organizationIdentifier },
       ],
-      isDeleted: false
+      isDeleted: false,
     };
 
     const stats = await this.credentialModel.aggregate([
@@ -755,9 +855,9 @@ export class CredentialService {
       {
         $group: {
           _id: '$verificationStatus',
-          count: { $sum: 1 }
-        }
-      }
+          count: { $sum: 1 },
+        },
+      },
     ]);
 
     const statsMap = stats.reduce((acc, stat) => {
@@ -773,7 +873,7 @@ export class CredentialService {
     const overdueVerifications = await this.credentialModel.countDocuments({
       ...filter,
       verificationStatus: CredentialStatusEnum.PENDING,
-      verificationDeadline: { $lt: new Date() }
+      verificationDeadline: { $lt: new Date() },
     });
 
     return {
@@ -802,25 +902,28 @@ export class CredentialService {
 
     const filter = {
       user: user._id,
-      isDeleted: false
+      isDeleted: false,
     };
 
     const sortOptions: any = {};
     sortOptions[sortBy] = sortDirection === 'desc' ? -1 : 1;
 
-    const result = await this.repositoryService.paginate<TalentCredentialDocument>({
-      model: this.credentialModel,
-      query: { page, size },
-      options: filter,
-      populateFields: [
-        { path: 'user', select: 'fullname email' },
-        { path: 'verifiedBy', select: 'fullname email' }
-      ]
-    });
+    const result =
+      await this.repositoryService.paginate<TalentCredentialDocument>({
+        model: this.credentialModel,
+        query: { page, size },
+        options: filter,
+        populateFields: [
+          { path: 'user', select: 'fullname email' },
+          { path: 'verifiedBy', select: 'fullname email' },
+        ],
+      });
 
     return {
-      data: result.data.map(credential => this.transformToResponseDto(credential)),
-      meta: result.meta
+      data: result.data.map((credential) =>
+        this.transformToResponseDto(credential),
+      ),
+      meta: result.meta,
     };
   }
 
@@ -829,13 +932,13 @@ export class CredentialService {
    */
   private async sendVerificationRequest(
     credential: TalentCredentialDocument,
-    payload: UploadCredentialDto
+    payload: UploadCredentialDto,
   ): Promise<void> {
     if (!payload.verifyingEmail) return;
 
     const user = await this.userService.findById(credential.user.toString());
     if (!user) throw new NotFoundException('User not found');
-    
+
     const userName = user.fullname || 'User';
 
     const emailData = {
@@ -847,7 +950,7 @@ export class CredentialService {
       message: payload.message,
       issueDate: payload.issueDate,
       expiryDate: payload.expiryDate,
-      url: payload.externalUrl
+      url: payload.externalUrl,
     };
 
     const emailTemplate = CredentialVerificationRequestTemplate(emailData);
@@ -855,10 +958,12 @@ export class CredentialService {
     await this.mailService.sendEmail(
       payload.verifyingEmail,
       `Credential Verification Request - ${credential.title}`,
-      emailTemplate
+      emailTemplate,
     );
 
-    this.logger.log(`Verification request email sent to ${payload.verifyingEmail} for credential ${credential._id}`);
+    this.logger.log(
+      `Verification request email sent to ${payload.verifyingEmail} for credential ${credential._id}`,
+    );
   }
 
   /**
@@ -886,22 +991,27 @@ export class CredentialService {
   /**
    * Placeholder for blockchain minting - implement based on your blockchain service
    */
-  private async mintCredentialOnBlockchain(credential: TalentCredentialDocument, user: UserDocument): Promise<{ transactionId: string }> {
+  private async mintCredentialOnBlockchain(
+    credential: TalentCredentialDocument,
+    user: UserDocument,
+  ): Promise<{ transactionId: string }> {
     // This should integrate with your blockchain service
     // For now, returning a placeholder
-    this.logger.log(`Minting credential ${credential._id} for user ${user._id}`);
-    
+    this.logger.log(
+      `Minting credential ${credential._id} for user ${user._id}`,
+    );
+
     // Update blockchain status to pending
     await this.credentialModel.updateOne(
       { _id: credential._id },
-      { 
-        $set: { 
+      {
+        $set: {
           blockchainStatus: 'PENDING_BLOCKCHAIN',
-          mintingStartedAt: new Date()
-        }
-      }
+          mintingStartedAt: new Date(),
+        },
+      },
     );
-    
+
     return { transactionId: `tx_${Date.now()}` };
   }
 }
