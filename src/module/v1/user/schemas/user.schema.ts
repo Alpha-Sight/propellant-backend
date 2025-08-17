@@ -127,6 +127,12 @@ export class User {
   @Prop({ required: false })
   totalCvDownload: number;
 
+  @Prop({ required: false })
+  totalCreditPoint: number;
+
+  @Prop({ required: false })
+  isReferralBonusClaimed: boolean;
+
   @Prop({ default: false })
   profileCompleted?: boolean;
 

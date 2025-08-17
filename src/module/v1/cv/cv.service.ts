@@ -41,47 +41,51 @@ export class CvService {
       throw new BadRequestException('Missing required fields');
     }
 
-    const html =
-      template === CVTemplateEnum.CLASSIC
-        ? classicCVTemplate({
-            ...user,
-            ...payload,
-            fullName: `${payload.firstName} ${payload.lastName}`,
-          })
-        : modernCVTemplate({
-            ...user,
-            ...payload,
-            fullName: `${payload.firstName} ${payload.lastName}`,
-          });
+    try {
+      const html =
+        template === CVTemplateEnum.CLASSIC
+          ? classicCVTemplate({
+              ...user,
+              ...payload,
+              fullName: `${payload.firstName} ${payload.lastName}`,
+            })
+          : modernCVTemplate({
+              ...user,
+              ...payload,
+              fullName: `${payload.firstName} ${payload.lastName}`,
+            });
 
-    const fileName = `${payload.firstName}_${payload.lastName}_CV.pdf`;
-    const filePath = await PDFHelper.generatePDFfromHTML(html, fileName);
+      const fileName = `${payload.firstName}_${payload.lastName}_CV.pdf`;
+      const filePath = await PDFHelper.generatePDFfromHTML(html, fileName);
 
-    await this.mailService.sendEmail(
-      payload.email,
-      cvGeneratedEmailSubject(payload.firstName),
-      cvGeneratedEmailTemplate({
-        firstName: payload.firstName,
-        lastName: payload.lastName,
-        hasBio: !!payload.professionalSummary,
-        hasWorkExperience: !!payload.workExperience?.length,
-        hasSkills: !!payload.skills?.length,
-        hasCertifications: !!payload.certifications?.length,
-        // hasLanguages: !!payload.languages?.length,
-        generatedDate: new Date().toLocaleDateString(),
-        appName: ENVIRONMENT.APP.NAME,
-      }),
-      [
-        {
-          filename: fileName,
-          path: filePath,
-          contentType: 'application/pdf',
-        },
-      ],
-    );
+      await this.mailService.sendEmail(
+        payload.email,
+        cvGeneratedEmailSubject(payload.firstName),
+        cvGeneratedEmailTemplate({
+          firstName: payload.firstName,
+          lastName: payload.lastName,
+          hasBio: !!payload.professionalSummary,
+          hasWorkExperience: !!payload.workExperience?.length,
+          hasSkills: !!payload.skills?.length,
+          hasCertifications: !!payload.certifications?.length,
+          // hasLanguages: !!payload.languages?.length,
+          generatedDate: new Date().toLocaleDateString(),
+          appName: ENVIRONMENT.APP.NAME,
+        }),
+        [
+          {
+            filename: fileName,
+            path: filePath,
+            contentType: 'application/pdf',
+          },
+        ],
+      );
 
-    if (existsSync(filePath)) unlinkSync(filePath);
-    return { message: 'CV generated and sent successfully' };
+      if (existsSync(filePath)) unlinkSync(filePath);
+      return { message: 'CV generated and sent successfully' };
+    } catch (error) {
+      throw new BadRequestException('Failed to generate and send CV');
+    }
   }
 
   async saveDraft(user: UserDocument, payload: GenerateCVDto) {
@@ -115,11 +119,10 @@ export class CvService {
     const { jobDescription, ...payload } = userCvData;
     try {
       // Step 1: Premium check
-      // if (user.plan === SubscriptionTypeEnum.FREE) {
-      //   throw new BadRequestException(
-      //     'AI optimization is only available for premium users',
-      //   );
-      // }
+      if (user.plan === SubscriptionTypeEnum.FREE && !user.totalCreditPoint)
+        throw new BadRequestException(
+          'You have no points left. Earn points by completing tasks or upgrade your plan to download more CVs.',
+        );
 
       // Step 2: Validate input
       if (!userCvData) throw new Error('userCvData is required');
@@ -169,6 +172,11 @@ export class CvService {
       // Step 4: Send to AI
       const { data } = await axios.post(ENVIRONMENT.AI.URL, aiPayload);
 
+      // Step 4: decrement total credit points
+      await this.userService.update(user._id.toString(), {
+        $inc: { totalCreditPoint: -1 },
+      });
+
       // Step 5: Merge AI response into original user data
       return {
         ...payload,
@@ -188,11 +196,10 @@ export class CvService {
         })),
       };
     } catch (error) {
-      console.error('[CvService] AI Optimization Failed', error.message);
-      if (error.response) {
-        console.error('[CvService] AI Error Response:', error.response.data);
-      }
-      throw new Error('AI Optimization failed. Please try again.');
+      throw new BadRequestException(
+        'AI Optimization Failed. Try again later',
+        error.message,
+      );
     }
   }
 
@@ -210,64 +217,75 @@ export class CvService {
       throw new BadRequestException('Missing required fields');
     }
 
-    // if (user.plan === SubscriptionTypeEnum.FREE && user.totalCvDownload >= 1)
-    //   throw new BadRequestException(
-    //     'Freemium users are limited to one CV download per month. Upgrade your plan to unlock unlimited downloads.',
-    //   );
+    if (user.plan === SubscriptionTypeEnum.FREE && !user.totalCreditPoint)
+      throw new BadRequestException(
+        'You have no points left. Earn points by completing tasks or upgrade your plan to download more CVs.',
+      );
 
-    const html =
-      template === CVTemplateEnum.CLASSIC
-        ? classicCVTemplate({
-            ...user,
-            ...payload,
-            fullName: `${payload.firstName} ${payload.lastName}`,
-            experience: payload.workExperience || [],
-          })
-        : modernCVTemplate({
-            ...user,
-            ...payload,
-            fullName: `${payload.firstName} ${payload.lastName}`,
-            experience: payload.workExperience || [],
-          });
+    try {
+      const html =
+        template === CVTemplateEnum.CLASSIC
+          ? classicCVTemplate({
+              ...user,
+              ...payload,
+              fullName: `${payload.firstName} ${payload.lastName}`,
+              experience: payload.workExperience || [],
+            })
+          : modernCVTemplate({
+              ...user,
+              ...payload,
+              fullName: `${payload.firstName} ${payload.lastName}`,
+              experience: payload.workExperience || [],
+            });
 
-    const fileName = `${payload.firstName}_${payload.lastName}_CV.pdf`;
+      const fileName = `${payload.firstName}_${payload.lastName}_CV.pdf`;
 
-    const filePath = await PDFHelper.generatePDFfromHTML(html, fileName);
+      const filePath = await PDFHelper.generatePDFfromHTML(html, fileName);
 
-    const pdfBuffer = await PDFHelper.generatePDFBufferFromHTML(html);
-    await this.userService.update(user._id.toString(), {
-      $inc: { totalCvDownload: 1 },
-    });
+      const pdfBuffer = await PDFHelper.generatePDFBufferFromHTML(html);
+      await this.userService.update(user._id.toString(), {
+        $inc: { totalCvDownload: 1 },
+      });
 
-    await this.mailService.sendEmail(
-      payload.email,
-      cvGeneratedEmailSubject(payload.firstName),
-      cvGeneratedEmailTemplate({
-        firstName: payload.firstName,
-        lastName: payload.lastName,
-        hasBio: !!payload.professionalSummary,
-        hasWorkExperience: !!payload.workExperience?.length,
-        hasSkills: !!payload.skills?.length,
-        hasCertifications: !!payload.certifications?.length,
-        // hasLanguages: !!payload.languages?.length,
-        generatedDate: new Date().toLocaleDateString(),
-        appName: ENVIRONMENT.APP.NAME,
-      }),
-      [
-        {
-          filename: fileName,
-          path: filePath,
-          contentType: 'application/pdf',
-        },
-      ],
-    );
+      await this.mailService.sendEmail(
+        payload.email,
+        cvGeneratedEmailSubject(payload.firstName),
+        cvGeneratedEmailTemplate({
+          firstName: payload.firstName,
+          lastName: payload.lastName,
+          hasBio: !!payload.professionalSummary,
+          hasWorkExperience: !!payload.workExperience?.length,
+          hasSkills: !!payload.skills?.length,
+          hasCertifications: !!payload.certifications?.length,
+          // hasLanguages: !!payload.languages?.length,
+          generatedDate: new Date().toLocaleDateString(),
+          appName: ENVIRONMENT.APP.NAME,
+        }),
+        [
+          {
+            filename: fileName,
+            path: filePath,
+            contentType: 'application/pdf',
+          },
+        ],
+      );
 
-    if (existsSync(filePath)) unlinkSync(filePath);
-    return {
-      success: true,
-      message: 'CV generated and sent successfully',
-      buffer: pdfBuffer,
-      fileName,
-    };
+      if (existsSync(filePath)) unlinkSync(filePath);
+
+      await this.userService.update(user._id.toString(), {
+        $inc: { totalCreditPoint: -1 },
+      });
+
+      return {
+        success: true,
+        message: 'CV generated and sent successfully',
+        buffer: pdfBuffer,
+        fileName,
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        'Failed to generate and send CV. Try again',
+      );
+    }
   }
 }

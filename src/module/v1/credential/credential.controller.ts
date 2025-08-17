@@ -54,10 +54,12 @@ export class CredentialController {
     console.log('User:', user);
     console.log('Payload:', payload);
     console.log('File:', file);
-    
+
     // Check if the user has exceeded their upload limit
     if (payload.title?.length > 500) {
-      throw new BadRequestException('Title is too long. Maximum 500 characters allowed.');
+      throw new BadRequestException(
+        'Title is too long. Maximum 500 characters allowed.',
+      );
     }
 
     return await this.credentialService.uploadCredential(user, payload, file);
@@ -117,7 +119,10 @@ export class CredentialController {
     @LoggedInUserDecorator() user: UserDocument,
     @Query() query: GetPendingVerificationsDto,
   ): Promise<PaginatedCredentialResponse> {
-    return await this.credentialService.getPendingVerifications(user.email, query);
+    return await this.credentialService.getPendingVerifications(
+      user.email,
+      query,
+    );
   }
 
   /**
@@ -139,9 +144,7 @@ export class CredentialController {
   @UseGuards(RoleGuard)
   @Roles(UserRoleEnum.ADMIN, UserRoleEnum.SUPER_ADMIN)
   @ResponseMessage('Overdue verifications retrieved successfully')
-  async getOverdueVerifications(
-    @Query() query: GetPendingVerificationsDto,
-  ) {
+  async getOverdueVerifications(@Query() query: GetPendingVerificationsDto) {
     return await this.credentialService.getOverdueVerifications(query);
   }
 
@@ -155,7 +158,10 @@ export class CredentialController {
     @Param('id') credentialId: string,
     @LoggedInUserDecorator() user: UserDocument,
   ) {
-    return await this.credentialService.resendVerificationRequest(credentialId, user._id.toString());
+    return await this.credentialService.resendVerificationRequest(
+      credentialId,
+      user._id.toString(),
+    );
   }
 
   /**
@@ -168,7 +174,10 @@ export class CredentialController {
     @Param('id') credentialId: string,
     @LoggedInUserDecorator() user: UserDocument,
   ) {
-    return await this.credentialService.retryMinting(credentialId, user._id.toString());
+    return await this.credentialService.retryMinting(
+      credentialId,
+      user._id.toString(),
+    );
   }
 
   /**
@@ -177,10 +186,10 @@ export class CredentialController {
   @Get('blockchain-status')
   @UseGuards(JwtAuthGuard)
   @ResponseMessage('Blockchain status retrieved successfully')
-  async getBlockchainStatus(
-    @LoggedInUserDecorator() user: UserDocument,
-  ) {
-    return await this.credentialService.getBlockchainStatus(user._id.toString());
+  async getBlockchainStatus(@LoggedInUserDecorator() user: UserDocument) {
+    return await this.credentialService.getBlockchainStatus(
+      user._id.toString(),
+    );
   }
 
   // EXISTING ENDPOINTS (PRESERVED)
@@ -211,9 +220,13 @@ export class CredentialController {
     return await this.credentialService.deleteCredential(user, _id);
   }
 
-  @Get('organization/retrieve')
+  @Get('retrieve-verifiable-credentials')
   @UseGuards(RoleGuard)
-  @Roles(UserRoleEnum.ORGANIZATION)
+  @Roles(
+    UserRoleEnum.ORGANIZATION,
+    UserRoleEnum.SUPER_ADMIN,
+    UserRoleEnum.ADMIN,
+  )
   @ResponseMessage('Organization verifiable credentials retrieved successfully')
   async getAllOrganizationVerifiableCredentials(
     @LoggedInUserDecorator() user: UserDocument,

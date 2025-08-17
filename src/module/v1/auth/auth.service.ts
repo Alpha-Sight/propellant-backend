@@ -37,6 +37,8 @@ import { WalletService } from '../blockchain/services/wallet.service';
 import { ethers } from 'ethers'; // Import ethers
 import { ConfigService } from '@nestjs/config';
 import * as AccountFactoryABI from '../blockchain/abis/AccountFactory.json';
+import { SettingService } from '../setting/setting.service';
+import { SETTINGS } from 'src/common/constants/setting.constant';
 
 @Injectable()
 export class AuthService {
@@ -50,6 +52,7 @@ export class AuthService {
     private otpService: OtpService,
     private mailService: MailService,
     private jwtService: JwtService,
+    private settingService: SettingService,
     private configService: ConfigService, // Add this injection
     private walletService: WalletService, // Inject WalletService
   ) {
@@ -210,12 +213,30 @@ export class AuthService {
       true,
     );
 
+    const { signup: signupPoint, referral: referralPoint } =
+      SETTINGS.app.points;
+
     await this.userService.updateQuery(
       { email },
       {
         emailVerified: true,
+        totalCreditPoint: signupPoint,
       },
     );
+
+    if (user.referredBy) {
+      const referrer = user.referredBy.toString();
+
+      await this.userService.updateQuery(
+        { _id: referrer },
+        {
+          isReferralBonusClaimed: true,
+          $inc: {
+            totalCreditPoint: referralPoint,
+          },
+        },
+      );
+    }
 
     const welcomeEmailName = user?.email || 'User';
     await this.mailService.sendEmail(

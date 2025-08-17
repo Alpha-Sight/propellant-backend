@@ -12,12 +12,12 @@ export class CredentialResponseDto {
   verifyingOrganization?: string;
   verifyingEmail?: string;
   message?: string;
-  visibility: boolean;
-  status: "PENDING" | "VERIFIED" | "REJECTED";
+  visibility?: boolean;
+  status: 'PENDING' | 'VERIFIED' | 'REJECTED';
   imageUrl?: string;
   createdAt: string;
   reviewedAt?: string;
-  
+
   // Verification tracking fields
   verifiedBy?: string;
   rejectedBy?: string;
@@ -26,13 +26,17 @@ export class CredentialResponseDto {
   attestationStatus?: string;
   verificationRequestSentAt?: string;
   verificationDeadline?: string;
-  
+
   // Blockchain fields
   blockchainCredentialId?: string;
   blockchainTransactionId?: string;
-  blockchainStatus?: 'NOT_MINTED' | 'PENDING_BLOCKCHAIN' | 'MINTED' | 'MINTING_FAILED';
+  blockchainStatus?:
+    | 'NOT_MINTED'
+    | 'PENDING_BLOCKCHAIN'
+    | 'MINTED'
+    | 'MINTING_FAILED';
   mintedAt?: string;
-  
+
   // Keep existing fields for backward compatibility
   subject?: any;
   credentialType?: any;
@@ -53,7 +57,14 @@ export interface PaginatedCredentialResponse {
   };
 }
 
-import { IsEnum, IsNotEmpty, IsOptional, IsString, IsBoolean, IsDateString } from 'class-validator';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsBoolean,
+  IsDateString,
+} from 'class-validator';
 import {
   CredentialCategoryEnum,
   CredentialStatusEnum,
@@ -61,6 +72,7 @@ import {
   VerificationLevelEnum,
 } from 'src/common/enums/credential.enum';
 import { PaginationDto } from '../../repository/dto/repository.dto';
+import { Transform, Type } from 'class-transformer';
 
 export class UploadCredentialDto {
   @IsString()
@@ -81,6 +93,11 @@ export class UploadCredentialDto {
 
   @IsOptional()
   @IsBoolean()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
   visibility?: boolean;
 
   @IsOptional()
