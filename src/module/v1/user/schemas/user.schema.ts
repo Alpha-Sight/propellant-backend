@@ -136,6 +136,9 @@ export class User {
   @Prop({ default: false })
   profileCompleted?: boolean;
 
+  @Prop({ default: false })
+  deactivated: boolean;
+
   @Prop({ default: null })
   lastLoginAt: Date;
 
