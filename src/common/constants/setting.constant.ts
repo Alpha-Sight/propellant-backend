@@ -7,11 +7,11 @@ export const SETTINGS: ISettings = {
     name: 'Propellant HR',
     supportEmail: 'support@Propellanthr.com',
     subscriptionPrice: {
-      [SubscriptionTypeEnum.BASIC]: 49,
-      [SubscriptionTypeEnum.PROFESSIONAL]: 99,
-      [SubscriptionTypeEnum.ENTERPRISE]: 199,
+      [SubscriptionTypeEnum.BASIC]: 1500,
+      [SubscriptionTypeEnum.PROFESSIONAL]: 1500,
+      [SubscriptionTypeEnum.ENTERPRISE]: 1500,
       [SubscriptionTypeEnum.FREE]: 0,
-      [SubscriptionTypeEnum.PREMIUM]: 59,
+      [SubscriptionTypeEnum.PREMIUM]: 1500,
     },
     urls: {
       webHomepage: isDevEnvironment
