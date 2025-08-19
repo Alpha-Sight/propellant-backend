@@ -5,7 +5,7 @@ export class PaginationDto {
   page?: number = 1;
 
   @IsOptional()
-  size?: number = 20;
+  size?: number = 10;
 
   @IsOptional()
   sortBy?: string;

@@ -70,6 +70,7 @@ export class CredentialService {
       // Create credential data
       const credentialData = {
         user: user._id,
+        owner: user.fullname,
         issuer: user._id,
         title: payload.title,
         description: payload.description,
@@ -338,10 +339,6 @@ export class CredentialService {
         model: this.credentialModel,
         query: { page, size },
         options: filter,
-        populateFields: [
-          { path: 'user', select: 'fullname email' },
-          { path: 'verifiedBy', select: 'fullname email' },
-        ],
       });
 
     return {
@@ -401,6 +398,11 @@ export class CredentialService {
           { path: 'verifiedBy', select: 'fullname email' },
         ],
       });
+
+    const populatedData = await this.credentialModel.populate(result.data, {
+      path: 'user',
+      select: 'fullname email',
+    });
 
     return {
       data: result.data.map((credential) =>
@@ -748,6 +750,8 @@ export class CredentialService {
       credentialId:
         credential.credentialId ||
         `${credential.user}-${credential.createdAt?.getTime()}`,
+      user: credential.user._id.toString(),
+      owner: credential.owner || credential.user.fullname || 'not defined',
       title: credential.title,
       description: credential.description,
       type: credential.type,

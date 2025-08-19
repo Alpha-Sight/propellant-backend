@@ -224,6 +224,14 @@ export class AdminGetAllUsersDto extends PaginationDto {
   @IsEnum([UserRoleEnum.TALENT, UserRoleEnum.ORGANIZATION])
   @IsOptional()
   role?: UserRoleEnum;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  userId?: string;
 }
 
 export class VerifyGuestUserDto {
