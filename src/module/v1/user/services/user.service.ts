@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -15,6 +16,7 @@ import {
   UpdateQuery,
 } from 'mongoose';
 import {
+  AdminGetAllUsersDto,
   ChangeEmailDto,
   CreateUserDto,
   CreateWalletUserDto,
@@ -104,6 +106,7 @@ export class UserService {
           ? {
               totalReferrals: 0,
               totalCreditPoint: 0,
+              totalReferralPoint: 0,
               totalCredentialUploads: 0,
               totalCvDownload: 0,
               isReferralBonusClaimed: false,
@@ -531,5 +534,32 @@ export class UserService {
     } finally {
       await session.endSession();
     }
+  }
+
+  async getUserReferrals(user: UserDocument, query: AdminGetAllUsersDto) {
+    const { isDeleted, userId, ...paginationQuery } = query;
+
+    const isAdmin = [UserRoleEnum.ADMIN, UserRoleEnum.SUPER_ADMIN].includes(
+      user.role,
+    );
+
+    if (!isAdmin && userId) {
+      throw new ForbiddenException(
+        'You are not allowed to fetch referrals for other users',
+      );
+    }
+
+    // If admin provided a userId, use it. Otherwise, use the logged-in user's ID
+    const targetUserId = isAdmin && userId ? userId : user._id;
+
+    return await this.repositoryService.paginate<UserDocument>({
+      model: this.userModel,
+      query: paginationQuery,
+      options: {
+        ...(isDeleted && { isDeleted }),
+        referredBy: targetUserId,
+      },
+      ...paginationQuery,
+    });
   }
 }

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -142,7 +143,8 @@ export class AdminUserService extends BaseRepositoryService<UserDocument> {
   async suspendUser(id: string, payload: SuspendUserDto) {
     await this.userModel.findByIdAndUpdate(id, {
       ...payload,
-      accountSuspended: true,
+      deactivated: true,
+      isActive: false,
     });
   }
 
@@ -150,7 +152,8 @@ export class AdminUserService extends BaseRepositoryService<UserDocument> {
     const suspend = await this.userModel.findByIdAndUpdate(
       id,
       {
-        accountSuspended: false,
+        deactivated: false,
+        isActive: true,
       },
       { new: true },
     );
@@ -160,5 +163,136 @@ export class AdminUserService extends BaseRepositoryService<UserDocument> {
     }
 
     return suspend;
+  }
+
+  async adminGetAllReferrals(query: AdminGetAllUsersDto) {
+    const { isDeleted, role, searchQuery, status, ...paginationQuery } = query;
+
+    let search = {};
+    if (searchQuery) {
+      search = {
+        $or: [
+          { firstName: { $regex: searchQuery, $options: 'i' } },
+          { lastName: { $regex: searchQuery, $options: 'i' } },
+          { email: { $regex: searchQuery, $options: 'i' } },
+        ],
+      };
+    }
+
+    const paginatedResults =
+      await this.repositoryService.paginate<UserDocument>({
+        model: this.userModel,
+        query: paginationQuery,
+        options: {
+          ...(isDeleted && { isDeleted }),
+          ...(role && { role }),
+          ...(status && { status }), // ✅ allow filtering by status
+          ...search,
+          referredBy: { $exists: true, $ne: null }, // ✅ only users with referrers
+        },
+        populateFields: 'referredBy',
+      });
+
+    return {
+      ...paginatedResults,
+      data: paginatedResults.data.map((user) => ({
+        referredUser: {
+          id: user._id,
+          fullname: user.fullname,
+          phone: user.phone,
+          email: user.email,
+          reward: user.referralPoint || 0,
+        },
+        referrer: user.referredBy
+          ? {
+              id: user.referredBy._id,
+              fullname: user.referredBy.fullname,
+              phone: user.referredBy.phone,
+              email: user.referredBy.email,
+              reward: user.referredBy.referralPoint || 0,
+            }
+          : null,
+        status: 'COMPLETED',
+        createdAt: user.createdAt,
+      })),
+    };
+  }
+
+  async getReferralLeaderboard(query: AdminGetAllUsersDto) {
+    const { isDeleted, role, status, ...paginationQuery } = query;
+
+    const paginatedResults =
+      await this.repositoryService.paginate<UserDocument>({
+        model: this.userModel,
+        query: paginationQuery,
+        options: {
+          ...(isDeleted && { isDeleted }),
+          ...(role && { role }),
+          ...(status && { status }),
+          // sort: { totalReferrals: -1 }, // 👈 highest referrals first
+        },
+        ...paginationQuery,
+      });
+
+    // Format results for leaderboard
+    return {
+      ...paginatedResults,
+      data: paginatedResults.data.map((user, index) => ({
+        rank: (paginationQuery.page - 1) * paginationQuery.size + (index + 1),
+        user: {
+          _id: user._id,
+          fullname: user.fullname,
+          phone: user.phone,
+          email: user.email,
+          totalReferrals: user.totalReferrals || 0,
+          completedReferrals: user.totalReferrals || 0,
+          referralPoint: user.referralPoint || 0,
+          createdAt: user.createdAt,
+        },
+      })),
+    };
+  }
+
+  async getPlatformReferralStats(user: UserDocument) {
+    // Ensure only admins or super admins can access
+    if (![UserRoleEnum.ADMIN, UserRoleEnum.SUPER_ADMIN].includes(user.role)) {
+      throw new ForbiddenException(
+        'You are not authorized to view these stats',
+      );
+    }
+
+    // 1. Total Referrals → all users who were referred
+    const totalReferrals = await this.userModel.countDocuments({
+      referredBy: { $exists: true, $ne: null },
+    });
+
+    // 2. Total Rewards → sum of rewards earned by all referrals
+    const totalRewardsAgg = await this.userModel.aggregate([
+      {
+        $match: { referredBy: { $exists: true, $ne: null } },
+      },
+      {
+        $group: {
+          _id: null,
+          referralPoint: { $sum: '$referralPoint' },
+        },
+      },
+    ]);
+
+    const totalRewards = totalRewardsAgg[0]?.totalRewards || 0;
+
+    // 3. Active Users → referrals not deleted and active
+    const activeUsers = await this.userModel.countDocuments({
+      referredBy: { $exists: true, $ne: null },
+      isDeleted: false,
+      isActive: true,
+    });
+
+    return {
+      totalReferrals,
+      completedReferrals: totalReferrals,
+      totalRewards,
+      activeUsers,
+    };
   }
 }

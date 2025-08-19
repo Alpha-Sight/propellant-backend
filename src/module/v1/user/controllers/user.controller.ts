@@ -13,6 +13,7 @@ import {
 import { UserService } from '../services/user.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
 import {
+  AdminGetAllUsersDto,
   ChangeEmailDto,
   UpdateOrganizationProfileDto,
   UpdatePasswordDto,
@@ -26,7 +27,6 @@ import { RESPONSE_CONSTANT } from '../../../../common/constants/response.constan
 import { ResponseMessage } from '../../../../common/decorators/response.decorator';
 import { LoggedInUserDecorator } from '../../../../common/decorators/logged-in-user.decorator';
 import { UserDocument } from '../schemas/user.schema';
-import { PaginationDto } from '../../repository/dto/repository.dto';
 import { UserVisibilityEnum } from 'src/common/enums/user.enum';
 
 @NoCache()
@@ -56,7 +56,7 @@ export class UserController {
     @Body() payload: UpdatePasswordDto,
     @LoggedInUserDecorator() user: UserDocument,
   ) {
-    console.log('user', user)
+    console.log('user', user);
     return await this.userService.updatePassword(user, payload);
   }
 
@@ -76,13 +76,13 @@ export class UserController {
     return this.userService.checkPhoneOrEmailExists(query);
   }
 
-  @Get('referrals')
-  async showUserReferrals(
-    @Query() payload: PaginationDto,
-    @LoggedInUserDecorator() user: UserDocument,
-  ) {
-    return await this.userService.showUserReferrals(user, payload);
-  }
+  // @Get('referrals')
+  // async showUserReferrals(
+  //   @Query() payload: PaginationDto,
+  //   @LoggedInUserDecorator() user: UserDocument,
+  // ) {
+  //   return await this.userService.showUserReferrals(user, payload);
+  // }
 
   @Patch('visibility')
   async updateVisibility(
@@ -103,4 +103,14 @@ export class UserController {
   async deleteUserProfile(@LoggedInUserDecorator() user: UserDocument) {
     return this.userService.deleteUserProfile(user);
   }
+
+  @Get('referrals')
+  async getUserReferrals(
+    @LoggedInUserDecorator() user: UserDocument,
+    @Query() query: AdminGetAllUsersDto,
+  ) {
+    return this.userService.getUserReferrals(user, query);
+  }
+
+  
 }

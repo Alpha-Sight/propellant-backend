@@ -26,6 +26,7 @@ import { premiumPlanNotificationEmailTemplate } from '../mail/templates/premium.
 import { SelectPlanDto } from './dto/premium.dto';
 import { SettingService } from '../setting/setting.service';
 import { ISettings } from 'src/common/interfaces/setting.interface';
+import { SETTINGS } from 'src/common/constants/setting.constant';
 
 @Injectable()
 export class PremiumService {
@@ -110,6 +111,17 @@ export class PremiumService {
 
       await session.commitTransaction();
       sessionCommitted = true;
+
+      const { premium: premiumPoint } = SETTINGS.app.points;
+
+      await this.userService.updateQuery(
+        { _id: user._id },
+        {
+          $inc: {
+            premiumPoint: premiumPoint,
+          },
+        },
+      );
 
       // Send email notifications for successful upgrade
       await Promise.all([

@@ -24,6 +24,7 @@ export const SETTINGS: ISettings = {
     points: {
       referral: 1,
       signup: 3,
+      premium: 5,
     },
   },
 };

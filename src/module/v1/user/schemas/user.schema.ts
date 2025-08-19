@@ -131,6 +131,9 @@ export class User {
   totalCreditPoint: number;
 
   @Prop({ required: false })
+  referralPoint: number;
+
+  @Prop({ required: false })
   isReferralBonusClaimed: boolean;
 
   @Prop({ default: false })
@@ -138,6 +141,9 @@ export class User {
 
   @Prop({ default: false })
   deactivated: boolean;
+
+  @Prop({ default: true })
+  isActive: boolean;
 
   @Prop({ default: null })
   lastLoginAt: Date;
@@ -147,6 +153,8 @@ export class User {
 
   @Prop({ default: false })
   isDeleted: boolean;
+
+  createdAt: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

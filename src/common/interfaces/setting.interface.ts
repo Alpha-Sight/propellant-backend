@@ -17,5 +17,6 @@ export interface App {
   points: {
     referral: number;
     signup: number;
+    premium: number;
   };
 }
