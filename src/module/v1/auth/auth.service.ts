@@ -185,6 +185,13 @@ export class AuthService {
     );
     delete user['_doc'].password;
 
+    await this.userService.updateQuery(
+      { email },
+      {
+        lastLoginAt: new Date(),
+      },
+    );
+
     return {
       ...user['_doc'],
       accessToken: token,
@@ -233,6 +240,7 @@ export class AuthService {
           isReferralBonusClaimed: true,
           $inc: {
             totalCreditPoint: referralPoint,
+            referralPoint: referralPoint,
           },
         },
       );

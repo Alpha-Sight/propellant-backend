@@ -91,4 +91,25 @@ export class AdminUserController {
   async restore(@Query() { _id }: IDQueryDto) {
     return await this.adminUserService.restoreDeleted(_id);
   }
+
+  @UseGuards(RoleGuard)
+  @Roles(UserRoleEnum.SUPER_ADMIN, UserRoleEnum.ADMIN)
+  @Get('referrals')
+  async getAllReferrals(@Query() query: AdminGetAllUsersDto) {
+    return await this.adminUserService.adminGetAllReferrals(query);
+  }
+
+  @UseGuards(RoleGuard)
+  @Roles(UserRoleEnum.SUPER_ADMIN, UserRoleEnum.ADMIN)
+  @Get('referrals/leaderboard')
+  async getReferralLeaderboard(@Query() query: AdminGetAllUsersDto) {
+    return await this.adminUserService.getReferralLeaderboard(query);
+  }
+
+  @UseGuards(RoleGuard)
+  @Roles(UserRoleEnum.SUPER_ADMIN, UserRoleEnum.ADMIN)
+  @Get('referrals/stats')
+  async getPlatformReferralStats(@LoggedInUserDecorator() user: UserDocument) {
+    return await this.adminUserService.getPlatformReferralStats(user);
+  }
 }

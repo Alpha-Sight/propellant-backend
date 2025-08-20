@@ -1,6 +1,8 @@
 export class CredentialResponseDto {
   _id: string;
   credentialId: string;
+  user: string;
+  owner: string;
   title: string;
   description?: string;
   type: string;

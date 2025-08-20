@@ -29,6 +29,9 @@ export class TalentCredential {
   })
   subject: UserDocument;
 
+  @Prop({ required: false })
+  owner: string;
+
   @Prop({ required: true })
   title: string;
 
