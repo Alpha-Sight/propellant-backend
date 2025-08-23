@@ -745,12 +745,40 @@ export class CredentialService {
   transformToResponseDto(
     credential: TalentCredentialDocument,
   ): CredentialResponseDto {
+    // Fix credentialId serialization
+    let credentialId: string;
+    if (credential.credentialId == null) {
+      credentialId = `${credential.user}-${credential.createdAt?.getTime()}`;
+    } else if (typeof credential.credentialId === 'object') {
+      credentialId = String(credential.credentialId);
+    } else {
+      credentialId = credential.credentialId;
+    }
+
+    // Fix verifiedBy serialization
+    let verifiedBy: string | undefined;
+    if (credential.verifiedBy) {
+      if (typeof credential.verifiedBy === 'object' && credential.verifiedBy._id) {
+        verifiedBy = credential.verifiedBy._id.toString();
+      } else {
+        verifiedBy = credential.verifiedBy.toString();
+      }
+    }
+
+    // Fix rejectedBy serialization
+    let rejectedBy: string | undefined;
+    if (credential.rejectedBy) {
+      if (typeof credential.rejectedBy === 'object' && credential.rejectedBy._id) {
+        rejectedBy = credential.rejectedBy._id.toString();
+      } else {
+        rejectedBy = credential.rejectedBy.toString();
+      }
+    }
+
     return {
       _id: credential._id.toString(),
-      credentialId:
-        credential.credentialId ||
-        `${credential.user}-${credential.createdAt?.getTime()}`,
-      user: credential.user._id.toString(),
+      credentialId,
+      user: credential.user._id?.toString() || credential.user.toString(),
       owner: credential.owner || credential.user.fullname || 'not defined',
       title: credential.title,
       description: credential.description,
@@ -758,10 +786,7 @@ export class CredentialService {
       category: credential.category,
       issuer: credential.issuer?.toString() || credential.user.toString(),
       visibility: credential.visibility,
-      status: credential.verificationStatus as
-        | 'PENDING'
-        | 'VERIFIED'
-        | 'REJECTED',
+      status: credential.verificationStatus as 'PENDING' | 'VERIFIED' | 'REJECTED',
       ipfsHash: credential.ipfsHash,
       issuingOrganization: credential.issuingOrganization,
       verifyingOrganization: credential.verifyingOrganization,
@@ -771,20 +796,15 @@ export class CredentialService {
       expiryDate: credential.expiryDate,
       externalUrl: credential.externalUrl,
       attestationStatus: credential.attestationStatus,
-      blockchainStatus: credential.blockchainStatus as
-        | 'NOT_MINTED'
-        | 'PENDING_BLOCKCHAIN'
-        | 'MINTED'
-        | 'MINTING_FAILED',
+      blockchainStatus: credential.blockchainStatus as 'NOT_MINTED' | 'PENDING_BLOCKCHAIN' | 'MINTED' | 'MINTING_FAILED',
       createdAt: credential.createdAt?.toISOString(),
-      updatedAt: (credential as any).updatedAt?.toISOString(), // Type assertion for timestamps
+      updatedAt: (credential as any).updatedAt?.toISOString(),
       // Verification fields
-      verifiedBy: credential.verifiedBy?.toString(),
-      rejectedBy: credential.rejectedBy?.toString(),
+      verifiedBy,
+      rejectedBy,
       rejectedAt: credential.rejectedAt?.toISOString(),
       verificationNotes: credential.verificationNotes,
-      verificationRequestSentAt:
-        credential.verificationRequestSentAt?.toISOString(),
+      verificationRequestSentAt: credential.verificationRequestSentAt?.toISOString(),
       verificationDeadline: credential.verificationDeadline?.toISOString(),
       // Blockchain fields
       blockchainCredentialId: credential.blockchainCredentialId,
@@ -998,12 +1018,29 @@ export class CredentialService {
   private async mintCredentialOnBlockchain(
     credential: TalentCredentialDocument,
     user: UserDocument,
-  ): Promise<{ transactionId: string }> {
-    // This should integrate with your blockchain service
-    // For now, returning a placeholder
-    this.logger.log(
-      `Minting credential ${credential._id} for user ${user._id}`,
-    );
+  ): Promise<{ transactionId: string; explorerUrl: string; imageUrl?: string; tokenId?: string }> {
+    // Direct contract integration
+    const { BLOCKCHAIN_RPC_URL, RELAYER_PRIVATE_KEY, CREDENTIAL_VERIFICATION_MODULE_ADDRESS } = process.env;
+    if (!BLOCKCHAIN_RPC_URL || !RELAYER_PRIVATE_KEY || !CREDENTIAL_VERIFICATION_MODULE_ADDRESS) {
+      throw new Error('Blockchain environment variables missing');
+    }
+
+    const ethers = require('ethers');
+    const provider = new ethers.JsonRpcProvider(BLOCKCHAIN_RPC_URL);
+    const wallet = new ethers.Wallet(RELAYER_PRIVATE_KEY, provider);
+    const abi = [
+      'function issueCredential(address to, string credentialId, string metadataUri) public returns (uint256)',
+      'event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)'
+    ];
+    const contract = new ethers.Contract(CREDENTIAL_VERIFICATION_MODULE_ADDRESS, abi, wallet);
+
+    // Prepare mint params
+    const to = user.walletAddress;
+    const credentialId = credential._id.toString();
+    const metadataUri = credential.externalUrl || '';
+    if (!to || !credentialId) {
+      throw new Error('Credential owner or ID missing');
+    }
 
     // Update blockchain status to pending
     await this.credentialModel.updateOne(
@@ -1016,6 +1053,58 @@ export class CredentialService {
       },
     );
 
-    return { transactionId: `tx_${Date.now()}` };
+    let tx, receipt, tokenId;
+    try {
+      tx = await contract.issueCredential(to, credentialId, metadataUri);
+      await tx.wait();
+      receipt = await provider.getTransactionReceipt(tx.hash);
+      // Parse tokenId from Transfer event
+      if (receipt && receipt.logs && receipt.logs.length > 0) {
+        const iface = new ethers.Interface(abi);
+        for (const log of receipt.logs) {
+          try {
+            const parsed = iface.parseLog(log);
+            if (parsed && parsed.name === 'Transfer') {
+              tokenId = parsed.args.tokenId.toString();
+              break;
+            }
+          } catch {}
+        }
+      }
+      await this.credentialModel.updateOne(
+        { _id: credential._id },
+        {
+          $set: {
+            blockchainStatus: 'MINTED',
+            blockchainTransactionId: tx.hash,
+            mintedAt: new Date(),
+            blockchainCredentialId: tokenId || credentialId,
+          },
+        },
+      );
+    } catch (err) {
+      await this.credentialModel.updateOne(
+        { _id: credential._id },
+        {
+          $set: {
+            blockchainStatus: 'MINTING_FAILED',
+            blockchainError: err.message,
+            lastMintAttempt: new Date(),
+          },
+        },
+      );
+      throw new Error('Minting failed: ' + err.message);
+    }
+
+    // Explorer/IPFS links
+    const explorerUrl = `https://sepolia.etherscan.io/tx/${tx.hash}`;
+    const imageUrl = credential.ipfsHash ? `https://gateway.pinata.cloud/ipfs/${credential.ipfsHash}` : undefined;
+
+    return {
+      transactionId: tx.hash,
+      explorerUrl,
+      imageUrl,
+      tokenId,
+    };
   }
 }
