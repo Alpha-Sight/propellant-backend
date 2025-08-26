@@ -289,8 +289,43 @@ export class RelayerService implements OnModuleInit {
       });
       this.logger.log(`Transaction sent: ${tx.hash}`);
       const receipt = await tx.wait();
-      this.logger.log(`Transaction confirmed in block: ${receipt.blockNumber}`);
+      this.logger.log(`Transaction confirmed in block: ${receipt.blockNumber} (status=${receipt.status})`);
 
+      // If the receipt indicates a revert (status === 0), mark transaction and credential as FAILED/REJECTED
+      if (receipt.status === 0) {
+        await this.transactionModel.updateOne(
+          { _id: transactionMongoId },
+          {
+            status: 'FAILED',
+            transactionHash: tx.hash,
+            blockNumber: receipt.blockNumber,
+            processedAt: new Date(),
+            lastError: 'On-chain transaction reverted'
+          }
+        );
+
+        // If this was a credential related transaction, mark the credential as REJECTED/FAILED
+        if (transaction.description && (transaction.description.includes('Issue credential') || transaction.description.includes('Verify credential'))) {
+          await this.credentialModel.updateOne(
+            { transactionId: transaction.transactionId },
+            {
+              $set: {
+                status: 'REJECTED',
+                verificationStatus: 'REJECTED',
+                transactionHash: tx.hash,
+                blockNumber: receipt.blockNumber,
+                updatedAt: new Date(),
+                error: 'On-chain transaction reverted'
+              }
+            }
+          );
+          this.logger.log(`Transaction ${transaction.transactionId} reverted; associated credential marked REJECTED.`);
+        }
+
+        return; // done processing this transaction
+      }
+
+      // Success path (receipt.status === 1)
       await this.transactionModel.updateOne(
         { _id: transactionMongoId },
         {
@@ -301,25 +336,114 @@ export class RelayerService implements OnModuleInit {
         }
       );
 
+      // Try to parse CredentialIssued event from receipt logs to get the canonical on-chain id
+      // This ensures we don't rely on locally generated ids.
+      let onchainCredentialId: string | null = null;
+      try {
+        // Try both common event shapes: uint256 and bytes32. Some deployments use bytes32 ids.
+        const issueIfaceUint = new ethers.Interface([
+          'event CredentialIssued(uint256 indexed credentialId, address indexed subject, address indexed issuer)'
+        ]);
+        const issueIfaceBytes = new ethers.Interface([
+          // include credentialType optional arg to match flattened ABI variant
+          'event CredentialIssued(bytes32 indexed id, address indexed subject, address indexed issuer, uint8 credentialType)'
+        ]);
+
+        for (const log of receipt.logs) {
+          try {
+            const parsedUint = issueIfaceUint.parseLog({ topics: Array.from(log.topics), data: log.data });
+            if (parsedUint && parsedUint.name === 'CredentialIssued') {
+              onchainCredentialId = parsedUint.args[0].toString();
+              this.logger.log(`Parsed CredentialIssued (uint) event, on-chain id=${onchainCredentialId}`);
+              break;
+            }
+          } catch (e) {
+            // ignore, try bytes32 next
+          }
+
+          try {
+            const parsedBytes = issueIfaceBytes.parseLog({ topics: Array.from(log.topics), data: log.data });
+            if (parsedBytes && parsedBytes.name === 'CredentialIssued') {
+              onchainCredentialId = parsedBytes.args[0].toString();
+              this.logger.log(`Parsed CredentialIssued (bytes32) event, on-chain id=${onchainCredentialId}`);
+              break;
+            }
+          } catch (e) {
+            // not the event we're looking for, ignore
+          }
+        }
+      } catch (e) {
+        this.logger.warn('Failed to parse CredentialIssued event interface:', e.message || e);
+      }
+
+      // Fallback: if no event parsed, attempt to read the first indexed topic as numeric id
+      if (!onchainCredentialId) {
+        try {
+          for (const log of receipt.logs) {
+            // Only consider logs emitted by the credential module contract
+            if (log.address && this.configService.get<string>('CREDENTIAL_VERIFICATION_MODULE_ADDRESS') && log.address.toLowerCase() === this.configService.get<string>('CREDENTIAL_VERIFICATION_MODULE_ADDRESS').toLowerCase()) {
+              if (log.topics && log.topics.length > 1) {
+                const possibleIdHex = log.topics[1];
+                // Convert hex to decimal string
+                try {
+                  const bn = ethers.toBigInt(possibleIdHex);
+                  onchainCredentialId = bn.toString();
+                  this.logger.log(`Fallback parsed id from topics[1]: ${onchainCredentialId}`);
+                  break;
+                } catch (e) {
+                  // not numeric; still store hex string as tokenId fallback
+                  onchainCredentialId = possibleIdHex.toString();
+                  this.logger.log(`Fallback parsed hex id from topics[1]: ${onchainCredentialId}`);
+                  break;
+                }
+              }
+            }
+          }
+        } catch (e) {
+          this.logger.warn('Fallback parsing of topics failed:', e.message || e);
+        }
+      }
+
       let credentialStatus = 'ISSUED';
-      
       if (transaction.description && transaction.description.includes('Verify credential')) {
         credentialStatus = 'VERIFIED';
       } else if (transaction.description && transaction.description.includes('Issue credential')) {
         credentialStatus = 'ISSUED';
       }
 
-      // Update credential status based on transaction type
+      // Update credential status based on transaction type; update both 'status' and 'verificationStatus' for compatibility
       if (transaction.description && (transaction.description.includes('Issue credential') || transaction.description.includes('Verify credential'))) {
+        const updateFields: any = {
+          status: credentialStatus,
+          transactionHash: tx.hash,
+          blockNumber: receipt.blockNumber,
+          updatedAt: new Date(),
+        };
+
+        // If we parsed an on-chain id from the issue event, persist it as the authoritative id.
+        if (onchainCredentialId) {
+          const numeric = parseInt(onchainCredentialId, 10);
+          if (!isNaN(numeric)) {
+            updateFields.blockchainCredentialId = numeric;
+          } else {
+            // fallback: store the string id in tokenId if number conversion fails
+            updateFields.tokenId = onchainCredentialId;
+          }
+          // Mark as issued on-chain
+          updateFields.verificationStatus = 'ISSUED';
+        }
+
+        if (credentialStatus === 'VERIFIED') {
+          updateFields.verificationStatus = 'VERIFIED';
+          updateFields.verifiedAt = new Date();
+        }
+
         await this.credentialModel.updateOne(
           { transactionId: transaction.transactionId },
-          {
-            status: credentialStatus,
-            transactionHash: tx.hash,
-            blockNumber: receipt.blockNumber,
-          }
+          { $set: updateFields }
         );
-        this.logger.log(`Transaction ${transaction.transactionId} and associated credential updated to ${credentialStatus}.`);
+
+        this.logger.log(`Transaction ${transaction.transactionId} and associated credential updated to ${credentialStatus}.` + (onchainCredentialId ? ` Persisted on-chain id ${onchainCredentialId}` : ''));
       }
 
     } catch (error) {

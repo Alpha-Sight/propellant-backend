@@ -66,7 +66,7 @@ export class CredentialService implements OnModuleInit {
       
       // Use a minimal ABI with only the functions we actually need
       const minimalABI = [
-        'function verifyCredential(uint256 credentialId) external returns (bool)',
+        'function verifyCredential(uint256 credentialId, uint8 status, string memory notes) external',
         'function revokeCredential(uint256 credentialId, string memory reason) external returns (bool)',
         'function getCredentialsForSubject(address subject) external view returns (uint256[])',
         'function getCredential(uint256 credentialId) external view returns (tuple(address issuer, address subject, string name, string description, uint8 status))',
@@ -205,6 +205,8 @@ export class CredentialService implements OnModuleInit {
   }
 
   async verifyCredential(credentialId: string, verifierAddress: string): Promise<{
+    _id?: any;
+    verificationStatus?: any;
     transactionId?: string;
     status?: string;
     credentialId?: string;
@@ -216,23 +218,16 @@ export class CredentialService implements OnModuleInit {
     try {
       await this.ensureInitialized();
       this.logger.log(`Attempting to verify credential with ID: ${credentialId}`);
-      
-      // Find the credential in the database
       let credential;
-      
-      // Search by MongoDB ObjectId if it looks like one
+      // Find credential by MongoDB ObjectId, credentialId, or blockchainCredentialId
       if (Types.ObjectId.isValid(credentialId)) {
         this.logger.log(`Searching by MongoDB ObjectId: ${credentialId}`);
         credential = await this.credentialModel.findById(credentialId);
       }
-      
-      // If not found, try by credentialId field
       if (!credential) {
         this.logger.log(`Searching by credentialId field: ${credentialId}`);
         credential = await this.credentialModel.findOne({ credentialId: credentialId });
       }
-      
-      // If still not found, try by blockchainCredentialId
       if (!credential) {
         this.logger.log(`Searching by blockchainCredentialId field: ${credentialId}`);
         const numericId = parseInt(credentialId);
@@ -240,37 +235,31 @@ export class CredentialService implements OnModuleInit {
           credential = await this.credentialModel.findOne({ blockchainCredentialId: numericId });
         }
       }
-      
       if (!credential) {
         const errorMsg = `Credential not found with ID: ${credentialId}`;
         this.logger.error(errorMsg);
         return { error: errorMsg, errorType: 'NOT_FOUND', message: errorMsg };
       }
-
       // Permission check: only issuer or admin can verify
       if (!credential.issuer || (verifierAddress !== credential.issuer.toString() && !this.isAdmin(verifierAddress))) {
         const errorMsg = `Unauthorized: Only the issuer or an admin can verify this credential.`;
         this.logger.error(errorMsg);
         return { error: errorMsg, errorType: 'UNAUTHORIZED', message: errorMsg };
       }
-
       // Check if already verified or revoked
       if (credential.verificationStatus === 'VERIFIED') {
         const errorMsg = `Credential already verified.`;
         this.logger.error(errorMsg);
         return { error: errorMsg, errorType: 'ALREADY_VERIFIED', message: errorMsg };
       }
-      
       if (credential.verificationStatus === 'REVOKED') {
         const errorMsg = `Credential is revoked and cannot be verified.`;
         this.logger.error(errorMsg);
         return { error: errorMsg, errorType: 'REVOKED', message: errorMsg };
       }
-
       // Use the numeric blockchain credential ID
       const blockchainCredentialId = credential.blockchainCredentialId || credential.credentialId;
       this.logger.log(`Using blockchain credential ID: ${blockchainCredentialId}`);
-      
       let numericCredentialId: number;
       if (typeof blockchainCredentialId === 'string') {
         const cleanId = blockchainCredentialId.replace(/[^0-9]/g, '');
@@ -278,25 +267,18 @@ export class CredentialService implements OnModuleInit {
       } else {
         numericCredentialId = blockchainCredentialId;
       }
-
       if (isNaN(numericCredentialId) || numericCredentialId <= 0) {
         const errorMsg = `Invalid credential ID format: ${blockchainCredentialId} -> ${numericCredentialId}`;
         this.logger.error(errorMsg);
         return { error: errorMsg, errorType: 'INVALID_ID', message: errorMsg };
       }
-
       this.logger.log(`Clean numeric credential ID: ${numericCredentialId}`);
-
-      // Prepare the verification data
-      const verificationStatus = 1; // 1 = VERIFIED from the contract's enum
+      const iface = new ethers.Interface([
+        'function verifyCredential(uint256 credentialId, uint8 status, string memory notes)'
+      ]);
+      const verificationStatus = 1; // 1 = VERIFIED from your contract's enum
       const verificationNotes = `Verified by ${verifierAddress} via PropellantBD`;
 
-      // Create the contract interface for the verification function
-      const iface = new ethers.Interface([
-        'function verifyCredential(uint256 credentialId, uint8 status, string memory notes) external'
-      ]);
-      
-      // Encode the function call
       const encodedData = iface.encodeFunctionData('verifyCredential', [
         numericCredentialId,
         verificationStatus,
@@ -304,85 +286,57 @@ export class CredentialService implements OnModuleInit {
       ]);
 
       this.logger.log(`Encoded data for verification: ${encodedData}`);
-
+      let transactionResult;
       try {
-        // Update the credential status to PENDING_VERIFICATION
-        await this.credentialModel.updateOne(
-          { _id: credential._id },
-          { 
-            $set: { 
-              verificationStatus: 'PENDING_VERIFICATION',
-              updatedAt: new Date()
-            } 
-          }
-        );
-
-        // Queue the verification transaction
-        const transactionResult = await this.relayerService.queueTransaction({
-          userAddress: verifierAddress,
+        transactionResult = await this.relayerService.queueTransaction({
+          userAddress: '0x2Ed32Af34d80ADB200592e7e0bD6a3F761677591', // Admin address that has DEFAULT_ADMIN_ROLE
           target: this.credentialModuleAddress,
           value: '0',
           data: encodedData,
-          operation: 0, // CALL operation
+          operation: 0,
           description: `Verify credential ID ${numericCredentialId}`,
           isAccountCreation: false,
         });
-
-        // Update the credential with the transaction ID
-        await this.credentialModel.updateOne(
-          { _id: credential._id },
-          { 
-            $set: { 
-              verificationStatus: 'PENDING_VERIFICATION',
-              verificationTransactionId: transactionResult.transactionId,
-              updatedAt: new Date()
-            } 
-          }
-        );
-
-        this.logger.log(`Verification transaction queued with ID: ${transactionResult.transactionId}`);
-        
-        return {
-          transactionId: transactionResult.transactionId,
-          status: 'PENDING',
-          credentialId: credential._id.toString(),
-          blockchainCredentialId: numericCredentialId.toString(),
-          message: 'Credential verification transaction has been queued and is being processed.'
-        };
-        
       } catch (txError) {
         const errorMsg = `Failed to queue verification transaction: ${txError.message}`;
         this.logger.error(errorMsg);
-        
-        // Update credential status to indicate the error
-        await this.credentialModel.updateOne(
-          { _id: credential._id },
-          { 
-            $set: { 
-              verificationStatus: 'VERIFICATION_FAILED',
-              lastError: errorMsg,
-              updatedAt: new Date()
-            } 
-          }
-        );
-        
-        return { 
-          error: errorMsg, 
-          errorType: 'TX_ERROR', 
-          message: 'Failed to submit verification transaction to the blockchain.' 
-        };
+        return { error: errorMsg, errorType: 'TX_ERROR', message: errorMsg };
       }
-      
-    } catch (error) {
-      const errorMsg = `Failed to verify credential: ${error.message}`;
-      this.logger.error(errorMsg);
-      
-      return { 
-        error: errorMsg, 
-        errorType: 'UNKNOWN', 
-        message: 'An unexpected error occurred during credential verification.' 
+      // Mark as pending on-chain and store relayer transaction id; do NOT mark VERIFIED
+      // until the relayer confirms the on-chain receipt. This prevents DB/chain
+      // inconsistencies when the on-chain tx reverts.
+      await this.credentialModel.updateOne(
+        { _id: credential._id },
+        {
+          $set: {
+            verificationStatus: 'PENDING_BLOCKCHAIN',
+            verificationRequestedAt: new Date(),
+            transactionId: transactionResult.transactionId,
+          }
+        }
+      );
+
+      this.logger.log(`Queued verification transaction (relayer id=${transactionResult.transactionId}) for credential ${credential._id}`);
+
+      return {
+        transactionId: transactionResult.transactionId,
+        status: 'PENDING_BLOCKCHAIN',
+        credentialId: credential._id.toString(),
+        blockchainCredentialId: numericCredentialId.toString(),
+        message: 'Credential verification queued — waiting for on-chain confirmation',
       };
+    } catch (error) {
+      this.logger.error(`Failed to verify credential: ${error.message}`);
+      return { error: error.message, errorType: 'UNKNOWN', message: 'An unexpected error occurred during credential verification.' };
     }
+  }
+
+  // Helper to check admin role (customize as needed)
+  private isAdmin(address: string): boolean {
+    // TODO: Implement actual admin check (e.g., query user DB or check against config)
+    // For now, treat a hardcoded address as admin for demonstration
+    const adminAddresses = [process.env.ADMIN_ADDRESS];
+    return adminAddresses.includes(address);
   }
 
   async getCredentialsForWallet(walletAddress: string) {
@@ -614,12 +568,5 @@ export class CredentialService implements OnModuleInit {
       this.logger.error(`Failed to get pending credentials: ${error.message}`);
       throw error;
     }
-  }
-
-  private isAdmin(address: string): boolean {
-    // TODO: Implement actual admin check (e.g., query user DB or check against config)
-    // For now, treat a hardcoded address as admin for demonstration
-    const adminAddresses = [process.env.ADMIN_ADDRESS];
-    return adminAddresses.includes(address);
   }
 }
