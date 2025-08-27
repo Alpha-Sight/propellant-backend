@@ -257,6 +257,17 @@ export class CredentialService implements OnModuleInit {
         this.logger.error(errorMsg);
         return { error: errorMsg, errorType: 'REVOKED', message: errorMsg };
       }
+      // Ensure the credential has been issued on-chain before attempting verify
+      if (!credential.blockchainCredentialId && !(credential as any).tokenId) {
+        const errorMsg = 'Credential is not yet issued on-chain. Wait until status is ISSUED.';
+        this.logger.warn(errorMsg + ` mongoId=${credential._id}`);
+        return { error: errorMsg, errorType: 'NOT_READY', message: errorMsg };
+      }
+      if (credential.verificationStatus !== 'ISSUED') {
+        const errorMsg = `Credential is not ready for verification; current status=${credential.verificationStatus}. Wait until status is ISSUED.`;
+        this.logger.warn(errorMsg + ` mongoId=${credential._id}`);
+        return { error: errorMsg, errorType: 'NOT_READY', message: errorMsg };
+      }
       // Use the numeric blockchain credential ID
       const blockchainCredentialId = credential.blockchainCredentialId || credential.credentialId;
       this.logger.log(`Using blockchain credential ID: ${blockchainCredentialId}`);

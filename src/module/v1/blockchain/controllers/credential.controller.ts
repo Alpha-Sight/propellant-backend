@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards, Logger } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
 import { CredentialService } from '../services/credential.service';
 import { ResponseMessage } from 'src/common/decorators/response.decorator';
@@ -54,18 +54,21 @@ export class CredentialController {
     const credential = await this.credentialService.verifyCredential(id, user._id.toString());
 
     // Ensure on-chain id exists and issue was mined
-    if (!credential.blockchainCredentialId) {
+  if (!credential.blockchainCredentialId && !(credential as any).tokenId) {
       const msg = 'Credential is not yet issued on-chain. Retry after the issue transaction is confirmed (status ISSUED).';
-      this.logger.warn(msg + ` mongoId=${credential._id}`);
-      return { error: msg, errorType: 'NOT_ISSUED_ONCHAIN', message: msg };
+      this.logger.warn(msg + ` mongoId=${id}`);
+      throw new HttpException({ success: false, data: { error: msg, errorType: 'NOT_ISSUED_ONCHAIN', message: msg } }, HttpStatus.CONFLICT);
     }
 
     // Optional stricter check: require verificationStatus === 'ISSUED'
     if (credential.verificationStatus !== 'ISSUED') {
       const msg = `Credential is not ready for verification; current status=${credential.verificationStatus}. Wait until status is ISSUED.`;
-      this.logger.warn(msg + ` mongoId=${credential._id}`);
-      return { error: msg, errorType: 'NOT_READY', message: msg };
+      this.logger.warn(msg + ` mongoId=${id}`);
+      throw new HttpException({ success: false, data: { error: msg, errorType: 'NOT_READY', message: msg } }, HttpStatus.CONFLICT);
     }
+
+    // Success path — return service result which should contain the queued tx id
+    return { success: true, data: credential, message: 'Credential verification transaction queued successfully' };
   }
 
   @Post('revoke/:id')
