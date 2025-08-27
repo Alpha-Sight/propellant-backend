@@ -186,17 +186,13 @@ Current repo behavior observed:
 - Parse issue event:
 ```bash
 BLOCKCHAIN_RPC_URL="https://rpc.sepolia-api.lisk.com" \
-CREDENTIAL_VERIFICATION_MODULE_ADDRESS="0x700fe28..." \
-ISSUE_TX="0xf4b4f4..." \
+CREDENTIAL_VERIFICATION_MODULE_ADDRESS="0x700fe280deF52455494603A8584425eE47D2FDF0" \
+ISSUE_TX="0xa11ace51d72a7cf33763849c0d975dda9c7565696ed4b1797935b4a321e26157" \
 node scripts/parse-issue-event.js
 ```
 - Set canonical id (one‑off DB fix):
 ```bash
-MONGO_URL="mongodb://localhost:27017/propellantbd" \
-BLOCKCHAIN_RPC_URL="https://rpc.sepolia-api.lisk.com" \
-CREDENTIAL_VERIFICATION_MODULE_ADDRESS="0x700fe28..." \
-ISSUE_TX="0xf4b4f4..." \
-node scripts/set-canonical-id.js
+MONGO_URL="mongodb://localhost:27017/propellantbd" BLOCKCHAIN_RPC_URL="https://rpc.sepolia-api.lisk.com" CREDENTIAL_VERIFICATION_MODULE_ADDRESS="0x700fe280deF52455494603A8584425eE47D2FDF0" ISSUE_TX="0xa11ace51d72a7cf33763849c0d975dda9c7565696ed4b1797935b4a321e26157" node scripts/set-canonical-id.js
 ```
 These scripts are in scripts.
 
