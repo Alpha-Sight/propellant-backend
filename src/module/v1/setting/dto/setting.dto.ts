@@ -22,14 +22,14 @@ export class UrlsDto {
 }
 
 export class SubscriptionDto {
-  @IsString()
-  BASIC: string;
+  @IsNumber()
+  BASIC: number;
 
-  @IsString()
-  PROFESSIONAL: string;
+  @IsNumber()
+  PROFESSIONAL: number;
 
-  @IsString()
-  ENTERPRISE: string;
+  @IsNumber()
+  ENTERPRISE: number;
 }
 
 export class AppSettingsDto {
