@@ -44,6 +44,9 @@ export class BlockchainTransaction {
 
   @Prop()
   transactionHash?: string;
+  
+  @Prop({ index: true })
+  blockchainTransactionHash?: string;
 
   @Prop()
   blockNumber?: number;

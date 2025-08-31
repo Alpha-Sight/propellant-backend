@@ -6,6 +6,7 @@ import { ConfigModule } from '@nestjs/config';
 import { Wallet, WalletSchema } from './schemas/wallet.schema';
 import { Credential, CredentialSchema } from './schemas/credential.schema';
 import { BlockchainTransaction, BlockchainTransactionSchema } from './schemas/transaction.schema';
+import { User, UserSchema } from '../user/schemas/user.schema';
 
 // Import services
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -26,9 +27,14 @@ import { BlockchainController } from './controllers/blockchain.controller';
       { name: Credential.name, schema: CredentialSchema },
       { name: Wallet.name, schema: WalletSchema },
       { name: BlockchainTransaction.name, schema: BlockchainTransactionSchema },
+      { name: User.name, schema: UserSchema }, // Adding User model directly
     ]),
   ],
   providers: [
+    {
+      provide: 'BLOCKCHAIN_CREDENTIAL_SERVICE',
+      useExisting: CredentialService
+    },
     CredentialService,
     WalletService,
     RelayerService,
@@ -39,6 +45,7 @@ import { BlockchainController } from './controllers/blockchain.controller';
     BlockchainController,
   ],
   exports: [
+    'BLOCKCHAIN_CREDENTIAL_SERVICE',
     CredentialService,
     WalletService,
     RelayerService,

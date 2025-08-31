@@ -6,6 +6,7 @@ import { LoggedInUserDecorator } from 'src/common/decorators/logged-in-user.deco
 import { UserDocument } from 'src/module/v1/user/schemas/user.schema';
 import { IssueCredentialDto } from '../dto/issue-credential.dto';
 import { WalletService } from '../services/wallet.service';
+import { UserRoleEnum } from 'src/common/enums/user.enum';
 
 @Controller('blockchain/credentials')
 export class CredentialController {
@@ -45,10 +46,15 @@ export class CredentialController {
     @Param('id') id: string,
     @LoggedInUserDecorator() user: UserDocument,
   ) {
-    // Only admins or approved issuers can verify credentials
-    if (!user.role?.includes('ADMIN') && !user.role?.includes('ISSUER')) {
-      throw new Error('Unauthorized: Only admins or approved issuers can verify credentials');
+    // Allow admins, issuers, and organizations to verify credentials
+    if (user.role !== UserRoleEnum.ADMIN && 
+        user.role !== UserRoleEnum.SUPER_ADMIN && 
+        user.role !== UserRoleEnum.ORGANIZATION && 
+        !user.role?.includes('ISSUER')) {
+      this.logger.error(`Unauthorized verification attempt by user with role: ${user.role}`);
+      throw new Error('Unauthorized: Only admins, organizations, or approved issuers can verify credentials');
     }
+    this.logger.log(`Credential verification requested by user ${user._id} with role ${user.role}`);
 
     // The id parameter is the MongoDB ObjectId of the credential
     const credential = await this.credentialService.verifyCredential(id, user._id.toString());

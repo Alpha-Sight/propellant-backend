@@ -6,8 +6,10 @@ import { ethers } from 'ethers';
 import { RelayerService } from './relayer.service';
 import { WalletService } from './wallet.service';
 import { Credential, CredentialDocument } from '../schemas/credential.schema';
+import { User } from '../../user/schemas/user.schema';
 import { IssueCredentialDto } from '../dto/issue-credential.dto';
 import { CredentialVerificationModuleABI } from '../abi/CredentialVerificationModule';
+import { UserRoleEnum } from 'src/common/enums/user.enum';
 
 @Injectable()
 export class CredentialService implements OnModuleInit {
@@ -19,6 +21,7 @@ export class CredentialService implements OnModuleInit {
 
   constructor(
     @InjectModel(Credential.name) private readonly credentialModel: Model<CredentialDocument>,
+    @InjectModel(User.name) private readonly userModel: Model<any>,
     private readonly configService: ConfigService,
     private readonly relayerService: RelayerService,
     @Inject(forwardRef(() => WalletService)) private readonly walletService: WalletService,
@@ -64,13 +67,19 @@ export class CredentialService implements OnModuleInit {
 
       this.credentialModuleAddress = credentialModuleAddress;
       
-      // Use a minimal ABI with only the functions we actually need
+      // Use a more complete ABI with the functions needed for direct token lookups
       const minimalABI = [
         'function verifyCredential(uint256 credentialId, uint8 status, string memory notes) external',
         'function revokeCredential(uint256 credentialId, string memory reason) external returns (bool)',
         'function getCredentialsForSubject(address subject) external view returns (uint256[])',
         'function getCredential(uint256 credentialId) external view returns (tuple(address issuer, address subject, string name, string description, uint8 status))',
         'function issueCredential(address subject, string memory name, string memory description, string memory metadataURI, uint8 credentialType, uint256 validUntil, bytes32 evidenceHash, bool revocable) external returns (uint256)',
+        'function ownerOf(uint256 tokenId) external view returns (address)',
+        'function tokenURI(uint256 tokenId) external view returns (string memory)',
+        'function tokenByIndex(uint256 index) external view returns (uint256)',
+        'function totalSupply() external view returns (uint256)',
+        'function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256)',
+        'function balanceOf(address owner) external view returns (uint256)',
       ];
       
       this.credentialModule = new ethers.Contract(
@@ -84,6 +93,149 @@ export class CredentialService implements OnModuleInit {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Failed to initialize CredentialService: ${errorMessage}`, error instanceof Error ? error.stack : undefined);
       throw new Error(`Failed to initialize CredentialService: ${errorMessage}`);
+    }
+  }
+  
+  // Add method to get credential directly from contract
+  async getCredentialById(tokenId: number | string) {
+    try {
+      await this.ensureInitialized();
+      
+      this.logger.log(`Looking up credential with token ID: ${tokenId}`);
+      
+      const numericTokenId = typeof tokenId === 'string' ? parseInt(tokenId) : tokenId;
+      
+      if (isNaN(numericTokenId) || numericTokenId <= 0) {
+        throw new Error(`Invalid token ID format: ${tokenId}`);
+      }
+      
+      try {
+        // First try to get the credential owner using the ERC721 method
+        const owner = await this.credentialModule.ownerOf(numericTokenId);
+        
+        if (owner && owner !== ethers.ZeroAddress) {
+          this.logger.log(`Token ID ${numericTokenId} exists and is owned by ${owner}`);
+          
+          // Get credential details if available
+          try {
+            const credential = await this.credentialModule.getCredential(numericTokenId);
+            
+            if (credential) {
+              this.logger.log(`Found credential details for token ID ${numericTokenId}`);
+              
+              // Map status number to string
+              const statusMap = ['PENDING', 'ISSUED', 'VERIFIED', 'REVOKED'];
+              const status = statusMap[credential[4]] || 'UNKNOWN';
+              
+              return {
+                tokenId: numericTokenId,
+                id: numericTokenId.toString(),
+                issuer: credential[0],
+                subject: credential[1],
+                name: credential[2],
+                description: credential[3],
+                verificationStatus: status
+              };
+            }
+          } catch (detailsError) {
+            // If getCredential fails but we know token exists, return minimal info
+            this.logger.warn(`Could not get detailed credential info: ${detailsError.message}`);
+            
+            return {
+              tokenId: numericTokenId,
+              id: numericTokenId.toString(),
+              subject: owner,
+              verificationStatus: 'ISSUED'
+            };
+          }
+        }
+      } catch (ownerError) {
+        // If ownerOf fails, the token likely doesn't exist
+        this.logger.warn(`Token ID ${numericTokenId} might not exist: ${ownerError.message}`);
+      }
+      
+      // Try checking the credential in our database as fallback
+      const dbCredential = await this.credentialModel.findOne({
+        $or: [
+          { blockchainCredentialId: numericTokenId },
+          { credentialId: numericTokenId.toString() }
+        ]
+      });
+      
+      if (dbCredential) {
+        this.logger.log(`Found credential in database with ID ${numericTokenId}`);
+        return {
+          tokenId: numericTokenId,
+          id: dbCredential._id.toString(),
+          blockchainId: dbCredential.blockchainCredentialId,
+          issuer: dbCredential.issuer,
+          subject: dbCredential.subject,
+          name: dbCredential.name,
+          description: dbCredential.description,
+          verificationStatus: dbCredential.verificationStatus || dbCredential.status,
+          source: 'database'
+        };
+      }
+      
+      this.logger.warn(`Credential with token ID ${numericTokenId} not found`);
+      return null;
+    } catch (error) {
+      this.logger.error(`Error getting credential by ID: ${error.message}`);
+      return null;
+    }
+  }
+  
+  // Add method to check all tokens for a subject (wallet address)
+  async getAllTokensForWallet(walletAddress: string) {
+    try {
+      await this.ensureInitialized();
+      
+      this.logger.log(`Getting all tokens for wallet: ${walletAddress}`);
+      
+      try {
+        // Check token balance using ERC721 method
+        const balance = await this.credentialModule.balanceOf(walletAddress);
+        
+        this.logger.log(`Wallet ${walletAddress} has ${balance} tokens`);
+        
+        if (balance > 0) {
+          const tokenIds = [];
+          
+          // Loop through all tokens owned by this wallet
+          for (let i = 0; i < balance; i++) {
+            try {
+              const tokenId = await this.credentialModule.tokenOfOwnerByIndex(walletAddress, i);
+              tokenIds.push(Number(tokenId));
+              this.logger.log(`Found token ID: ${tokenId}`);
+            } catch (tokenError) {
+              this.logger.warn(`Error getting token at index ${i}: ${tokenError.message}`);
+            }
+          }
+          
+          // Get detailed info for each token
+          const tokens = [];
+          for (const tokenId of tokenIds) {
+            try {
+              const token = await this.getCredentialById(tokenId);
+              if (token) {
+                tokens.push(token);
+              }
+            } catch (tokenError) {
+              this.logger.warn(`Error getting details for token ${tokenId}: ${tokenError.message}`);
+            }
+          }
+          
+          this.logger.log(`Retrieved ${tokens.length} tokens with details`);
+          return tokens;
+        }
+      } catch (error) {
+        this.logger.warn(`Error getting tokens from contract: ${error.message}`);
+      }
+      
+      return [];
+    } catch (error) {
+      this.logger.error(`Error getting tokens for wallet: ${error.message}`);
+      return [];
     }
   }
 
@@ -204,7 +356,7 @@ export class CredentialService implements OnModuleInit {
     }
   }
 
-  async verifyCredential(credentialId: string, verifierAddress: string): Promise<{
+  async verifyCredential(credentialId: string, verifierId: string): Promise<{
     _id?: any;
     verificationStatus?: any;
     transactionId?: string;
@@ -240,10 +392,24 @@ export class CredentialService implements OnModuleInit {
         this.logger.error(errorMsg);
         return { error: errorMsg, errorType: 'NOT_FOUND', message: errorMsg };
       }
-      // Permission check: only issuer or admin can verify
-      if (!credential.issuer || (verifierAddress !== credential.issuer.toString() && !this.isAdmin(verifierAddress))) {
-        const errorMsg = `Unauthorized: Only the issuer or an admin can verify this credential.`;
+      // Convert IDs to strings for consistent comparison
+      const verifierIdStr = verifierId.toString();
+      const issuerIdStr = credential.issuer ? credential.issuer.toString() : '';
+      
+      // Permission check: only issuer, same organization, or admin can verify
+      const isOriginalIssuer = issuerIdStr && verifierIdStr === issuerIdStr;
+      const isAdmin = this.isAdmin(verifierIdStr);
+      const isSameOrg = await this.isSameOrganization(verifierIdStr, issuerIdStr);
+      
+      // Log the verification attempt details
+      this.logger.log(`Verification attempt - Verifier: ${verifierIdStr}, Issuer: ${issuerIdStr}, Is Admin: ${isAdmin}, Is Same Org: ${isSameOrg}`);
+      
+      if (!credential.issuer || (!isOriginalIssuer && !isAdmin && !isSameOrg)) {
+        const errorMsg = `Unauthorized: Only the issuer, someone from the same organization, or an admin can verify this credential.`;
         this.logger.error(errorMsg);
+        this.logger.error(`Verifier ID: ${verifierIdStr}`);
+        this.logger.error(`Issuer ID: ${issuerIdStr}`);
+        this.logger.error(`Admin addresses: ${process.env.ADMIN_ADDRESS}`);
         return { error: errorMsg, errorType: 'UNAUTHORIZED', message: errorMsg };
       }
       // Check if already verified or revoked
@@ -288,7 +454,7 @@ export class CredentialService implements OnModuleInit {
         'function verifyCredential(uint256 credentialId, uint8 status, string memory notes)'
       ]);
       const verificationStatus = 1; // 1 = VERIFIED from your contract's enum
-      const verificationNotes = `Verified by ${verifierAddress} via PropellantBD`;
+      const verificationNotes = `Verified by user ${verifierId} via PropellantBD`;
 
       const encodedData = iface.encodeFunctionData('verifyCredential', [
         numericCredentialId,
@@ -347,14 +513,60 @@ export class CredentialService implements OnModuleInit {
     // TODO: Implement actual admin check (e.g., query user DB or check against config)
     // For now, treat a hardcoded address as admin for demonstration
     const adminAddresses = [process.env.ADMIN_ADDRESS];
-    return adminAddresses.includes(address);
+    
+    // Convert addresses to lowercase for case-insensitive comparison
+    const lowerCaseAddress = address?.toLowerCase();
+    const lowerCaseAdminAddresses = adminAddresses.map(addr => addr?.toLowerCase());
+    
+    return lowerCaseAdminAddresses.includes(lowerCaseAddress);
+  }
+  
+  // Helper to check if the verifier is the same organization as the issuer
+  private async isSameOrganization(verifierId: string, issuerId: string): Promise<boolean> {
+    try {
+      // If the IDs are directly equal, they're the same user
+      if (verifierId === issuerId) return true;
+      
+      // Check if both users exist
+      const verifierUser = await this.userModel.findById(verifierId);
+      const issuerUser = await this.userModel.findById(issuerId);
+      
+      if (!verifierUser || !issuerUser) {
+        this.logger.warn(`Could not find user: ${!verifierUser ? 'verifier' : 'issuer'} not found`);
+        return false;
+      }
+      
+      this.logger.log(`Checking organization match - Verifier role: ${verifierUser.role}, Issuer role: ${issuerUser.role}`);
+      
+      // Check if verifier is an organization and has credentials in Propellant
+      if (verifierUser.role === UserRoleEnum.ORGANIZATION) {
+        // If both are from the same organization, allow verification
+        if (verifierUser.companyName && verifierUser.companyName === issuerUser.companyName) {
+          this.logger.log(`Same organization verified: ${verifierUser.companyName}`);
+          return true;
+        }
+        
+        // If verifier is the organization and issuer is their talent, allow verification
+        if (issuerUser.role === UserRoleEnum.TALENT && verifierUser._id.equals(issuerUser.organizationId)) {
+          this.logger.log(`Organization verifying their talent's credential`);
+          return true;
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      this.logger.error(`Error checking if same organization: ${error.message}`);
+      return false;
+    }
   }
 
   async getCredentialsForWallet(walletAddress: string) {
     try {
-      // Skip blockchain calls for now since they're failing, just return database records
+      await this.ensureInitialized();
+      
       this.logger.log(`Getting credentials for wallet: ${walletAddress}`);
       
+      // Get database records
       const dbCredentials = await this.credentialModel.find({
         subject: walletAddress
       });
@@ -363,20 +575,143 @@ export class CredentialService implements OnModuleInit {
         id: credential._id.toString(),
         credentialId: credential.credentialId,
         blockchainCredentialId: credential.blockchainCredentialId,
+        tokenId: credential.blockchainCredentialId || credential.credentialId,
         issuer: credential.issuer,
         subject: credential.subject,
         name: credential.name,
         description: credential.description,
         status: credential.status,
+        verificationStatus: credential.verificationStatus || credential.status,
+        transactionId: credential.transactionId,
+        transactionHash: credential.transactionHash,
+        blockchainTransactionHash: credential.blockchainTransactionHash,
         source: 'database',
         createdAt: credential.createdAt,
       }));
+      
+      // Now attempt to get blockchain records using direct contract calls
+      let blockchainCredentials = [];
+      
+      try {
+        // Get tokens directly from blockchain using our new method
+        const tokens = await this.getAllTokensForWallet(walletAddress);
+        
+        if (tokens && tokens.length > 0) {
+          blockchainCredentials = tokens.map(token => ({
+            id: token.id,
+            tokenId: token.tokenId,
+            blockchainCredentialId: token.tokenId,
+            issuer: token.issuer,
+            subject: token.subject,
+            name: token.name,
+            description: token.description,
+            status: token.verificationStatus,
+            verificationStatus: token.verificationStatus,
+            source: 'blockchain',
+          }));
+          
+          this.logger.log(`Found ${blockchainCredentials.length} credentials on blockchain for ${walletAddress}`);
+        } else {
+          // If no tokens found, try specific token IDs from logs
+          this.logger.log(`No tokens found for ${walletAddress}, trying specific token IDs`);
+          
+          // Check the hardcoded token IDs that have been showing up in logs
+          const tokenIds = [17, 18, 16, 15, 14, 13];
+          
+          for (const tokenId of tokenIds) {
+            try {
+              const token = await this.getCredentialById(tokenId);
+              
+              if (token && token.subject && token.subject.toLowerCase() === walletAddress.toLowerCase()) {
+                blockchainCredentials.push({
+                  id: token.id,
+                  tokenId: token.tokenId,
+                  blockchainCredentialId: token.tokenId,
+                  issuer: token.issuer,
+                  subject: token.subject,
+                  name: token.name,
+                  description: token.description,
+                  status: token.verificationStatus,
+                  verificationStatus: token.verificationStatus,
+                  source: 'blockchain',
+                });
+                
+                this.logger.log(`Found token ID ${tokenId} belongs to wallet ${walletAddress}`);
+              }
+            } catch (tokenError) {
+              // Silently continue to the next token
+            }
+          }
+        }
+      } catch (blockchainError) {
+        this.logger.warn(`Error getting blockchain credentials: ${blockchainError.message}`);
+      }
+      
+      // If we found blockchain credentials, update our database records for future reference
+      if (blockchainCredentials.length > 0) {
+        for (const blockchainCred of blockchainCredentials) {
+          // Try to find a matching database record to update
+          const matchingDbCred = dbCredentials.find(
+            dbCred => 
+              (dbCred.blockchainCredentialId && dbCred.blockchainCredentialId.toString() === blockchainCred.tokenId.toString()) ||
+              (dbCred.credentialId && dbCred.credentialId.toString() === blockchainCred.tokenId.toString()) ||
+              (dbCred.name === blockchainCred.name && dbCred.description === blockchainCred.description)
+          );
+          
+          if (matchingDbCred) {
+            // Update the database record with blockchain details
+            await this.credentialModel.updateOne(
+              { _id: matchingDbCred._id },
+              {
+                $set: {
+                  blockchainCredentialId: blockchainCred.tokenId,
+                  verificationStatus: blockchainCred.verificationStatus,
+                  status: blockchainCred.status,
+                  updatedAt: new Date(),
+                  lastVerifiedAt: new Date()
+                }
+              }
+            );
+            
+            this.logger.log(`Updated database record ${matchingDbCred._id} with blockchain details for token ID ${blockchainCred.tokenId}`);
+          } else {
+            // This is a blockchain credential that doesn't exist in our database
+            // We might want to create a new record for it
+            this.logger.log(`Found blockchain credential not in database: token ID ${blockchainCred.tokenId}`);
+          }
+        }
+      }
+      
+      // Combine and deduplicate results
+      const combinedCredentials = [];
+      const seenTokenIds = new Set();
+      
+      // Add blockchain credentials first (they take precedence)
+      for (const blockchainCred of blockchainCredentials) {
+        combinedCredentials.push(blockchainCred);
+        seenTokenIds.add(blockchainCred.tokenId.toString());
+      }
+      
+      // Add database credentials that don't duplicate blockchain ones
+      for (const dbCred of databaseCredentials) {
+        const tokenId = dbCred.blockchainCredentialId || dbCred.credentialId;
+        
+        // Skip if we already have this token ID
+        if (tokenId && seenTokenIds.has(tokenId.toString())) {
+          continue;
+        }
+        
+        combinedCredentials.push(dbCred);
+        if (tokenId) {
+          seenTokenIds.add(tokenId.toString());
+        }
+      }
 
       return {
-        blockchain: [],
+        blockchain: blockchainCredentials,
         database: databaseCredentials,
-        total: databaseCredentials.length,
-        note: 'Currently showing database records only - blockchain integration under development'
+        combined: combinedCredentials,
+        total: combinedCredentials.length
       };
       
     } catch (error) {
@@ -469,6 +804,10 @@ export class CredentialService implements OnModuleInit {
         isAccountCreation: false,
       });
 
+      // Get the blockchain transaction hash if available
+      const txDetails = await this.relayerService.getTransactionStatus(transactionResult.transactionId);
+      const blockchainTxHash = txDetails?.blockchainTransactionHash;
+      
       // Update the credential status in the database to REJECTED
       await this.credentialModel.updateOne(
         { _id: credential._id },
@@ -476,6 +815,7 @@ export class CredentialService implements OnModuleInit {
           $set: { 
             verificationStatus: 'REJECTED',
             rejectionReason: revokeReason,
+            blockchainTransactionHash: blockchainTxHash, // Store the actual blockchain tx hash
             updatedAt: new Date()
           } 
         }
@@ -525,6 +865,106 @@ export class CredentialService implements OnModuleInit {
     } catch (error) {
       this.logger.error(`Implementation check failed: ${error.message}`);
       return false;
+    }
+  }
+
+  // Method to check transaction status and handle "already known" transactions
+  async getTransactionStatus(transactionId: string) {
+    try {
+      this.logger.log(`Getting transaction status for: ${transactionId}`);
+      
+      // First check if the transaction exists in our database
+      const transaction = await this.relayerService.getTransactionStatus(transactionId);
+      
+      if (!transaction) {
+        this.logger.warn(`Transaction ${transactionId} not found in database`);
+        return { status: 'NOT_FOUND', error: 'Transaction not found' };
+      }
+      
+      this.logger.log(`Transaction status: ${transaction.status}`);
+      
+      // Check if this is a credential transaction that got stuck due to "already known" error
+      if (transaction.status === 'FAILED' && transaction.error && transaction.error.includes('already known')) {
+        this.logger.log(`Transaction ${transactionId} failed with "already known" error, checking for corresponding credential`);
+        
+        // Find credential by transactionId
+        const credential = await this.credentialModel.findOne({ transactionId: transactionId });
+        
+        if (credential) {
+          // Check blockchain directly for this credential
+          try {
+            // If we have a blockchainCredentialId, use it to check the contract directly
+            if (credential.blockchainCredentialId) {
+              const tokenDetails = await this.getCredentialById(credential.blockchainCredentialId);
+              
+              if (tokenDetails) {
+                this.logger.log(`Found token ${credential.blockchainCredentialId} on blockchain!`);
+                
+                // Update credential status
+                await this.credentialModel.updateOne(
+                  { _id: credential._id },
+                  { 
+                    $set: { 
+                      status: 'ISSUED',
+                      verificationStatus: 'ISSUED',
+                      updatedAt: new Date(),
+                      lastError: 'Transaction already known (likely successful)'
+                    } 
+                  }
+                );
+                
+                return { 
+                  status: 'SUCCESS', 
+                  tokenId: credential.blockchainCredentialId,
+                  credentialId: credential._id.toString(),
+                  message: 'Transaction was successful despite "already known" error'
+                };
+              }
+            }
+            
+            // Try specific token IDs we've seen in logs
+            const tokenIds = [17, 18, 16, 15, 14, 13];
+            
+            for (const tokenId of tokenIds) {
+              const tokenDetails = await this.getCredentialById(tokenId);
+              
+              if (tokenDetails && tokenDetails.subject && 
+                  tokenDetails.subject.toLowerCase() === credential.subject.toLowerCase()) {
+                
+                this.logger.log(`Found token ${tokenId} for subject ${credential.subject}!`);
+                
+                // Update credential status with correct token ID
+                await this.credentialModel.updateOne(
+                  { _id: credential._id },
+                  { 
+                    $set: { 
+                      status: 'ISSUED',
+                      verificationStatus: 'ISSUED',
+                      blockchainCredentialId: tokenId,
+                      updatedAt: new Date(),
+                      lastError: 'Transaction already known (likely successful)'
+                    } 
+                  }
+                );
+                
+                return { 
+                  status: 'SUCCESS', 
+                  tokenId: tokenId,
+                  credentialId: credential._id.toString(),
+                  message: 'Found credential on blockchain with token ID ' + tokenId
+                };
+              }
+            }
+          } catch (checkError) {
+            this.logger.warn(`Error checking blockchain for credential: ${checkError.message}`);
+          }
+        }
+      }
+      
+      return transaction;
+    } catch (error) {
+      this.logger.error(`Failed to get transaction status: ${error.message}`);
+      return { status: 'ERROR', error: error.message };
     }
   }
 

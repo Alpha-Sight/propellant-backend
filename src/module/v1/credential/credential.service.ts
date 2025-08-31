@@ -19,6 +19,8 @@ import {
   TalentCredential,
 } from './schema/credential.schema';
 import { UserDocument } from '../user/schemas/user.schema';
+// Import the blockchain credential service
+import { Inject, forwardRef } from '@nestjs/common';
 import {
   UploadCredentialDto,
   GetAllCredentialsDto,
@@ -47,7 +49,34 @@ export class CredentialService {
     private userService: UserService,
     private mailService: MailService,
     private moduleRef: ModuleRef,
-  ) {}
+    @Inject('BLOCKCHAIN_CREDENTIAL_SERVICE') private blockchainCredentialService: any = null
+  ) {
+    // Initialize services from other modules later as needed
+  }
+  
+  // Helper to get blockchain credential service
+  private getBlockchainCredentialService() {
+    // First check if we have the service injected in the constructor
+    if (this.blockchainCredentialService) {
+      return this.blockchainCredentialService;
+    }
+    
+    // Try to get the service from the moduleRef (handles circular dependencies)
+    try {
+      // First try to get by token name (most reliable)
+      const blockchainCredentialService = this.moduleRef.get('BLOCKCHAIN_CREDENTIAL_SERVICE', { strict: false });
+      if (blockchainCredentialService) {
+        return blockchainCredentialService;
+      }
+      
+      // Try to get by class name
+      return this.moduleRef.get('CredentialService', { strict: false }) || 
+             this.moduleRef.get('BlockchainCredentialService', { strict: false });
+    } catch (error) {
+      this.logger.error('Failed to get blockchain credential service:', error);
+      return null;
+    }
+  }
 
   /**
    * Upload/Create a new credential
@@ -993,29 +1022,41 @@ export class CredentialService {
   }
 
   /**
-   * Placeholder for blockchain minting - implement based on your blockchain service
+   * Mints a credential on the blockchain by orchestrating the full blockchain process:
+   * 1. Issue the credential to the blockchain (uses BlockchainModule's CredentialService)
+   * 2. Wait for the issuance confirmation (polling until ISSUED status)
+   * 3. Verify the credential on blockchain
+   * 4. Wait for the verification confirmation
+   * 5. Update the DB status to VERIFIED or REJECTED based on results
+   * 
+   * This implements the full blockchain credential lifecycle in a single operation
+   * to make the process seamless after a credential is verified by an admin.
    */
   private async mintCredentialOnBlockchain(
     credential: TalentCredentialDocument,
     user: UserDocument,
   ): Promise<{ transactionId: string }> {
-    // This should integrate with your blockchain service
-    // For now, returning a placeholder
-    this.logger.log(
-      `Minting credential ${credential._id} for user ${user._id}`,
+    // Import the implementation to keep this method clean and maintainable
+    const { mintCredentialOnBlockchain } = await import('./mintCredentialOnBlockchain');
+    
+    // Call the implementation with all required dependencies
+    return mintCredentialOnBlockchain(
+      credential,
+      user,
+      this.credentialModel,
+      this.logger,
+      this.getBlockchainCredentialService.bind(this)
     );
+  }
 
-    // Update blockchain status to pending
-    await this.credentialModel.updateOne(
-      { _id: credential._id },
-      {
-        $set: {
-          blockchainStatus: 'PENDING_BLOCKCHAIN',
-          mintingStartedAt: new Date(),
-        },
-      },
-    );
-
-    return { transactionId: `tx_${Date.now()}` };
+  /**
+   * Test method to directly mint a credential on the blockchain
+   * This is for testing purposes only and should not be used in production
+   */
+  public async testMintCredential(
+    credential: TalentCredentialDocument,
+    user: UserDocument,
+  ): Promise<{ transactionId: string }> {
+    return this.mintCredentialOnBlockchain(credential, user);
   }
 }

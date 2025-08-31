@@ -41,11 +41,17 @@ export class Credential {
   @Prop({ required: true })
   status: string;
 
+  @Prop({ default: 'PENDING' })
+  verificationStatus?: string;
+
   @Prop()
   transactionId?: string;
 
   @Prop()
   transactionHash?: string;
+  
+  @Prop({ index: true })
+  blockchainTransactionHash?: string;
 
   @Prop()
   blockNumber?: number;
@@ -55,6 +61,36 @@ export class Credential {
 
   @Prop()
   error?: string;
+  
+  @Prop()
+  lastError?: string;
+
+  @Prop()
+  verificationRequestedAt?: Date;
+  
+  @Prop()
+  lastVerifiedAt?: Date;
+  
+  @Prop()
+  mintingStartedAt?: Date;
+  
+  @Prop()
+  mintedAt?: Date;
+
+  @Prop()
+  rejectionReason?: string;
+
+  @Prop()
+  blockchainTransactionId?: string;
+  
+  @Prop()
+  blockchainVerificationTransactionId?: string;
+
+  @Prop()
+  blockchainStatus?: string;
+  
+  @Prop()
+  blockchainError?: string;
 
   @Prop({ required: true })
   createdAt: Date;
