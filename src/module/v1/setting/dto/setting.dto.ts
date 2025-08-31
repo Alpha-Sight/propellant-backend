@@ -21,6 +21,17 @@ export class UrlsDto {
   waitlistPage: string;
 }
 
+export class SubscriptionDto {
+  @IsString()
+  BASIC: string;
+
+  @IsString()
+  PROFESSIONAL: string;
+
+  @IsString()
+  ENTERPRISE: string;
+}
+
 export class AppSettingsDto {
   @IsString()
   @IsNotEmpty()
@@ -29,9 +40,10 @@ export class AppSettingsDto {
   @IsEmail()
   supportEmail: string;
 
-  @IsNumber()
-  @IsNotEmpty()
-  premiumPricing: number;
+  @IsObject()
+  @ValidateNested()
+  @Type(() => SubscriptionDto)
+  subscriptionPrice: SubscriptionDto;
 
   @IsObject()
   @ValidateNested()
