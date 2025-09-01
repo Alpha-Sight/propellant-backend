@@ -51,24 +51,27 @@ export class CredentialController {
     }
 
     // The id parameter is the MongoDB ObjectId of the credential
-    const credential = await this.credentialService.verifyCredential(id, user._id.toString());
+    const result = await this.credentialService.verifyCredential(id, user._id.toString());
 
-    // Ensure on-chain id exists and issue was mined
-  if (!credential.blockchainCredentialId && !(credential as any).tokenId) {
-      const msg = 'Credential is not yet issued on-chain. Retry after the issue transaction is confirmed (status ISSUED).';
-      this.logger.warn(msg + ` mongoId=${id}`);
-      throw new HttpException({ success: false, data: { error: msg, errorType: 'NOT_ISSUED_ONCHAIN', message: msg } }, HttpStatus.CONFLICT);
+    // Check if service returned an error
+    if (result && (result as any).errorType) {
+      const err = result as { error?: string; errorType?: string; message?: string };
+      let status = HttpStatus.INTERNAL_SERVER_ERROR;
+      switch (err.errorType) {
+        case 'NOT_READY': status = HttpStatus.CONFLICT; break;
+        case 'NOT_FOUND': status = HttpStatus.NOT_FOUND; break;
+        case 'INVALID_ID': status = HttpStatus.BAD_REQUEST; break;
+        case 'TX_ERROR': status = HttpStatus.BAD_GATEWAY; break;
+      }
+      this.logger.warn(`${err.message} mongoId=${id}`);
+      throw new HttpException(
+        { success: false, data: { error: err.error || err.message, errorType: err.errorType, message: err.message } },
+        status,
+      );
     }
 
-    // Optional stricter check: require verificationStatus === 'ISSUED'
-    if (credential.verificationStatus !== 'ISSUED') {
-      const msg = `Credential is not ready for verification; current status=${credential.verificationStatus}. Wait until status is ISSUED.`;
-      this.logger.warn(msg + ` mongoId=${id}`);
-      throw new HttpException({ success: false, data: { error: msg, errorType: 'NOT_READY', message: msg } }, HttpStatus.CONFLICT);
-    }
-
-    // Success path — return service result which should contain the queued tx id
-    return { success: true, data: credential, message: 'Credential verification transaction queued successfully' };
+    // Success path — return the queued transaction result
+    return { success: true, data: result, message: 'Credential verification transaction queued successfully' };
   }
 
   @Post('revoke/:id')

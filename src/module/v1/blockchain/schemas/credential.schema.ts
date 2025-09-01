@@ -42,6 +42,9 @@ export class Credential {
   status: string;
 
   @Prop()
+  verificationStatus?: string;
+
+  @Prop()
   transactionId?: string;
 
   @Prop()
@@ -52,6 +55,12 @@ export class Credential {
 
   @Prop()
   tokenId?: string;
+
+  @Prop()
+  verificationRequestedAt?: Date;
+
+  @Prop()
+  verifiedAt?: Date;
 
   @Prop()
   error?: string;
