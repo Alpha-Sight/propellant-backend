@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ConfigModule } from '@nestjs/config'; // Add this import
 import { CredentialController } from './credential.controller';
 import { CredentialService } from './credential.service';
 import { TalentCredentialSchema } from './schema/credential.schema';
@@ -10,6 +11,7 @@ import { BlockchainModule } from '../blockchain/blockchain.module';
 
 @Module({
   imports: [
+    ConfigModule, // Add ConfigModule here
     MongooseModule.forFeature([
       { name: 'TalentCredential', schema: TalentCredentialSchema },
     ]),
