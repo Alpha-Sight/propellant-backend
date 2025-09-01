@@ -168,6 +168,9 @@ export class TalentCredential {
 
   @Prop({ required: false })
   createdAt?: Date;
+
+  @Prop({ required: false })
+  file?: string;
 }
 
 export const TalentCredentialSchema =

@@ -1,29 +1,25 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { RepositoryModule } from '../repository/repository.module';
 import { MongooseModule } from '@nestjs/mongoose';
-import { CredentialService } from './credential.service';
 import { CredentialController } from './credential.controller';
-import {
-  TalentCredential,
-  TalentCredentialSchema,
-} from './schema/credential.schema';
-import { PinataService } from 'src/common/utils/pinata.util';
+import { CredentialService } from './credential.service';
+import { TalentCredentialSchema } from './schema/credential.schema';
 import { UserModule } from '../user/user.module';
 import { MailModule } from '../mail/mail.module';
 import { BlockchainModule } from '../blockchain/blockchain.module';
+// import { NotificationModule } from '../notification/notification.module'; // If created
 
 @Module({
   imports: [
     MongooseModule.forFeature([
-      { name: TalentCredential.name, schema: TalentCredentialSchema },
+      { name: 'TalentCredential', schema: TalentCredentialSchema },
     ]),
-    RepositoryModule,
-    UserModule,
-    MailModule,
-    forwardRef(() => BlockchainModule), // Import blockchain module for auto-minting
+    forwardRef(() => UserModule),
+    forwardRef(() => MailModule),
+    forwardRef(() => BlockchainModule),
+    // forwardRef(() => NotificationModule), // Uncomment if created
   ],
   controllers: [CredentialController],
-  providers: [CredentialService, PinataService],
-  exports: [CredentialService, PinataService],
+  providers: [CredentialService],
+  exports: [CredentialService],
 })
 export class CredentialModule {}

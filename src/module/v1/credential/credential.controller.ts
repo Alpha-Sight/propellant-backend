@@ -62,7 +62,7 @@ export class CredentialController {
       );
     }
 
-    return await this.credentialService.uploadCredential(user, payload, file);
+    return await this.credentialService.createCredential(user, payload, file);
   }
 
   @Get()
