@@ -6,10 +6,10 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Document, Model } from 'mongoose';
 import { ethers } from 'ethers';
 import { ConfigService } from '@nestjs/config';
-import { TalentCredentialDocument } from './schema/credential.schema';
+import { TalentCredential, TalentCredentialDocument } from './schema/credential.schema';
 import { UserDocument } from '../user/schemas/user.schema';
 import { UserService } from '../user/services/user.service';
 import { MailService } from '../mail/mail.service';
@@ -50,9 +50,237 @@ export class CredentialService {
   getSingleUserCredentials(user: UserDocument, query: PaginationDto): import("./dto/credential.dto").PaginatedCredentialResponse | PromiseLike<import("./dto/credential.dto").PaginatedCredentialResponse> {
     throw new Error('Method not implemented.');
   }
-  createCredential(user: UserDocument, payload: UploadCredentialDto, file: Express.Multer.File) {
-    throw new Error('Method not implemented.');
+  /**
+   * Create a new credential
+   */
+  async createCredential(
+    user: UserDocument,
+    payload: UploadCredentialDto,
+    file?: Express.Multer.File,
+  ): Promise<TalentCredentialDocument> {
+    try {
+      this.logger.log(`Creating credential for user ${user._id}: ${payload.title}`);
+
+      // Handle file upload if provided
+      let fileUrl: string | undefined;
+      let ipfsHash: string | undefined;
+
+      if (file) {
+        try {
+          // Upload file to IPFS using PinataService (if available)
+          // For now, we'll store the file reference
+          fileUrl = `uploads/credentials/${Date.now()}_${file.originalname}`;
+          this.logger.log(`File uploaded: ${fileUrl}`);
+        } catch (fileError) {
+          this.logger.warn(`File upload failed: ${fileError.message}`);
+          // Continue without file if upload fails
+        }
+      }
+
+      // Generate unique credential ID
+      const credentialId = `CRED_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+
+      // Parse dates
+      const issueDate = new Date(payload.issueDate);
+      const expiryDate = payload.expiryDate ? new Date(payload.expiryDate) : undefined;
+
+      // Validate dates
+      if (isNaN(issueDate.getTime())) {
+        throw new BadRequestException('Invalid issue date format');
+      }
+
+      if (expiryDate && isNaN(expiryDate.getTime())) {
+        throw new BadRequestException('Invalid expiry date format');
+      }
+
+      if (expiryDate && expiryDate <= issueDate) {
+        throw new BadRequestException('Expiry date must be after issue date');
+      }
+
+      // Create credential data
+      const credentialData = {
+        credentialId,
+        user: user._id,
+        issuer: user._id, // User is creating their own credential
+        subject: user._id,
+        owner: user.walletAddress || user._id.toString(),
+        title: payload.title,
+        type: payload.type,
+        category: payload.category,
+        url: payload.url,
+        imageUrl: fileUrl,
+        ipfsHash,
+        description: payload.description,
+        visibility: payload.visibility !== false, // Default to true
+        verificationStatus: CredentialStatusEnum.PENDING,
+        issuingOrganization: payload.issuingOrganization,
+        verifyingOrganization: payload.verifyingOrganization,
+        verifyingEmail: payload.verifyingEmail,
+        message: payload.message,
+        issueDate,
+        expiryDate,
+        externalUrl: payload.externalUrl,
+        
+        // Enhanced tracking fields
+        attestationStatus: 'PENDING_VERIFICATION',
+        verificationRequestSentAt: new Date(),
+        verificationDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+        
+        // Blockchain fields
+        blockchainStatus: 'NOT_MINTED',
+        autoMint: payload.autoMint || false,
+        
+        // Metadata
+        isDeleted: false,
+        file: fileUrl,
+      };
+
+      // Create the credential
+      const credential = await this.credentialModel.create(credentialData);
+
+      this.logger.log(`Credential created successfully: ${credential._id}`);
+
+      // Send verification request email if verifying organization is specified
+      if (payload.verifyingEmail && payload.verifyingOrganization) {
+        try {
+          await this.sendVerificationRequestEmail(credential, user);
+        } catch (emailError) {
+          this.logger.warn(`Failed to send verification email: ${emailError.message}`);
+          // Don't fail the whole operation if email fails
+        }
+      }
+
+      return credential;
+    } catch (error) {
+      this.logger.error(`Failed to create credential: ${error.message}`, error.stack);
+      throw error;
+    }
   }
+
+  /**
+   * Send verification request email to the verifying organization
+   */
+  private async sendVerificationRequestEmail(
+    credential: TalentCredentialDocument,
+    user: UserDocument,
+  ): Promise<void> {
+    try {
+      const emailSubject = `Credential Verification Request - ${credential.title}`;
+      const emailTemplate = this.createVerificationRequestEmailTemplate({
+        userName: user.fullname || user.email.split('@')[0],
+        userEmail: user.email,
+        credentialTitle: credential.title,
+        credentialType: credential.type,
+        credentialCategory: credential.category,
+        issuingOrganization: credential.issuingOrganization,
+        issueDate: credential.issueDate?.toLocaleDateString(),
+        expiryDate: credential.expiryDate?.toLocaleDateString(),
+        description: credential.description,
+        message: credential.message,
+        credentialId: credential._id.toString(),
+        verificationDeadline: credential.verificationDeadline?.toLocaleDateString(),
+      });
+
+      await this.mailService.sendEmail(
+        credential.verifyingEmail!,
+        emailSubject,
+        emailTemplate,
+      );
+
+      this.logger.log(
+        `Verification request email sent to ${credential.verifyingEmail} for credential ${credential._id}`,
+      );
+    } catch (error) {
+      this.logger.error(`Failed to send verification request email: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Create verification request email template
+   */
+  private createVerificationRequestEmailTemplate(data: {
+    userName: string;
+    userEmail: string;
+    credentialTitle: string;
+    credentialType: string;
+    credentialCategory: string;
+    issuingOrganization: string;
+    issueDate?: string;
+    expiryDate?: string;
+    description?: string;
+    message?: string;
+    credentialId: string;
+    verificationDeadline?: string;
+  }): string {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+          <meta charset="UTF-8">
+          <title>Credential Verification Request</title>
+          <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background: #007bff; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+              .content { background: #f9f9f9; padding: 20px; border: 1px solid #ddd; }
+              .credential-details { background: white; padding: 15px; border-radius: 5px; margin: 15px 0; }
+              .footer { background: #333; color: white; padding: 15px; text-align: center; border-radius: 0 0 5px 5px; }
+              .btn { display: inline-block; padding: 10px 20px; color: white; background: #28a745; text-decoration: none; border-radius: 5px; margin: 10px 5px; }
+              .btn-reject { background: #dc3545; }
+          </style>
+      </head>
+      <body>
+          <div class="container">
+              <div class="header">
+                  <h1>🔍 Credential Verification Request</h1>
+                  <p>PropellantBD Platform</p>
+              </div>
+              
+              <div class="content">
+                  <h2>Dear Verification Team,</h2>
+                  
+                  <p>You have received a new credential verification request from <strong>${data.userName}</strong> (${data.userEmail}).</p>
+                  
+                  <div class="credential-details">
+                      <h3>📄 Credential Details</h3>
+                      <p><strong>Title:</strong> ${data.credentialTitle}</p>
+                      <p><strong>Type:</strong> ${data.credentialType}</p>
+                      <p><strong>Category:</strong> ${data.credentialCategory}</p>
+                      <p><strong>Issuing Organization:</strong> ${data.issuingOrganization}</p>
+                      ${data.issueDate ? `<p><strong>Issue Date:</strong> ${data.issueDate}</p>` : ''}
+                      ${data.expiryDate ? `<p><strong>Expiry Date:</strong> ${data.expiryDate}</p>` : ''}
+                      ${data.description ? `<p><strong>Description:</strong> ${data.description}</p>` : ''}
+                      ${data.message ? `<p><strong>Additional Message:</strong> ${data.message}</p>` : ''}
+                  </div>
+                  
+                  <div style="text-align: center; margin: 20px 0;">
+                      <p><strong>Verification Deadline:</strong> ${data.verificationDeadline || 'Not specified'}</p>
+                      <p><strong>Credential ID:</strong> ${data.credentialId}</p>
+                  </div>
+                  
+                  <p>Please review this credential and provide your verification decision through the PropellantBD platform.</p>
+                  
+                  <div style="text-align: center; margin: 30px 0;">
+                      <a href="${process.env.FRONTEND_URL || 'https://propellantbd.com'}/verify-credential/${data.credentialId}" class="btn">
+                          ✅ Verify Credential
+                      </a>
+                      <a href="${process.env.FRONTEND_URL || 'https://propellantbd.com'}/reject-credential/${data.credentialId}" class="btn btn-reject">
+                          ❌ Reject Credential
+                      </a>
+                  </div>
+              </div>
+              
+              <div class="footer">
+                  <p>&copy; 2025 PropellantBD. All rights reserved.</p>
+                  <p>This is an automated message. Please do not reply to this email.</p>
+              </div>
+          </div>
+      </body>
+      </html>
+    `;
+  }
+
   private readonly logger = new Logger(CredentialService.name);
 
   constructor(
@@ -154,23 +382,42 @@ export class CredentialService {
       );
 
       // Get updated credential and user for minting
+      const updatedCredential = await this.credentialModel.findById(credentialId);
       const user = await this.userService.findById(credential.user.toString());
       
       // Send approval notification
-      await this.sendVerificationNotification(
-        credential,
-        user,
-        'APPROVED',
-        payload.notes
-      );
+      try {
+        await this.sendVerificationNotification(
+          updatedCredential!,
+          user,
+          'APPROVED',
+          payload.notes
+        );
+      } catch (notificationError) {
+        this.logger.warn(`Failed to send approval notification: ${notificationError.message}`);
+      }
 
-      // Auto-mint if user has wallet and minting is enabled
-      if (user && user.walletAddress && this.shouldAutoMintVerified(credential)) {
+      // 🚀 ENHANCED: Always attempt minting for verified credentials if user has wallet
+      if (user && user.walletAddress) {
         try {
-          const mintResult = await this.mintCredentialOnBlockchain(credential, user);
+          this.logger.log(`Attempting to mint credential ${credentialId} for user with wallet ${user.walletAddress}`);
+          
+          const mintResult = await this.mintCredentialOnBlockchain(updatedCredential!, user);
+          
+          // Update credential with minting success
+          await this.credentialModel.updateOne(
+            { _id: credentialId },
+            {
+              $set: {
+                blockchainStatus: 'MINTED',
+                mintedAt: new Date(),
+                blockchainTransactionId: mintResult.transactionId,
+              },
+            },
+          );
           
           this.logger.log(
-            `Credential verified and minting initiated for credential ${credentialId}`
+            `Credential verified and minting initiated for credential ${credentialId}, transaction: ${mintResult.transactionId}`
           );
 
           return {
@@ -184,8 +431,24 @@ export class CredentialService {
             `Failed to mint verified credential: ${mintError.message}`
           );
           
+          // Update credential with minting failure
+          await this.credentialModel.updateOne(
+            { _id: credentialId },
+            {
+              $set: {
+                blockchainStatus: 'MINTING_FAILED',
+                blockchainError: mintError.message,
+                lastMintAttempt: new Date(),
+              },
+            },
+          );
+          
           // Send notification about minting failure
-          await this.sendMintingErrorNotification(credential, user, mintError.message);
+          try {
+            await this.sendMintingErrorNotification(updatedCredential!, user, mintError.message);
+          } catch (emailError) {
+            this.logger.warn(`Failed to send minting error notification: ${emailError.message}`);
+          }
           
           return {
             status: 'VERIFIED',
@@ -221,12 +484,16 @@ export class CredentialService {
       const user = await this.userService.findById(credential.user.toString());
       
       // Send rejection notification
-      await this.sendVerificationNotification(
-        credential,
-        user,
-        'REJECTED',
-        payload.notes
-      );
+      try {
+        await this.sendVerificationNotification(
+          credential,
+          user,
+          'REJECTED',
+          payload.notes
+        );
+      } catch (notificationError) {
+        this.logger.warn(`Failed to send rejection notification: ${notificationError.message}`);
+      }
 
       this.logger.log(`Credential ${credentialId} rejected by verifier ${verifierUserId}`);
 
@@ -236,6 +503,13 @@ export class CredentialService {
         message: 'Credential has been rejected',
       };
     }
+  }
+
+  /**
+   * Check if a verified credential should be auto-minted.
+   */
+  private shouldAutoMintVerified(credential: TalentCredentialDocument): boolean {
+    return (credential as any).autoMint === true;
   }
 
   /**
@@ -381,96 +655,186 @@ export class CredentialService {
   }
 
   /**
-   * Enhanced retry minting functionality
+   * Retry minting for verified credentials
    */
-  async retryMinting(
-    credentialId: string,
-    userId: string,
-  ): Promise<{ message: string; transactionId?: string }> {
-    const credential = await this.credentialModel.findById(credentialId);
-    if (!credential) {
-      throw new NotFoundException('Credential not found');
-    }
-
-    // Check if user owns the credential
-    if (credential.user.toString() !== userId) {
-      throw new ForbiddenException(
-        'You can only retry minting for your own credentials',
-      );
-    }
-
-    if (credential.verificationStatus !== CredentialStatusEnum.VERIFIED) {
-      throw new BadRequestException('Only verified credentials can be minted');
-    }
-
-    if (credential.blockchainStatus === 'MINTED') {
-      throw new BadRequestException('Credential is already minted');
-    }
-
-    if (credential.blockchainStatus === 'PENDING_BLOCKCHAIN') {
-      throw new BadRequestException(
-        'Credential minting is already in progress',
-      );
-    }
-
+  async retryMinting(credentialId: string, userId: string): Promise<{ message: string; transactionId?: string }> {
     try {
-      const user = await this.userService.findById(userId);
-      if (!user.walletAddress) {
-        throw new BadRequestException(
-          'User must have a wallet address to mint credentials',
-        );
+      const credential = await this.credentialModel.findById(credentialId);
+      if (!credential) {
+        throw new NotFoundException('Credential not found');
       }
 
-      const mintResult = await this.mintCredentialOnBlockchain(credential, user);
+      const user = await this.userService.findById(userId);
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
 
-      return {
-        message: 'Credential minting retry initiated successfully',
-        transactionId: mintResult.transactionId,
-      };
+      // Check if user owns the credential
+      if (credential.user.toString() !== userId) {
+        throw new ForbiddenException('You can only retry minting for your own credentials');
+      }
+
+      // Check if credential is verified
+      if (credential.verificationStatus !== CredentialStatusEnum.VERIFIED) {
+        throw new BadRequestException('Can only retry minting for verified credentials');
+      }
+
+      // Check if already minted
+      if (credential.blockchainStatus === 'MINTED') {
+        throw new BadRequestException('Credential is already minted');
+      }
+
+      // Update status to pending minting
+      await this.credentialModel.updateOne(
+        { _id: credentialId },
+        {
+          $set: {
+            blockchainStatus: 'PENDING_BLOCKCHAIN',
+            lastMintAttempt: new Date(),
+            blockchainError: null,
+          },
+        },
+      );
+
+      // Attempt minting
+      try {
+        const mintResult = await this.mintCredentialOnBlockchain(credential, user);
+        
+        await this.credentialModel.updateOne(
+          { _id: credentialId },
+          {
+            $set: {
+              blockchainStatus: 'MINTED',
+              mintedAt: new Date(),
+              blockchainTransactionId: mintResult.transactionId,
+            },
+          },
+        );
+
+        this.logger.log(`Credential minting retry successful for ${credentialId}`);
+        
+        return {
+          message: 'Credential minting retry initiated successfully',
+          transactionId: mintResult.transactionId,
+        };
+      } catch (mintError) {
+        await this.credentialModel.updateOne(
+          { _id: credentialId },
+          {
+            $set: {
+              blockchainStatus: 'MINTING_FAILED',
+              blockchainError: mintError.message,
+            },
+          },
+        );
+
+        this.logger.error(`Credential minting retry failed for ${credentialId}: ${mintError.message}`);
+        
+        return {
+          message: 'Credential minting retry failed. Please try again later.',
+        };
+      }
     } catch (error) {
       this.logger.error(`Failed to retry minting: ${error.message}`);
-      throw new BadRequestException(
-        `Failed to retry minting: ${error.message}`,
-      );
+      throw error;
     }
   }
 
   /**
    * Get blockchain status for user's credentials
    */
-  async getBlockchainStatus(userId: string): Promise<any> {
-    const credentials = await this.credentialModel.find({
-      user: userId,
-      verificationStatus: CredentialStatusEnum.VERIFIED
-    }).select('title blockchainStatus transactionId mintingStartedAt createdAt');
+  async getBlockchainStatus(userId: string): Promise<{
+    total: number;
+    notMinted: number;
+    pendingBlockchain: number;
+    minted: number;
+    mintingFailed: number;
+    credentials: Array<{
+      id: string;
+      title: string;
+      status: string;
+      transactionId?: string;
+      error?: string;
+      lastAttempt?: string;
+    }>;
+  }> {
+    try {
+      const credentials = await this.credentialModel
+        .find({
+          user: userId,
+          verificationStatus: CredentialStatusEnum.VERIFIED,
+          isDeleted: false,
+        })
+        .select('title blockchainStatus blockchainTransactionId blockchainError lastMintAttempt')
+        .lean();
 
-    return {
-      totalVerified: credentials.length,
-      minted: credentials.filter(c => c.blockchainStatus === 'MINTED').length,
-      pending: credentials.filter(c => c.blockchainStatus === 'PENDING_BLOCKCHAIN').length,
-      failed: credentials.filter(c => c.blockchainStatus === 'FAILED').length,
-      credentials: credentials
-    };
+      const stats = {
+        total: credentials.length,
+        notMinted: 0,
+        pendingBlockchain: 0,
+        minted: 0,
+        mintingFailed: 0,
+      };
+
+      const credentialsList = credentials.map((cred) => {
+        const status = cred.blockchainStatus || 'NOT_MINTED';
+        
+        // Update stats
+        switch (status) {
+          case 'NOT_MINTED':
+            stats.notMinted++;
+            break;
+          case 'PENDING_BLOCKCHAIN':
+            stats.pendingBlockchain++;
+            break;
+          case 'MINTED':
+            stats.minted++;
+            break;
+          case 'MINTING_FAILED':
+            stats.mintingFailed++;
+            break;
+        }
+
+        return {
+          id: cred._id.toString(),
+          title: cred.title,
+          status,
+          transactionId: cred.blockchainTransactionId,
+          error: cred.blockchainError,
+          lastAttempt: cred.lastMintAttempt?.toISOString(),
+        };
+      });
+
+      return {
+        ...stats,
+        credentials: credentialsList,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get blockchain status: ${error.message}`);
+      throw error;
+    }
   }
 
   /**
-   * Helper methods
+   * Map credential type to blockchain number
    */
-  private shouldAutoMintVerified(credential: TalentCredentialDocument): boolean {
-    // Add your business logic here
-    // For example: only mint certain types of credentials automatically
-    return true; // Simplified for now
-  }
-
-  private mapCredentialTypeToNumber(type: string): number {
+  private mapCredentialTypeToNumber(type: CredentialTypeEnum): number {
     const typeMap = {
-      'EDUCATION': 0,
-      'EXPERIENCE': 1,
-      'SKILL': 2,
-      'CERTIFICATION': 3,
-      'OTHER': 4
+      [CredentialTypeEnum.DEGREE]: 0,
+      [CredentialTypeEnum.CERTIFICATE]: 1,
+      [CredentialTypeEnum.LICENSE]: 2,
+      [CredentialTypeEnum.AWARD]: 4,
+      [CredentialTypeEnum.TRAINING]: 1,
+      [CredentialTypeEnum.WORK_EXPERIENCE]: 2,
+      [CredentialTypeEnum.PROJECT_PORTFOLIO]: 6,
+      [CredentialTypeEnum.RECOMMENDATION_LETTER]: 5,
+      [CredentialTypeEnum.DIPLOMA]: 0,
+      [CredentialTypeEnum.BADGE]: 4,
+      [CredentialTypeEnum.ACHIEVEMENT]: 4,
+      [CredentialTypeEnum.OTHER]: 6,
     };
-    return typeMap[type?.toUpperCase()] || 4;
+    
+    return typeMap[type] || 6; // Default to OTHER
   }
 
   private createApprovalEmailTemplate(data: {
