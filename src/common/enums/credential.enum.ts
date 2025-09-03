@@ -29,10 +29,16 @@ export enum CredentialStatusEnum {
   PENDING = 'PENDING',
   VERIFIED = 'VERIFIED',
   REJECTED = 'REJECTED',
+  PENDING_ISSUANCE = "PENDING_ISSUANCE",
 }
 
 export enum VerificationLevelEnum {
   LOW = 'LOW',
   MID = 'MID',
   HIGH = 'HIGH',
+}
+
+export enum VerificationDecisionEnum {
+  APPROVE = 'approve',
+  REJECT = 'reject',
 }

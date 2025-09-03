@@ -10,10 +10,10 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { BlockchainTransaction, BlockchainTransactionDocument } from '../schemas/transaction.schema';
 import { WalletService } from './wallet.service';
-import { Credential, CredentialDocument } from '../schemas/credential.schema';
 import { Wallet, WalletDocument } from '../schemas/wallet.schema';
 import { TransactionStatusEnum, TransactionTypeEnum } from 'src/common/enums/transaction.enum';
 import { UserDocument } from '../../user/schemas/user.schema';
+import { TalentCredential, TalentCredentialDocument } from '../../credential/schema/credential.schema';
 
 @Injectable()
 export class RelayerService implements OnModuleInit {
@@ -27,7 +27,7 @@ export class RelayerService implements OnModuleInit {
   private roleModule: ethers.Contract;
   private storageModule: ethers.Contract;
   private credentialVerificationModule: ethers.Contract;
-  private paymaster: ethers.Contract; // Add this property
+  private paymaster: ethers.Contract;
   private isProcessing = false;
   private pendingTransactions: Map<string, any> = new Map();
   private ensSupportedChains = [1, 3, 4, 5, 11155111]; // mainnet, ropsten, rinkeby, goerli, sepolia
@@ -35,9 +35,8 @@ export class RelayerService implements OnModuleInit {
   constructor(
     private configService: ConfigService,
     private eventEmitter: EventEmitter2,
-
     @InjectModel(BlockchainTransaction.name) private transactionModel: Model<BlockchainTransactionDocument>,
-    @InjectModel(Credential.name) private credentialModel: Model<CredentialDocument>,
+    @InjectModel(TalentCredential.name) private credentialModel: Model<TalentCredentialDocument>, // use TalentCredential
     @Inject(forwardRef(() => WalletService)) private readonly walletService: WalletService,
     @InjectModel(Wallet.name) private walletModel: Model<WalletDocument>,
   ) {}
@@ -304,7 +303,6 @@ export class RelayerService implements OnModuleInit {
           }
         );
 
-        // If this was a credential related transaction, mark the credential as REJECTED/FAILED
         if (transaction.description && (transaction.description.includes('Issue credential') || transaction.description.includes('Verify credential'))) {
           await this.credentialModel.updateOne(
             { transactionId: transaction.transactionId },
@@ -312,17 +310,17 @@ export class RelayerService implements OnModuleInit {
               $set: {
                 status: 'REJECTED',
                 verificationStatus: 'REJECTED',
-                transactionHash: tx.hash,
-                blockNumber: receipt.blockNumber,
+                transactionHash: tx.hash,          // persist on-chain hash
+                blockNumber: receipt.blockNumber,  // persist block number
                 updatedAt: new Date(),
-                error: 'On-chain transaction reverted'
+                blockchainError: 'On-chain transaction reverted',
+                error: 'On-chain transaction reverted',
               }
             }
           );
           this.logger.log(`Transaction ${transaction.transactionId} reverted; associated credential marked REJECTED.`);
         }
-
-        return; // done processing this transaction
+        return;
       }
 
       // Success path (receipt.status === 1)
@@ -415,8 +413,8 @@ export class RelayerService implements OnModuleInit {
       if (transaction.description && (transaction.description.includes('Issue credential') || transaction.description.includes('Verify credential'))) {
         const updateFields: any = {
           status: credentialStatus,
-          transactionHash: tx.hash,
-          blockNumber: receipt.blockNumber,
+          transactionHash: tx.hash,          // persist on-chain hash
+          blockNumber: receipt.blockNumber,  // persist block number
           updatedAt: new Date(),
         };
 
@@ -438,14 +436,28 @@ export class RelayerService implements OnModuleInit {
           updateFields.verifiedAt = new Date();
         }
 
+        // Update credential in the database
         await this.credentialModel.updateOne(
           { transactionId: transaction.transactionId },
           { $set: updateFields }
         );
 
         this.logger.log(`Transaction ${transaction.transactionId} and associated credential updated to ${credentialStatus}.` + (onchainCredentialId ? ` Persisted on-chain id ${onchainCredentialId}` : ''));
-      }
 
+        // Emit event for newly issued credentials
+        if (credentialStatus === 'ISSUED' && onchainCredentialId) {
+          const updatedCredential = await this.credentialModel.findOne({ transactionId: transaction.transactionId });
+          if (updatedCredential && updatedCredential._id) {
+            this.logger.log(`Emitting credential.issued event for credential ${updatedCredential._id.toString()} with blockchain ID ${onchainCredentialId}`);
+            this.eventEmitter.emit('credential.issued', {
+              credentialId: updatedCredential._id.toString(),
+              blockchainCredentialId: onchainCredentialId,
+              transactionId: transaction.transactionId,
+              transactionHash: tx.hash, // include hash for robust lookup
+            });
+          }
+        }
+      }
     } catch (error) {
       // Improved error handling for transaction reverts and ENS issues
       this.logger.error(`Failed to process transaction with mongo ID ${transactionMongoId}: ${error.message}`);

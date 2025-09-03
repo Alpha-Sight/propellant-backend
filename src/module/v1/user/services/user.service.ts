@@ -44,17 +44,22 @@ import {
   OrganizationPost,
   OrganizationPostDocument,
 } from '../../organization-post/schema/organization-post.schema';
+import { CredentialService } from '../../credential/credential.service'; // Correct path
+import { Inject, forwardRef } from '@nestjs/common'; // Add Inject and forwardRef
 
 @Injectable()
 export class UserService {
   constructor(
-    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(User.name)
+    private userModel: Model<UserDocument>,
     @InjectModel(OrganizationPost.name)
     private organizationPostModel: Model<OrganizationPostDocument>,
-    private otpService: OtpService,
-    private pinataService: PinataService,
-    private repositoryService: RepositoryService,
-    private walletService: WalletService,
+    private readonly pinataService: PinataService,
+    @Inject(forwardRef(() => CredentialService)) // Wrap CredentialService with forwardRef
+    private readonly credentialService: CredentialService,
+    private readonly repositoryService: RepositoryService,
+    private readonly walletService: WalletService,
+    private readonly otpService: OtpService,
   ) {}
 
   async findById(userId: string): Promise<UserDocument | null> {
@@ -552,7 +557,7 @@ export class UserService {
     // If admin provided a userId, use it. Otherwise, use the logged-in user's ID
     const targetUserId = isAdmin && userId ? userId : user._id;
 
-    return await this.repositoryService.paginate<UserDocument>({
+    return await this.repositoryService.paginate({
       model: this.userModel,
       query: paginationQuery,
       options: {
