@@ -179,7 +179,11 @@ export class PremiumService {
     // If the user selects a paid plan, proceed with payment initialization
 
     const settings = (await this.settingService.getSettings()) as ISettings;
-    const subscriptionPriceMap = settings?.app?.subscriptionPrice;
+    const subscriptionPriceMap = Object.fromEntries(
+      Object.entries(settings?.app?.subscriptionPrice || {}).map(
+        ([plan, details]) => [plan, details.price],
+      ),
+    );
 
     const selectedPlan = payload.plan;
 

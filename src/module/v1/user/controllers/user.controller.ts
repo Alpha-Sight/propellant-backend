@@ -111,6 +111,5 @@ export class UserController {
   ) {
     return this.userService.getUserReferrals(user, query);
   }
-
   
 }

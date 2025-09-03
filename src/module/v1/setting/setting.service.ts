@@ -1,9 +1,13 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import { ISettings } from '../../../common/interfaces/setting.interface';
+import {
+  ISettings,
+  ISubscriptionPlan,
+} from '../../../common/interfaces/setting.interface';
 import { CacheHelperUtil } from '../../../common/utils/cache-helper.util';
 import { SETTINGS } from '../../../common/constants/setting.constant';
 import { CACHE_KEYS } from 'src/common/constants/cache.constant';
 import { UpdateSettingsDto } from './dto/setting.dto';
+import { UserDocument } from '../user/schemas/user.schema';
 
 @Injectable()
 export class SettingService implements OnModuleInit {
@@ -47,5 +51,23 @@ export class SettingService implements OnModuleInit {
     query.forEach((prop: string) => delete updatedSettings[prop]);
     await CacheHelperUtil.setCache(CACHE_KEYS.appSettings, updatedSettings);
     return updatedSettings;
+  }
+
+  async getSubscriptionPrice(user: UserDocument) {
+    const settings = (await CacheHelperUtil.getCache(
+      CACHE_KEYS.appSettings,
+    )) as any;
+
+    const subscriptionPlans = Object.fromEntries(
+      Object.entries(settings.app.subscriptionPrice).map(([plan, details]) => [
+        plan,
+        {
+          ...(details as ISubscriptionPlan),
+          isCurrentPlan: plan === user.plan,
+        },
+      ]),
+    );
+
+    return subscriptionPlans;
   }
 }

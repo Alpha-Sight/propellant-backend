@@ -6,6 +6,8 @@ import { Roles } from '../../../common/decorators/role.decorator';
 import { UserRoleEnum } from '../../../common/enums/user.enum';
 import { DeleteFromSettingsDto, UpdateSettingsDto } from './dto/setting.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
+import { UserDocument } from '../user/schemas/user.schema';
+import { LoggedInUserDecorator } from 'src/common/decorators/logged-in-user.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('settings')
@@ -23,6 +25,12 @@ export class SettingController {
   @Get()
   async settings() {
     return await this.storeService.settings();
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('pricing')
+  async getSubscriptionPrice(@LoggedInUserDecorator() user: UserDocument) {
+    return await this.storeService.getSubscriptionPrice(user);
   }
 
   @Patch()
