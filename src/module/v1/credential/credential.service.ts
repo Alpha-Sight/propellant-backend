@@ -551,34 +551,36 @@ export class CredentialService {
       throw new BadRequestException('User must have a wallet address to mint NFT');
     }
 
-    // Check if NFT contract address is configured
     const nftContractAddress = this.configService.get<string>('NFT_CONTRACT_ADDRESS');
     if (!nftContractAddress) {
       throw new BadRequestException('NFT_CONTRACT_ADDRESS not configured in environment variables');
     }
 
-    const evidenceHash = ethers.keccak256(
-      ethers.toUtf8Bytes(credential._id.toString())
-    );
+    const evidenceHash = ethers.keccak256(ethers.toUtf8Bytes(credential._id.toString()));
 
     const iface = new ethers.Interface([
       'function mint(address to, string memory name, string memory description, string memory tokenURI, uint8 credentialType, uint256 validUntil, bytes32 evidenceHash, bool revocable) returns (uint256)'
     ]);
 
+    // Keep on-chain strings short; put the heavy metadata in tokenURI (IPFS / HTTPS)
+    const name = (credential.title || 'Credential').slice(0, 64);
+    const description = (credential.description || 'PropellantBD Credential').slice(0, 160);
+    const tokenURI = credential.file || ''; // ideally an IPFS/HTTPS URL to metadata.json
+
     const encodedData = iface.encodeFunctionData('mint', [
-      user.walletAddress,                                    // NFT recipient
-      credential.title,                                      // NFT name
-      credential.description || 'PropellantBD Credential',  // NFT description
-      credential.file || '',                                 // NFT metadata URI
-      this.mapCredentialTypeToNumber(credential.type),      // Credential type enum
-      Math.floor(Date.now() / 1000) + 31536000,            // Valid for 1 year
-      evidenceHash,                                         // Evidence hash
-      true                                                  // Revocable
+      user.walletAddress,
+      name,
+      description,
+      tokenURI,
+      this.mapCredentialTypeToNumber(credential.type),
+      Math.floor(Date.now() / 1000) + 31536000, // 1 year
+      evidenceHash,
+      true
     ]);
 
     const result = await this.relayerService.queueTransaction({
       userAddress: user.walletAddress,
-      target: nftContractAddress, // CredentialNFT contract address
+      target: nftContractAddress,
       value: "0",
       data: encodedData,
       operation: 0,

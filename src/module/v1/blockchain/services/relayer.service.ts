@@ -280,11 +280,53 @@ export class RelayerService implements OnModuleInit {
 
       const relayerWallet = new ethers.Wallet(relayerPrivateKey, provider);
 
+// Preflight: surface revert reasons early
+      try {
+        await provider.call({
+          from: relayerWallet.address,
+          to: transaction.target,
+          data: transaction.data,
+          value: transaction.value || 0
+        });
+      } catch (preflightErr: any) {
+        this.logger.error(`Preflight call reverted: ${preflightErr.shortMessage || preflightErr.message}`);
+        await this.transactionModel.updateOne(
+          { _id: transactionMongoId },
+          {
+            status: 'FAILED',
+            lastError: preflightErr.shortMessage || preflightErr.message,
+            processedAt: new Date(),
+          }
+        );
+        // For non-issue/verify, stop here. (Issue/verify handling below stays unchanged.)
+        return;
+      }
+
+// Estimate gas + add buffer, with caps
+      let gasLimit: bigint = 500_000n; // fallback
+      try {
+        const est = await provider.estimateGas({
+          from: relayerWallet.address,
+          to: transaction.target,
+          data: transaction.data,
+          value: transaction.value || 0
+        });
+        let buffered = (est * 130n) / 100n; // +30%
+        const MIN_GAS = 300_000n;
+        const MAX_GAS = 2_000_000n;
+        if (buffered < MIN_GAS) buffered = MIN_GAS;
+        if (buffered > MAX_GAS) buffered = MAX_GAS;
+        gasLimit = buffered;
+        this.logger.log(`Estimated gas=${est.toString()} → using gasLimit=${gasLimit.toString()}`);
+      } catch (e: any) {
+        this.logger.warn(`Gas estimation failed, using fallback gasLimit=${gasLimit.toString()}: ${e.message || e}`);
+      }
+
       const tx = await relayerWallet.sendTransaction({
         to: transaction.target,
         data: transaction.data,
         value: transaction.value || 0,
-        gasLimit: 500000,
+        gasLimit, // was 500000
       });
       this.logger.log(`Transaction sent: ${tx.hash}`);
       const receipt = await tx.wait();
