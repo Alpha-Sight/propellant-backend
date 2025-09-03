@@ -10,7 +10,7 @@ import { User, UserDocument } from '../../user/schemas/user.schema';
 export type TalentCredentialDocument = TalentCredential & Document;
 
 @Schema({ timestamps: true })
-export class TalentCredential {
+export class TalentCredential extends Document {
   @Prop({
     type: mongoose.Schema.Types.ObjectId,
     ref: User.name,
@@ -124,25 +124,54 @@ export class TalentCredential {
   @Prop({ required: false })
   verificationRequestSentAt?: Date;
 
-  @Prop({ required: false })
+  @Prop({ required: false, type: Date })
   verificationDeadline?: Date;
 
-  // Blockchain integration fields
-  @Prop({ required: false })
-  blockchainCredentialId?: string;
+  // Blockchain fields
+  @Prop({ required: false, type: Number, unique: true, sparse: true })
+  blockchainCredentialId?: number;
 
+  // ID we assign to queue relayer jobs (issuance/mint/verify)
   @Prop({ required: false })
-  blockchainTransactionId?: string;
+  transactionId?: string;            // relayer queue id
+
+  // Specific verify job transaction id
+  @Prop({ required: false })
+  verificationTransactionId?: string;
+
+  // On-chain transaction hash from receipt
+  @Prop({ required: false })
+  transactionHash?: string;          // on-chain tx hash
+
+  // Block number of on-chain confirmation
+  @Prop({ required: false, type: Number })
+  blockNumber?: number;
+
+  // Fallback string ID (bytes32) from event when uint parsing fails
+  @Prop({ required: false })
+  tokenId?: string;
 
   @Prop({
     required: false,
-    enum: ['NOT_MINTED', 'PENDING_BLOCKCHAIN', 'MINTED', 'MINTING_FAILED'],
+    enum: ['NOT_MINTED', 'PENDING_BLOCKCHAIN', 'PENDING_ISSUANCE', 'MINTING_NFT', 'MINTED', 'MINTING_FAILED', 'WORKFLOW_FAILED'],
     default: 'NOT_MINTED',
   })
   blockchainStatus?: string;
 
+  // General status for compatibility (Relayer sets this)
+  @Prop({ required: false })
+  status?: string;
+
+  // Canonical error field for blockchain failures
   @Prop({ required: false })
   blockchainError?: string;
+
+  // Keep a generic error for legacy writes
+  @Prop({ required: false })
+  error?: string;
+
+  @Prop({ required: false })
+  blockchainTransactionId?: string;
 
   @Prop({ required: false })
   lastMintAttempt?: Date;
@@ -163,11 +192,14 @@ export class TalentCredential {
   @Prop({ required: false })
   revocable?: boolean;
 
-  @Prop({ required: false })
-  status?: string;
+  // @Prop({ required: false })
+  // status?: string;
 
   @Prop({ required: false })
   createdAt?: Date;
+
+  @Prop({ required: false })
+  file?: string;
 }
 
 export const TalentCredentialSchema =
@@ -180,6 +212,9 @@ TalentCredentialSchema.index({
   attestationStatus: 1,
 });
 TalentCredentialSchema.index({ user: 1, verificationStatus: 1 });
+TalentCredentialSchema.index({ transactionId: 1 }, { sparse: true });
+TalentCredentialSchema.index({ transactionHash: 1 }, { sparse: true });
+TalentCredentialSchema.index({ blockchainCredentialId: 1 }, { unique: true, sparse: true });
 
 TalentCredentialSchema.pre(/^find/, function (next) {
   const preConditions = {

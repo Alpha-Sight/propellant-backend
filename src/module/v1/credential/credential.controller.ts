@@ -29,6 +29,7 @@ import {
   VerificationStatsResponseDto,
 } from './dto/credential.dto';
 import { PaginationDto } from '../repository/dto/repository.dto';
+import { VerificationDecisionEnum } from '../../../common/enums/credential.enum';
 import { Roles } from 'src/common/decorators/role.decorator';
 import { UserRoleEnum } from 'src/common/enums/user.enum';
 import { RoleGuard } from '../auth/guards/role.guard';
@@ -62,7 +63,7 @@ export class CredentialController {
       );
     }
 
-    return await this.credentialService.uploadCredential(user, payload, file);
+    return await this.credentialService.createCredential(user, payload, file);
   }
 
   @Get()
@@ -102,10 +103,15 @@ export class CredentialController {
     @Body() payload: VerifyCredentialDto,
     @LoggedInUserDecorator() user: UserDocument,
   ) {
+    // Map the decision from DTO to service action format
+    const action = payload.decision === 'VERIFIED' ? 'approve' : 'reject';
+    
     return await this.credentialService.verifyOrRejectCredential(
       credentialId,
-      user._id.toString(),
-      payload,
+      action,
+      payload.notes, // verificationNotes
+      payload.decision === 'REJECTED' ? payload.notes : undefined, // rejectionReason
+      user._id.toString(), // verifierId
     );
   }
 

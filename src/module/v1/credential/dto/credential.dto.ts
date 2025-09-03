@@ -66,6 +66,7 @@ import {
   IsString,
   IsBoolean,
   IsDateString,
+  MaxLength,
 } from 'class-validator';
 import {
   CredentialCategoryEnum,
@@ -142,6 +143,11 @@ export class UploadCredentialDto {
   // Auto-minting control
   @IsBoolean()
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
   autoMint?: boolean;
 }
 
@@ -216,16 +222,18 @@ export class UpdateCredentialStatusDto {
 // New DTOs for verification process
 export class VerifyCredentialDto {
   @IsEnum(['VERIFIED', 'REJECTED'])
-  @IsNotEmpty()
   decision: 'VERIFIED' | 'REJECTED';
 
-  @IsString()
   @IsOptional()
+  @IsString()
+  @MaxLength(500)
   notes?: string;
+}
 
-  @IsString()
+export class RetryMintingDto {
   @IsOptional()
-  verificationReference?: string;
+  @IsString()
+  reason?: string;
 }
 
 export class GetPendingVerificationsDto extends PaginationDto {

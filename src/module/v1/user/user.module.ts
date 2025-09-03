@@ -14,6 +14,7 @@ import {
   OrganizationPost,
   OrganizationPostSchema,
 } from '../organization-post/schema/organization-post.schema';
+import { CredentialModule } from '../credential/credential.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import {
     MailModule,
     RepositoryModule,
     BlockchainModule,
+    forwardRef(() => CredentialModule),
   ],
   controllers: [UserController, AdminUserController],
   providers: [UserService, AdminUserService, PinataService],
