@@ -22,6 +22,7 @@ import { UserRoleEnum  } from 'src/common/enums/user.enum';
 import { CredentialVerificationRequestTemplate } from '../mail/templates/credential-verification-request.email';
 import { VerifyCredentialDto, UploadCredentialDto, GetAllCredentialsDto, GetPendingVerificationsDto, UpdateCredentialDto } from './dto/credential.dto';
 import { PaginationDto } from '../repository/dto/repository.dto';
+import { PinataService } from 'src/common/utils/pinata.util';
 
 @Injectable()
 export class CredentialService {
@@ -73,15 +74,68 @@ export class CredentialService {
       // Handle file upload if provided
       let fileUrl: string | undefined;
       let ipfsHash: string | undefined;
+      let metadataURI: string | undefined;
+      let imageIpfsHash: string | undefined;
 
       if (file) {
         try {
-          // Upload file to IPFS using PinataService (if available)
-          // For now, we'll store the file reference
-          fileUrl = `uploads/credentials/${Date.now()}_${file.originalname}`;
-          this.logger.log(`File uploaded: ${fileUrl}`);
+          this.logger.log(`Uploading file to IPFS: ${file.originalname}`);
+
+          // Upload image file to IPFS
+          const imageUploadResult = await this.pinataService.uploadFile(file, 'credentials');
+          imageIpfsHash = imageUploadResult;
+          const imageUrl = `ipfs://${imageIpfsHash}`;
+
+          this.logger.log(`Image uploaded to IPFS: ${imageUrl}`);
+
+          // Create metadata JSON for the NFT
+          const metadata = {
+            name: payload.title,
+            description: payload.description || 'PropellantBD Credential',
+            image: imageUrl,
+            attributes: [
+              {
+                trait_type: 'Credential Type',
+                value: payload.type
+              },
+              {
+                trait_type: 'Category',
+                value: payload.category
+              },
+              {
+                trait_type: 'Issuing Organization',
+                value: payload.issuingOrganization || 'PropellantBD'
+              },
+              {
+                trait_type: 'Issue Date',
+                value: payload.issueDate
+              },
+              {
+                trait_type: 'Expiry Date',
+                value: payload.expiryDate || 'No Expiry'
+              }
+            ],
+            external_url: payload.externalUrl || '',
+            properties: {
+              credentialId: `CRED_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+              issuingOrganization: payload.issuingOrganization,
+              verifyingOrganization: payload.verifyingOrganization,
+              issueDate: payload.issueDate,
+              expiryDate: payload.expiryDate
+            }
+          };
+
+          // Upload metadata JSON to IPFS
+          const metadataUploadResult = await this.pinataService.uploadJSON(metadata, `${payload.title} Metadata`);
+          metadataURI = `ipfs://${metadataUploadResult}`;
+
+          this.logger.log(`Metadata uploaded to IPFS: ${metadataURI}`);
+
+          // Keep legacy file field for backward compatibility
+          fileUrl = metadataURI;
+
         } catch (fileError) {
-          this.logger.warn(`File upload failed: ${fileError.message}`);
+          this.logger.warn(`IPFS upload failed: ${fileError.message}`);
           // Continue without file if upload fails
         }
       }
@@ -119,6 +173,8 @@ export class CredentialService {
         url: payload.url,
         imageUrl: fileUrl,
         ipfsHash,
+        metadataURI,
+        imageIpfsHash,
         description: payload.description,
         visibility: payload.visibility !== false, // Default to true
         verificationStatus: CredentialStatusEnum.PENDING,
@@ -300,6 +356,7 @@ export class CredentialService {
     private mailService: MailService,
     private relayerService: RelayerService,
     private configService: ConfigService,
+    private pinataService: PinataService,
   ) {}
 
   /**
@@ -565,7 +622,10 @@ export class CredentialService {
     // Keep on-chain strings short; put the heavy metadata in tokenURI (IPFS / HTTPS)
     const name = (credential.title || 'Credential').slice(0, 64);
     const description = (credential.description || 'PropellantBD Credential').slice(0, 160);
-    const tokenURI = credential.file || ''; // ideally an IPFS/HTTPS URL to metadata.json
+    const tokenURI = credential.metadataURI || credential.file || '';
+    if (!tokenURI || (!tokenURI.startsWith('ipfs://') && !tokenURI.startsWith('https://'))) {
+      this.logger.warn(`Invalid tokenURI for credential ${credential._id}: ${tokenURI}`);
+    }
 
     const encodedData = iface.encodeFunctionData('mint', [
       user.walletAddress,

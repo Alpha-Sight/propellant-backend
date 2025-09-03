@@ -14,6 +14,7 @@ import { Wallet, WalletDocument } from '../schemas/wallet.schema';
 import { TransactionStatusEnum, TransactionTypeEnum } from 'src/common/enums/transaction.enum';
 import { UserDocument } from '../../user/schemas/user.schema';
 import { TalentCredential, TalentCredentialDocument } from '../../credential/schema/credential.schema';
+import { PinataService } from 'src/common/utils/pinata.util';
 
 @Injectable()
 export class RelayerService implements OnModuleInit {
@@ -38,6 +39,7 @@ export class RelayerService implements OnModuleInit {
     @InjectModel(BlockchainTransaction.name) private transactionModel: Model<BlockchainTransactionDocument>,
     @InjectModel(TalentCredential.name) private credentialModel: Model<TalentCredentialDocument>, // use TalentCredential
     @Inject(forwardRef(() => WalletService)) private readonly walletService: WalletService,
+    private readonly pinataService: PinataService,
     @InjectModel(Wallet.name) private walletModel: Model<WalletDocument>,
   ) {}
 

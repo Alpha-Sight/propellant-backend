@@ -51,6 +51,12 @@ export class TalentCredential extends Document {
   ipfsHash?: string;
 
   @Prop({ required: false })
+  metadataURI?: string;
+
+  @Prop({ required: false })
+  imageIpfsHash?: string;
+
+  @Prop({ required: false })
   evidenceHash?: string;
 
   @Prop({ required: false })

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
 import { CredentialService } from '../services/credential.service';
 import { ResponseMessage } from 'src/common/decorators/response.decorator';
@@ -7,7 +7,7 @@ import { UserDocument } from 'src/module/v1/user/schemas/user.schema';
 import { IssueCredentialDto } from '../dto/issue-credential.dto';
 import { WalletService } from '../services/wallet.service';
 
-@Controller('blockchain/credentials')
+@Controller('credentials')
 export class CredentialController {
   private readonly logger = new Logger(CredentialController.name);
 
@@ -38,40 +38,43 @@ export class CredentialController {
     return this.credentialService.getCredentialsForWallet(walletAddress);
   }
 
-  @Post('verify/:id')
-  @UseGuards(JwtAuthGuard)
-  @ResponseMessage('Credential verification transaction queued successfully')
-  async verifyCredential(
+  @Post(':id/verify')
+  @ResponseMessage('Credential verification processed')
+  async verify(
     @Param('id') id: string,
+    @Body() payload: { decision: 'VERIFIED' | 'REJECTED'; notes?: string; reason?: string; verifierId?: string },
     @LoggedInUserDecorator() user: UserDocument,
+    @Query('waitForMint') waitForMint?: string, // "true" to await mint
   ) {
-    // Only admins or approved issuers can verify credentials
-    if (!user.role?.includes('ADMIN') && !user.role?.includes('ISSUER')) {
-      throw new Error('Unauthorized: Only admins or approved issuers can verify credentials');
-    }
+    const action = payload.decision === 'VERIFIED' ? 'approve' : 'reject';
+    const result = await this.credentialService.verifyOrRejectCredential(
+      id,
+      action,
+      payload.notes,
+      payload.reason,
+      payload.verifierId,
+      waitForMint === 'true',
+    );
 
-    // The id parameter is the MongoDB ObjectId of the credential
-    const result = await this.credentialService.verifyCredential(id, user._id.toString());
-
-    // Check if service returned an error
-    if (result && (result as any).errorType) {
-      const err = result as { error?: string; errorType?: string; message?: string };
-      let status = HttpStatus.INTERNAL_SERVER_ERROR;
-      switch (err.errorType) {
-        case 'NOT_READY': status = HttpStatus.CONFLICT; break;
-        case 'NOT_FOUND': status = HttpStatus.NOT_FOUND; break;
-        case 'INVALID_ID': status = HttpStatus.BAD_REQUEST; break;
-        case 'TX_ERROR': status = HttpStatus.BAD_GATEWAY; break;
+    // If caller wants to wait until minted, poll briefly and return full details.
+    if (waitForMint === 'true' && action === 'approve') {
+      const minted = await this.credentialService.waitForMintCompletion(id, 60000);
+      if (minted) {
+        return minted;
       }
-      this.logger.warn(`${err.message} mongoId=${id}`);
-      throw new HttpException(
-        { success: false, data: { error: err.error || err.message, errorType: err.errorType, message: err.message } },
-        status,
-      );
+      // Fallback if not minted in time
+      const partial = await this.credentialService.getBlockchainDetails(id);
+      return { ...result, pendingMint: true, ...partial };
     }
 
-    // Success path — return the queued transaction result
-    return { success: true, data: result, message: 'Credential verification transaction queued successfully' };
+    return result;
+  }
+
+  // Fetch blockchain details + explorer links at any time
+  @Get(':id/blockchain')
+  @ResponseMessage('Credential blockchain details')
+  async getBlockchainDetails(@Param('id') id: string) {
+    return await this.credentialService.getBlockchainDetails(id);
   }
 
   @Post('revoke/:id')

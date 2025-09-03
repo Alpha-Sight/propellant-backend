@@ -19,6 +19,9 @@ import { WalletController } from './controllers/wallet.controller';
 import { CredentialController } from './controllers/credential.controller';
 import { BlockchainController } from './controllers/blockchain.controller';
 
+// Import PinataService
+import { PinataService } from 'src/common/utils/pinata.util';
+
 @Module({
   imports: [
     ConfigModule,
@@ -34,6 +37,7 @@ import { BlockchainController } from './controllers/blockchain.controller';
     CredentialService,
     WalletService,
     RelayerService,
+    PinataService, // Add PinataService here
   ],
   controllers: [
     WalletController,
@@ -44,6 +48,7 @@ import { BlockchainController } from './controllers/blockchain.controller';
     CredentialService,
     WalletService,
     RelayerService,
+    PinataService, // Export PinataService
   ],
 })
 export class BlockchainModule {}

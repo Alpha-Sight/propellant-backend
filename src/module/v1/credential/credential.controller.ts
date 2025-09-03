@@ -63,6 +63,7 @@ export class CredentialController {
       );
     }
 
+    // IPFS upload logic is now handled in the credential service
     return await this.credentialService.createCredential(user, payload, file);
   }
 

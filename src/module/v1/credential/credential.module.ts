@@ -7,6 +7,7 @@ import { TalentCredentialSchema } from './schema/credential.schema';
 import { UserModule } from '../user/user.module';
 import { MailModule } from '../mail/mail.module';
 import { BlockchainModule } from '../blockchain/blockchain.module';
+import { PinataService } from 'src/common/utils/pinata.util'; // Import PinataService
 // import { NotificationModule } from '../notification/notification.module'; // If created
 
 @Module({
@@ -21,7 +22,7 @@ import { BlockchainModule } from '../blockchain/blockchain.module';
     // forwardRef(() => NotificationModule), // Uncomment if created
   ],
   controllers: [CredentialController],
-  providers: [CredentialService],
+  providers: [CredentialService, PinataService], // Add PinataService here
   exports: [CredentialService],
 })
 export class CredentialModule {}

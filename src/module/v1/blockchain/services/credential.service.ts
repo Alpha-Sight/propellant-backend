@@ -8,6 +8,21 @@ import { WalletService } from './wallet.service';
 import { Credential, CredentialDocument } from '../schemas/credential.schema';
 import { IssueCredentialDto } from '../dto/issue-credential.dto';
 import { CredentialVerificationModuleABI } from '../abi/CredentialVerificationModule';
+import { PinataService } from 'src/common/utils/pinata.util';
+
+// Minimal lean type for fields used from Mongo in this service
+type LeanCredentialDoc = {
+  _id: Types.ObjectId;
+  credentialId?: string;
+  blockchainCredentialId?: number | string;
+  status?: string;
+  blockchainStatus?: string;
+  tokenId?: number | string;
+  transactionHash?: string;
+  blockNumber?: number;
+  mintedAt?: Date;
+  createdAt?: Date;
+};
 
 @Injectable()
 export class CredentialService implements OnModuleInit {
@@ -19,9 +34,10 @@ export class CredentialService implements OnModuleInit {
 
   constructor(
     @InjectModel(Credential.name) private readonly credentialModel: Model<CredentialDocument>,
-    private readonly configService: ConfigService,
     private readonly relayerService: RelayerService,
     @Inject(forwardRef(() => WalletService)) private readonly walletService: WalletService,
+    private readonly pinataService: PinataService,
+    private readonly configService: ConfigService,
   ) {
     this.credentialModuleAddress = '';
   }
@@ -385,30 +401,6 @@ export class CredentialService implements OnModuleInit {
     }
   }
 
-  async getPendingCredentialsForWallet(walletAddress: string) {
-    try {
-      const pendingCredentials = await this.credentialModel.find({
-        subject: walletAddress,
-        status: 'PENDING'
-      });
-
-      return pendingCredentials.map(credential => ({
-        id: credential._id.toString(),
-        credentialId: credential.credentialId,
-        blockchainCredentialId: credential.blockchainCredentialId,
-        issuer: credential.issuer,
-        subject: credential.subject,
-        name: credential.name,
-        description: credential.description,
-        status: credential.status,
-        createdAt: credential.createdAt,
-      }));
-    } catch (error) {
-      this.logger.error(`Failed to get pending credentials for wallet: ${error.message}`);
-      return [];
-    }
-  }
-
   async revokeCredential(credentialId: string, revokerId: string) {
     try {
       await this.ensureInitialized();
@@ -544,6 +536,166 @@ export class CredentialService implements OnModuleInit {
         }
       } catch (error) {
         this.logger.warn(`Could not get account address for ${inputAddress}: ${error.message}`);
+      }
+      
+      this.logger.log(`Searching for credentials with subjects: ${addresses.join(', ')}`);
+      
+      const dbCredentials = await this.credentialModel.find({
+        subject: { $in: addresses },
+        status: 'PENDING'
+      });
+      
+      this.logger.log(`Found ${dbCredentials.length} pending credentials in database`);
+      
+      if (dbCredentials.length === 0) {
+        const allSubjects = await this.credentialModel.distinct('subject');
+        this.logger.log(`All subjects in database: ${allSubjects.join(', ')}`);
+      }
+      
+      const combinedCredentials = dbCredentials.map(dbCred => ({
+        id: dbCred.credentialId,
+        mongoId: dbCred._id.toString(),
+        blockchainCredentialId: dbCred.blockchainCredentialId,
+        name: dbCred.name,
+        description: dbCred.description,
+        status: dbCred.status,
+        subject: dbCred.subject,
+        issuer: dbCred.issuer,
+        createdAt: dbCred.createdAt,
+        transactionId: dbCred.transactionId
+      }));
+      
+      return combinedCredentials;
+      
+    } catch (error) {
+      this.logger.error(`Failed to get pending credentials: ${error.message}`);
+      throw error;
+    }
+  }
+
+  private getExplorerBase(): string {
+    // Default to Lisk Sepolia Blockscout
+    return this.configService.get<string>('BLOCKCHAIN_EXPLORER_BASE') || 'https://sepolia-blockscout.lisk.com';
+  }
+
+  async waitForMintCompletion(credentialId: string, timeoutMs = 60000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const cred = await this.credentialModel.findById(credentialId).lean<LeanCredentialDoc>();
+      if (cred && cred.blockchainStatus === 'MINTED' && cred.tokenId) {
+        const links = this.buildExplorerLinks({
+          mintTxHash: cred.transactionHash, // relayer sets this to the last tx (mint) on success
+          tokenId: cred.tokenId,
+        });
+        return {
+          credentialId: cred._id.toString(),
+          blockchainCredentialId: cred.blockchainCredentialId,
+          tokenId: cred.tokenId,
+          nftContract: this.configService.get<string>('NFT_CONTRACT_ADDRESS'),
+          mintTxHash: cred.transactionHash,
+          blockNumber: cred.blockNumber,
+          mintedAt: cred.mintedAt,
+          explorer: links,
+        };
+      }
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    return null;
+  }
+
+  private buildExplorerLinks({ mintTxHash, tokenId }: { mintTxHash?: string; tokenId?: string | number }) {
+    const base = this.getExplorerBase();
+    return {
+      transaction: mintTxHash ? `${base}/tx/${mintTxHash}` : null,
+      token: tokenId ? `${base}/token/${this.configService.get<string>('NFT_CONTRACT_ADDRESS')}/instance/${tokenId}` : null,
+    };
+  }
+
+  async verifyOrRejectCredential(
+    credentialId: string,
+    action: 'approve' | 'reject',
+    verificationNotes?: string,
+    rejectionReason?: string,
+    verifierId?: string,
+    waitForMint?: boolean,
+  ): Promise<any> {
+    try {
+      this.logger.log(`Processing ${action} action for credential: ${credentialId}`);
+
+      if (action === 'approve') {
+        // Use existing verifyCredential method for approval
+        const result = await this.verifyCredential(credentialId, verifierId || '0x2Ed32Af34d80ADB200592e7e0bD6a3F761677591');
+        return {
+          success: true,
+          message: 'Credential verification initiated',
+          transactionId: result.transactionId,
+          status: result.status,
+        };
+      } else {
+        // Handle rejection - update status in database
+        await this.credentialModel.updateOne(
+          { _id: credentialId },
+          {
+            $set: {
+              verificationStatus: 'REJECTED',
+              rejectionReason: rejectionReason || 'Rejected by verifier',
+              rejectedAt: new Date(),
+              rejectedBy: verifierId,
+            }
+          }
+        );
+
+        this.logger.log(`Credential ${credentialId} rejected by ${verifierId}`);
+        return {
+          success: true,
+          message: 'Credential rejected successfully',
+          status: 'REJECTED',
+        };
+      }
+    } catch (error) {
+      this.logger.error(`Failed to process ${action} for credential ${credentialId}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async getBlockchainDetails(credentialId: string) {
+    const cred = await this.credentialModel.findById(credentialId).lean<LeanCredentialDoc>();
+    if (!cred) {
+      throw new Error('Credential not found');
+    }
+    const links = this.buildExplorerLinks({
+      mintTxHash: cred.transactionHash,
+      tokenId: cred.tokenId,
+    });
+    return {
+      credentialId: cred._id.toString(),
+      blockchainCredentialId: cred.blockchainCredentialId,
+      status: cred.status,
+      blockchainStatus: cred.blockchainStatus,
+      tokenId: cred.tokenId,
+      mintTxHash: cred.transactionHash,
+      blockNumber: cred.blockNumber,
+      mintedAt: cred.mintedAt,
+      explorer: links,
+    };
+  }
+
+  async getPendingCredentialsForWallet(walletAddress: string) {
+    try {
+      this.logger.log(`Looking for pending credentials for address: ${walletAddress}`);
+      
+      const addresses = [walletAddress];
+      
+      // Try to get account address, but don't fail if it doesn't work
+      try {
+        if (this.walletService && typeof this.walletService.getAccountAddress === 'function') {
+          const accountAddress = await this.walletService.getAccountAddress(walletAddress);
+          if (accountAddress && accountAddress !== walletAddress) {
+            addresses.push(accountAddress);
+          }
+        }
+      } catch (error) {
+        this.logger.warn(`Could not get account address for ${walletAddress}: ${error.message}`);
       }
       
       this.logger.log(`Searching for credentials with subjects: ${addresses.join(', ')}`);

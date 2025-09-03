@@ -24,7 +24,7 @@ export class Credential {
   description: string;
 
   @Prop()
-  metadataURI?: string;
+  metadataURI?: string; // ipfs://<metadataCID>
 
   @Prop({ required: true })
   credentialType: number;
@@ -70,6 +70,13 @@ export class Credential {
 
   @Prop()
   updatedAt?: Date;
+
+  // NEW: IPFS metadata and image references
+  ipfsHash?: string;
+  metadataIpfsHash?: string;     // metadata CID only
+  imageIpfsHash?: string;        // image CID only
+
+  file?: string; // keep for UI (gateway URL)
 }
 
 export const CredentialSchema = SchemaFactory.createForClass(Credential);
