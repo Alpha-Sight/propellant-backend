@@ -7,11 +7,53 @@ export const SETTINGS: ISettings = {
     name: 'Propellant HR',
     supportEmail: 'support@Propellanthr.com',
     subscriptionPrice: {
-      [SubscriptionTypeEnum.BASIC]: 1500,
-      [SubscriptionTypeEnum.PROFESSIONAL]: 1500,
-      [SubscriptionTypeEnum.ENTERPRISE]: 1500,
-      [SubscriptionTypeEnum.FREE]: 0,
-      [SubscriptionTypeEnum.PREMIUM]: 1500,
+      [SubscriptionTypeEnum.FREE]: {
+        price: 0,
+        features: [
+          'Basic profile creation',
+          'Upload up to 5 credentials',
+          'Basic CV generator',
+          'Email support',
+        ],
+      },
+      [SubscriptionTypeEnum.BASIC]: {
+        price: 1500,
+        features: ['Access to HR management tools', 'Email support'],
+      },
+      [SubscriptionTypeEnum.PROFESSIONAL]: {
+        price: 5000,
+        features: [
+          'Enhanced profile with portfolio',
+          'Unlimited credential uploads',
+          'AI-powered CV optimization',
+          'Unlimited CV downloads',
+          'NFT skill badges',
+          'Priority verification',
+          'Advanced analytics',
+          'Priority support',
+        ],
+      },
+      [SubscriptionTypeEnum.ENTERPRISE]: {
+        price: 15000,
+        features: [
+          'All PROFESSIONAL features',
+          'Custom integrations',
+          'Dedicated account manager',
+        ],
+      },
+      [SubscriptionTypeEnum.PREMIUM]: {
+        price: 10000,
+        features: [
+          'All PROFESSIONAL features',
+          'Personal brand building tools',
+          'Advanced recommendation engine',
+          'Multiple CV templates',
+          'Interview preparation tools',
+          'Career coaching sessions',
+          'Premium support',
+          'API access',
+        ],
+      },
     },
     urls: {
       webHomepage: isDevEnvironment

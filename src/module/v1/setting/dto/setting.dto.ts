@@ -21,15 +21,52 @@ export class UrlsDto {
   waitlistPage: string;
 }
 
+export class PointsDto {
+  @IsNumber()
+  referral: number;
+
+  @IsNumber()
+  signup: number;
+
+  @IsNumber()
+  premium: number;
+}
+
+export class SubscriptionPlanDto {
+  @IsNumber()
+  @IsOptional()
+  price: number;
+
+  @IsString()
+  @IsOptional()
+  description: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  features: string[];
+}
+
 export class SubscriptionDto {
-  @IsNumber()
-  BASIC: number;
+  @ValidateNested()
+  @Type(() => SubscriptionPlanDto)
+  FREE: SubscriptionPlanDto;
 
-  @IsNumber()
-  PROFESSIONAL: number;
+  @ValidateNested()
+  @Type(() => SubscriptionPlanDto)
+  BASIC: SubscriptionPlanDto;
 
-  @IsNumber()
-  ENTERPRISE: number;
+  @ValidateNested()
+  @Type(() => SubscriptionPlanDto)
+  PROFESSIONAL: SubscriptionPlanDto;
+
+  @ValidateNested()
+  @Type(() => SubscriptionPlanDto)
+  PREMIUM: SubscriptionPlanDto;
+
+  @ValidateNested()
+  @Type(() => SubscriptionPlanDto)
+  ENTERPRISE: SubscriptionPlanDto;
 }
 
 export class AppSettingsDto {
@@ -49,6 +86,11 @@ export class AppSettingsDto {
   @ValidateNested()
   @Type(() => UrlsDto)
   urls: UrlsDto;
+
+  @IsObject()
+  @ValidateNested()
+  @Type(() => PointsDto)
+  points: PointsDto;
 }
 
 // Transfer Settings DTOs
