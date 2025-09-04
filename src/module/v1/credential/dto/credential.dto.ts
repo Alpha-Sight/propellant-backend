@@ -252,6 +252,7 @@ export class GetPendingVerificationsDto extends PaginationDto {
   @IsOptional()
   @IsString()
   sortOrder?: 'asc' | 'desc';
+  email: any;
 }
 
 export class VerificationStatsResponseDto {
@@ -295,4 +296,5 @@ export class GetAllCredentialsDto extends PaginationDto {
   @IsOptional()
   @IsString()
   verifyingOrganization?: string;
+  limit: number;
 }

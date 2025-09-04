@@ -22,43 +22,380 @@ import { UserRoleEnum  } from 'src/common/enums/user.enum';
 import { CredentialVerificationRequestTemplate } from '../mail/templates/credential-verification-request.email';
 import { VerifyCredentialDto, UploadCredentialDto, GetAllCredentialsDto, GetPendingVerificationsDto, UpdateCredentialDto } from './dto/credential.dto';
 import { PaginationDto } from '../repository/dto/repository.dto';
+import { PinataService } from 'src/common/utils/pinata.util';
 
 @Injectable()
 export class CredentialService {
-  getBlockchainStatus(arg0: string) {
-    throw new Error('Method not implemented.');
+  async getBlockchainStatus(userId: string) {
+    try {
+      const credentials = await this.credentialModel.find({ 
+        user: userId 
+      }).lean();
+      
+      return {
+        success: true,
+        data: {
+          total: credentials.length,
+          minted: credentials.filter(c => c.blockchainStatus === 'MINTED').length,
+          pending: credentials.filter(c => ['PENDING_BLOCKCHAIN', 'PENDING_ISSUANCE', 'MINTING_NFT'].includes(c.blockchainStatus)).length,
+          failed: credentials.filter(c => c.blockchainStatus === 'MINTING_FAILED').length,
+          credentials: credentials.map(c => ({
+            _id: c._id,
+            title: c.title,
+            blockchainStatus: c.blockchainStatus,
+            transactionId: c.blockchainTransactionId || c.transactionId,
+            transactionHash: c.transactionHash,
+            nftTokenId: c.nftTokenId,
+            nftTokenURI: c.nftTokenURI,
+            mintedAt: c.mintedAt,
+            explorer: this.buildExplorer(c.transactionHash, c.nftTokenId?.toString()),
+          })),
+        }
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get blockchain status: ${error.message}`);
+      throw error;
+    }
   }
-  retryMinting(credentialId: string, arg1: string) {
-    throw new Error('Method not implemented.');
+
+  async retryMinting(credentialId: string, userId: string) {
+    try {
+      const credential = await this.credentialModel.findOne({
+        _id: credentialId,
+        user: userId
+      }).populate('user');
+      
+      if (!credential) {
+        throw new NotFoundException('Credential not found');
+      }
+      
+      if (credential.blockchainStatus !== 'MINTING_FAILED') {
+        throw new BadRequestException('Credential is not in a failed state');
+      }
+      
+      // Reset the status and retry minting
+      await this.credentialModel.updateOne(
+        { _id: credentialId },
+        { 
+          $set: { 
+            blockchainStatus: 'PENDING_BLOCKCHAIN',
+            blockchainError: null,
+            lastMintAttempt: new Date()
+          }
+        }
+      );
+      
+      // Re-initiate the verification workflow
+      return await this.verifyOrRejectCredential(credentialId, 'approve', 'Retry minting', undefined, userId);
+    } catch (error) {
+      this.logger.error(`Failed to retry minting: ${error.message}`);
+      throw error;
+    }
   }
-  getAllOrganizationVerifiableCredentials(user: UserDocument, query: PaginationDto & { type?: CredentialTypeEnum; category?: CredentialCategoryEnum; verificationStatus?: CredentialStatusEnum; }) {
-    throw new Error('Method not implemented.');
+
+  async getAllOrganizationVerifiableCredentials(user: UserDocument, query: PaginationDto & { type?: CredentialTypeEnum; category?: CredentialCategoryEnum; verificationStatus?: CredentialStatusEnum; }) {
+    const filter: any = {};
+    
+    if (query.type) filter.type = query.type;
+    if (query.category) filter.category = query.category;
+    if (query.verificationStatus) filter.verificationStatus = query.verificationStatus;
+    
+    const page = query.page || 1;
+    const limit = query.limit || 10;
+    const skip = (page - 1) * limit;
+    
+    const credentials = await this.credentialModel
+      .find(filter)
+      .populate('user', 'firstName lastName email')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+      
+    const total = await this.credentialModel.countDocuments(filter);
+    
+    return {
+      success: true,
+      data: {
+        credentials,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit)
+        }
+      }
+    };
   }
-  deleteCredential: any;
-  updateCredential(_id: string, user: UserDocument, payload: UpdateCredentialDto, file: Express.Multer.File) {
-    throw new Error('Method not implemented.');
+
+  async updateCredential(_id: string, user: UserDocument, payload: UpdateCredentialDto, file?: Express.Multer.File) {
+    const credential = await this.credentialModel.findOne({
+      _id,
+      user: user._id
+    });
+    
+    if (!credential) {
+      throw new NotFoundException('Credential not found');
+    }
+    
+    if (credential.verificationStatus !== CredentialStatusEnum.PENDING) {
+      throw new BadRequestException('Cannot update credential that is not pending');
+    }
+    
+    const updateData: any = { ...payload };
+    
+    if (file) {
+      try {
+        const ipfsHash = await this.pinataService.uploadFile(file, 'credentials');
+        updateData.imageUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
+        updateData.ipfsHash = ipfsHash;
+        updateData.file = updateData.imageUrl;
+      } catch (error) {
+        this.logger.warn(`IPFS upload failed: ${error.message}`);
+        updateData.imageUrl = `uploads/credentials/${Date.now()}_${file.originalname}`;
+        updateData.file = updateData.imageUrl;
+      }
+    }
+    
+    return await this.credentialModel.findByIdAndUpdate(_id, updateData, { new: true });
   }
-  resendVerificationRequest(credentialId: string, arg1: string) {
-    throw new Error('Method not implemented.');
+
+  async resendVerificationRequest(credentialId: string, userId: string) {
+    const credential = await this.credentialModel.findOne({
+      _id: credentialId,
+      user: userId
+    }).populate('user');
+    
+    if (!credential) {
+      throw new NotFoundException('Credential not found');
+    }
+    
+    if (!credential.verifyingEmail) {
+      throw new BadRequestException('No verification email configured for this credential');
+    }
+    
+    try {
+      await this.sendVerificationRequestEmail(credential, credential.user as UserDocument);
+      
+      await this.credentialModel.updateOne(
+        { _id: credentialId },
+        { 
+          $set: { 
+            verificationRequestSentAt: new Date(),
+            verificationDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+          }
+        }
+      );
+      
+      return { success: true, message: 'Verification request resent successfully' };
+    } catch (error) {
+      this.logger.error(`Failed to resend verification request: ${error.message}`);
+      throw error;
+    }
   }
-  getOverdueVerifications(query: GetPendingVerificationsDto) {
-    throw new Error('Method not implemented.');
+
+  async getOverdueVerifications(query: GetPendingVerificationsDto) {
+    const filter: any = {
+      verificationStatus: CredentialStatusEnum.PENDING,
+      verificationDeadline: { $lt: new Date() }
+    };
+    
+    if (query.email) {
+      filter.verifyingEmail = { $regex: query.email, $options: 'i' };
+    }
+    
+    const page = query.page || 1;
+    const limit = query.limit || 10;
+    const skip = (page - 1) * limit;
+    
+    const credentials = await this.credentialModel
+      .find(filter)
+      .populate('user', 'firstName lastName email')
+      .sort({ verificationDeadline: 1 })
+      .skip(skip)
+      .limit(limit);
+      
+    const total = await this.credentialModel.countDocuments(filter);
+    
+    return {
+      success: true,
+      data: {
+        credentials,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit)
+        }
+      }
+    };
   }
-  getVerificationStats(email: string): import("./dto/credential.dto").VerificationStatsResponseDto | PromiseLike<import("./dto/credential.dto").VerificationStatsResponseDto> {
-    throw new Error('Method not implemented.');
+
+  async getVerificationStats(email: string) {
+    const filter: any = {};
+    if (email) {
+      filter.verifyingEmail = { $regex: email, $options: 'i' };
+    }
+    
+    const totalPending = await this.credentialModel.countDocuments({
+      ...filter,
+      verificationStatus: CredentialStatusEnum.PENDING
+    });
+    
+    const totalVerified = await this.credentialModel.countDocuments({
+      ...filter,
+      verificationStatus: CredentialStatusEnum.VERIFIED
+    });
+    
+    const totalRejected = await this.credentialModel.countDocuments({
+      ...filter,
+      verificationStatus: CredentialStatusEnum.REJECTED
+    });
+    
+    const overdue = await this.credentialModel.countDocuments({
+      ...filter,
+      verificationStatus: CredentialStatusEnum.PENDING,
+      verificationDeadline: { $lt: new Date() }
+    });
+    
+    return {
+      success: true,
+      data: {
+        totalPending,
+        totalVerified,
+        totalRejected,
+        overdue,
+        total: totalPending + totalVerified + totalRejected
+      }
+    };
   }
-  getPendingVerifications(email: string, query: GetPendingVerificationsDto): import("./dto/credential.dto").PaginatedCredentialResponse | PromiseLike<import("./dto/credential.dto").PaginatedCredentialResponse> {
-    throw new Error('Method not implemented.');
+
+  getPendingVerifications(email: string, query: GetPendingVerificationsDto) {
+    const filter: any = {
+      verificationStatus: CredentialStatusEnum.PENDING
+    };
+    
+    if (email) {
+      filter.verifyingEmail = { $regex: email, $options: 'i' };
+    }
+    
+    const page = query.page || 1;
+    const limit = query.limit || 10;
+    const skip = (page - 1) * limit;
+    
+    return this.credentialModel
+      .find(filter)
+      .populate('user', 'firstName lastName email')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .then(async (credentials) => {
+        const total = await this.credentialModel.countDocuments(filter);
+        return {
+          success: true,
+          data: {
+            credentials,
+            pagination: {
+              total,
+              page,
+              limit,
+              totalPages: Math.ceil(total / limit)
+            }
+          }
+        };
+      });
   }
-  getCredentialById(_id: string) {
-    throw new Error('Method not implemented.');
+
+  async getCredentialById(_id: string) {
+    const credential = await this.credentialModel
+      .findById(_id)
+      .populate('user', 'firstName lastName email')
+      .populate('verifiedBy', 'firstName lastName email')
+      .populate('rejectedBy', 'firstName lastName email');
+      
+    if (!credential) {
+      throw new NotFoundException('Credential not found');
+    }
+    
+    return {
+      success: true,
+      data: credential
+    };
   }
-  adminGetAllCredentials(query: GetAllCredentialsDto) {
-    throw new Error('Method not implemented.');
+
+  async adminGetAllCredentials(query: GetAllCredentialsDto) {
+    const filter: any = {};
+    
+    if (query.verificationStatus) {
+      filter.verificationStatus = query.verificationStatus;
+    }
+    if (query.type) {
+      filter.type = query.type;
+    }
+    if (query.category) {
+      filter.category = query.category;
+    }
+    
+    const page = query.page || 1;
+    const limit = query.limit || 10;
+    const skip = (page - 1) * limit;
+    
+    const credentials = await this.credentialModel
+      .find(filter)
+      .populate('user', 'firstName lastName email')
+      .populate('verifiedBy', 'firstName lastName email')
+      .populate('rejectedBy', 'firstName lastName email')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+      
+    const total = await this.credentialModel.countDocuments(filter);
+    
+    return {
+      success: true,
+      data: {
+        credentials,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit)
+        }
+      }
+    };
   }
-  getSingleUserCredentials(user: UserDocument, query: PaginationDto): import("./dto/credential.dto").PaginatedCredentialResponse | PromiseLike<import("./dto/credential.dto").PaginatedCredentialResponse> {
-    throw new Error('Method not implemented.');
+
+  async getSingleUserCredentials(user: UserDocument, query: PaginationDto) {
+    const filter = { user: user._id };
+    
+    const page = query.page || 1;
+    const limit = query.limit || 10;
+    const skip = (page - 1) * limit;
+    
+    const credentials = await this.credentialModel
+      .find(filter)
+      .populate('verifiedBy', 'firstName lastName email')
+      .populate('rejectedBy', 'firstName lastName email')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+      
+    const total = await this.credentialModel.countDocuments(filter);
+    
+    return {
+      success: true,
+      data: {
+        credentials,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit)
+        }
+      }
+    };
   }
+
   /**
    * Create a new credential
    */
@@ -76,13 +413,16 @@ export class CredentialService {
 
       if (file) {
         try {
-          // Upload file to IPFS using PinataService (if available)
-          // For now, we'll store the file reference
-          fileUrl = `uploads/credentials/${Date.now()}_${file.originalname}`;
-          this.logger.log(`File uploaded: ${fileUrl}`);
+          // Upload file to IPFS using PinataService
+          this.logger.log(`Uploading file to IPFS: ${file.originalname}`);
+          ipfsHash = await this.pinataService.uploadFile(file, 'credentials');
+          fileUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
+          this.logger.log(`File uploaded to IPFS: ${fileUrl} (hash: ${ipfsHash})`);
         } catch (fileError) {
-          this.logger.warn(`File upload failed: ${fileError.message}`);
-          // Continue without file if upload fails
+          this.logger.warn(`IPFS upload failed, using local storage: ${fileError.message}`);
+          // Fallback to local storage if IPFS fails
+          fileUrl = `uploads/credentials/${Date.now()}_${file.originalname}`;
+          this.logger.log(`File uploaded locally: ${fileUrl}`);
         }
       }
 
@@ -300,6 +640,7 @@ export class CredentialService {
     private mailService: MailService,
     private relayerService: RelayerService,
     private configService: ConfigService,
+    private pinataService: PinataService, // ADD THIS LINE
   ) {}
 
   /**
@@ -387,6 +728,27 @@ export class CredentialService {
     // Return a placeholder ID - the RelayerService will update this with the actual blockchain ID
     // when the transaction is processed (as seen in your logs: "Persisted on-chain id 31")
     return { credentialId: 0, transactionId: result.transactionId }; // RelayerService will update with real ID
+  }
+  /**
+   * Helper function to map credential types to smart contract enum values
+   */
+  private mapCredentialTypeToNumber(type: string): number {
+    const typeMapping = {
+      'EDUCATION': 0,
+      'EXPERIENCE': 1,
+      'SKILL': 2,
+      'CERTIFICATION': 3,
+      'CERTIFICATE': 3, // Same as CERTIFICATION
+      'OTHER': 4
+    };
+    
+    const mappedValue = typeMapping[type as keyof typeof typeMapping];
+    if (mappedValue === undefined) {
+      this.logger.warn(`Unknown credential type: ${type}, defaulting to OTHER (4)`);
+      return 4; // Default to OTHER
+    }
+    
+    return mappedValue;
   }
 
   /**
@@ -541,31 +903,97 @@ export class CredentialService {
   }
 
   /**
-   * Step 3: Mint NFT after credential verification - FIXED
+   * Step 3: Mint NFT after credential verification - FIXED METADATA STRUCTURE
    */
   private async mintNFTOnBlockchain(
     credential: TalentCredentialDocument,
     user: UserDocument,
-  ): Promise<{ transactionId: string }> {
+  ): Promise<{ transactionId: string; metadataURI?: string }> {
     if (!user.walletAddress) {
       throw new BadRequestException('User must have a wallet address to mint NFT');
     }
-
     const nftContractAddress = this.configService.get<string>('NFT_CONTRACT_ADDRESS');
     if (!nftContractAddress) {
       throw new BadRequestException('NFT_CONTRACT_ADDRESS not configured in environment variables');
     }
 
-    const evidenceHash = ethers.keccak256(ethers.toUtf8Bytes(credential._id.toString()));
-
-    const iface = new ethers.Interface([
-      'function mint(address to, string memory name, string memory description, string memory tokenURI, uint8 credentialType, uint256 validUntil, bytes32 evidenceHash, bool revocable) returns (uint256)'
-    ]);
-
-    // Keep on-chain strings short; put the heavy metadata in tokenURI (IPFS / HTTPS)
+    // Build ERC-721 metadata - FIXED STRUCTURE
     const name = (credential.title || 'Credential').slice(0, 64);
-    const description = (credential.description || 'PropellantBD Credential').slice(0, 160);
-    const tokenURI = credential.file || ''; // ideally an IPFS/HTTPS URL to metadata.json
+    const description = (credential.description || 'PropellantBD Credential').slice(0, 1000);
+    
+    // Ensure image URL is accessible - prefer IPFS gateway over ipfs:// protocol for better compatibility
+    let imageUrl = '';
+    if (credential.ipfsHash) {
+      // Use IPFS gateway instead of ipfs:// protocol for better block explorer compatibility
+      imageUrl = `https://gateway.pinata.cloud/ipfs/${credential.ipfsHash}`;
+    } else if (credential.imageUrl || credential.file) {
+      imageUrl = credential.imageUrl || credential.file || '';
+    }
+
+    // Create ERC-721 compliant metadata structure
+    const metadata = {
+      name: name,
+      description: description,
+      image: imageUrl, // This MUST be a valid HTTP URL for block explorers
+      external_url: credential.url || undefined,
+      animation_url: undefined, // Optional: for videos/animations
+      background_color: undefined, // Optional: hex color without #
+      attributes: [
+        {
+          trait_type: 'Type',
+          value: String(credential.type)
+        },
+        {
+          trait_type: 'Category', 
+          value: String(credential.category)
+        },
+        credential.issuingOrganization ? {
+          trait_type: 'Issuer',
+          value: credential.issuingOrganization
+        } : null,
+        credential.verifyingOrganization ? {
+          trait_type: 'Verifier',
+          value: credential.verifyingOrganization
+        } : null,
+        credential.issueDate ? {
+          display_type: 'date',
+          trait_type: 'Issued',
+          value: Math.floor(new Date(credential.issueDate).getTime() / 1000)
+        } : null,
+        credential.expiryDate ? {
+          display_type: 'date', 
+          trait_type: 'Expires',
+          value: Math.floor(new Date(credential.expiryDate).getTime() / 1000)
+        } : null,
+      ].filter(Boolean) // Remove null entries
+    };
+
+    let tokenURI = '';
+    try {
+      // Pin metadata JSON to IPFS with proper naming
+      const ipfsHash = await this.pinataService.uploadJSON(
+        metadata, 
+        `credential-nft-${credential._id}-metadata.json`
+      );
+      
+      // Use IPFS gateway URL instead of ipfs:// protocol for better compatibility
+      tokenURI = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
+      
+      this.logger.log(`NFT metadata uploaded to IPFS: ${tokenURI}`);
+      
+      // Log the metadata for debugging
+      this.logger.log(`NFT metadata structure:`, JSON.stringify(metadata, null, 2));
+      
+    } catch (error) {
+      this.logger.error(`Failed to upload metadata to IPFS: ${error.message}`);
+      throw new BadRequestException(`Failed to upload NFT metadata: ${error.message}`);
+    }
+
+    // Encode contract call
+    const evidenceHash = ethers.keccak256(ethers.toUtf8Bytes(credential._id.toString()));
+    const iface = new ethers.Interface([
+      'function mint(address to, string memory name, string memory description, string memory tokenURI, uint8 credentialType, uint256 validUntil, bytes32 evidenceHash, bool revocable) returns (uint256)',
+    ]);
 
     const encodedData = iface.encodeFunctionData('mint', [
       user.walletAddress,
@@ -573,42 +1001,50 @@ export class CredentialService {
       description,
       tokenURI,
       this.mapCredentialTypeToNumber(credential.type),
-      Math.floor(Date.now() / 1000) + 31536000, // 1 year
+      Math.floor(Date.now() / 1000) + 31536000, // 1 year validity
       evidenceHash,
-      true
+      true,
     ]);
 
     const result = await this.relayerService.queueTransaction({
       userAddress: user.walletAddress,
       target: nftContractAddress,
-      value: "0",
+      value: '0',
       data: encodedData,
       operation: 0,
       description: `Mint NFT for credential: ${credential.title}`,
-      isAccountCreation: false
+      isAccountCreation: false,
     });
 
-    this.logger.log(`NFT minting queued: ${result.transactionId}`);
-    return { transactionId: result.transactionId };
+    // Store the metadata URI for later reference
+    await this.credentialModel.updateOne(
+      { _id: credential._id },
+      { 
+        $set: { 
+          blockchainStatus: 'MINTING_NFT', 
+          blockchainTransactionId: result.transactionId, 
+          nftTokenURI: tokenURI, 
+          lastMintAttempt: new Date(), 
+          blockchainError: null 
+        } 
+      }
+    );
+
+    this.logger.log(`NFT minting queued: ${result.transactionId} (metadata ${tokenURI})`);
+    return { transactionId: result.transactionId, metadataURI: tokenURI };
   }
 
-  /**
-   * Helper function to map credential types to smart contract enum values
-   */
-  private mapCredentialTypeToNumber(type: string): number {
-    const typeMap: { [key: string]: number } = {
-      'EDUCATION': 0,
-      'CERTIFICATION': 1,
-      'EXPERIENCE': 2,
-      'SKILL': 3,
-      'ACHIEVEMENT': 4,
-      'REFERENCE': 5,
-      'OTHER': 6,
-      'CERTIFICATE': 1, // Map to CERTIFICATION
-      'PROFESSIONAL': 1, // Map to CERTIFICATION
+  // Add this new method for building explorer links
+  private buildExplorer(txHash?: string, tokenId?: string) {
+    const base = this.configService.get<string>('BLOCK_EXPLORER_BASE_URL') || '';
+    const nft = this.configService.get<string>('NFT_CONTRACT_ADDRESS') || '';
+    return {
+      tx: txHash && base ? `${base.replace(/\/+$/,'')}/tx/${txHash}` : undefined,
+      token:
+        tokenId && nft && base
+          ? `${base.replace(/\/+$/,'')}/token/${nft}?a=${tokenId}`
+          : undefined,
     };
-    
-    return typeMap[type.toUpperCase()] || 6; // Default to OTHER
   }
 
   private createApprovalEmailTemplate(data: {
@@ -931,5 +1367,4 @@ export class CredentialService {
       this.logger.error(`Failed to send workflow error email: ${error.message}`);
     }
   }
-
 }

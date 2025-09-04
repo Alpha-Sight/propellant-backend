@@ -179,6 +179,13 @@ export class TalentCredential extends Document {
   @Prop({ required: false })
   mintedAt?: Date;
 
+  // New fields for NFT support
+  @Prop({ required: false, type: mongoose.Schema.Types.Mixed })
+  nftTokenId?: number | string;
+
+  @Prop({ required: false, type: String })
+  nftTokenURI?: string;
+
   // Backward compatibility fields
   @Prop({ required: false })
   credentialId?: string;
