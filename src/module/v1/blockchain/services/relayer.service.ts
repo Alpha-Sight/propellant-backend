@@ -251,9 +251,23 @@ export class RelayerService implements OnModuleInit {
           this.logger.error(`Failed to process transaction ${transaction._id}: ${error.message}`);
         }
       }
-    } catch (error) {
-      this.logger.error(`Error processing transactions: ${error.message}`);
-    }
+  } catch (error) {
+    this.logger.error(`Error processing transactions: ${error.message}`);
+  }
+}
+
+// removed duplicate processTransaction; see the implementation below with NFT handling
+
+private buildExplorerLinks(txHash: string, tokenId?: string) {
+    const base = this.configService.get<string>('BLOCK_EXPLORER_BASE_URL') || '';
+    const nft = this.configService.get<string>('NFT_CONTRACT_ADDRESS') || '';
+    return {
+      tx: base && txHash ? `${base.replace(/\/+$/,'')}/tx/${txHash}` : undefined,
+      token:
+        base && nft && tokenId
+          ? `${base.replace(/\/+$/,'')}/token/${nft}?a=${tokenId}`
+          : undefined,
+    };
   }
 
   private async processTransaction(transactionMongoId: string) {
@@ -496,6 +510,71 @@ export class RelayerService implements OnModuleInit {
               blockchainCredentialId: onchainCredentialId,
               transactionId: transaction.transactionId,
               transactionHash: tx.hash, // include hash for robust lookup
+            });
+          }
+        }
+      }
+
+      // NEW: Handle NFT mint transactions
+      if (transaction.description?.includes('Mint NFT')) {
+        let tokenId: string | undefined;
+        try {
+          const nftIface = new ethers.Interface([
+            'event CredentialMinted(uint256 indexed tokenId, address indexed subject, address indexed issuer)',
+          ]);
+
+          for (const log of receipt.logs) {
+            try {
+              const parsed = nftIface.parseLog({ topics: Array.from(log.topics), data: log.data });
+              if (parsed && parsed.name === 'CredentialMinted') {
+                tokenId = parsed.args[0].toString();
+                this.logger.log(`Parsed CredentialMinted event, tokenId=${tokenId}`);
+                break;
+              }
+            } catch (e) {
+              // not the event we're looking for, ignore
+            }
+          }
+        } catch (e) {
+          this.logger.warn('Failed to parse CredentialMinted event:', e.message || e);
+        }
+
+        // If we have a tokenId, update the transaction and credential with the new information
+        if (tokenId) {
+          await this.transactionModel.updateOne(
+            { _id: transactionMongoId },
+            {
+              $set: {
+                tokenId: tokenId,
+                status: 'COMPLETED',
+                processedAt: new Date(),
+              },
+            }
+          );
+
+          await this.credentialModel.updateOne(
+            { transactionId: transaction.transactionId },
+            {
+              $set: {
+                tokenId: tokenId,
+                status: 'ISSUED',
+                verificationStatus: 'ISSUED',
+                transactionHash: tx.hash,
+                blockNumber: receipt.blockNumber,
+                updatedAt: new Date(),
+              },
+            }
+          );
+
+          // Emit event for newly minted NFTs
+          const updatedCredential = await this.credentialModel.findOne({ transactionId: transaction.transactionId });
+          if (updatedCredential && updatedCredential._id) {
+            this.logger.log(`Emitting credential.issued event for NFT credential ${updatedCredential._id.toString()} with token ID ${tokenId}`);
+            this.eventEmitter.emit('credential.issued', {
+              credentialId: updatedCredential._id.toString(),
+              blockchainCredentialId: tokenId, // use tokenId as blockchain ID for NFTs
+              transactionId: transaction.transactionId,
+              transactionHash: tx.hash,
             });
           }
         }

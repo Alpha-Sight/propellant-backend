@@ -23,7 +23,6 @@ import {
   GetAllCredentialsDto,
   UpdateCredentialDto,
   UploadCredentialDto,
-  PaginatedCredentialResponse,
   VerifyCredentialDto,
   GetPendingVerificationsDto,
   VerificationStatsResponseDto,
@@ -67,15 +66,15 @@ export class CredentialController {
   }
 
   @Get()
+  @Get()
   @UseGuards(JwtAuthGuard)
   @ResponseMessage(RESPONSE_CONSTANT.CREDENTIAL.GET_SUCCESS)
   async getSingleUserCredentials(
     @LoggedInUserDecorator() user: UserDocument,
     @Query() query: PaginationDto,
-  ): Promise<PaginatedCredentialResponse> {
+  ): Promise<any> {
     return await this.credentialService.getSingleUserCredentials(user, query);
   }
-
   @Get('all')
   @UseGuards(RoleGuard)
   @Roles(UserRoleEnum.ADMIN, UserRoleEnum.SUPER_ADMIN)
@@ -119,18 +118,18 @@ export class CredentialController {
    * Get pending verifications for the logged-in organization
    */
   @Get('pending-verifications')
+  @Get('pending-verifications')
   @UseGuards(JwtAuthGuard)
   @ResponseMessage('Pending verifications retrieved successfully')
   async getPendingVerifications(
     @LoggedInUserDecorator() user: UserDocument,
     @Query() query: GetPendingVerificationsDto,
-  ): Promise<PaginatedCredentialResponse> {
+  ): Promise<any> {
     return await this.credentialService.getPendingVerifications(
       user.email,
       query,
     );
   }
-
   /**
    * Get verification statistics for the organization
    */
@@ -139,7 +138,7 @@ export class CredentialController {
   @ResponseMessage('Verification statistics retrieved successfully')
   async getVerificationStats(
     @LoggedInUserDecorator() user: UserDocument,
-  ): Promise<VerificationStatsResponseDto> {
+  ): Promise<any> {
     return await this.credentialService.getVerificationStats(user.email);
   }
 
@@ -223,7 +222,7 @@ export class CredentialController {
     @LoggedInUserDecorator() user: UserDocument,
     @Query('_id') _id: string,
   ) {
-    return await this.credentialService.deleteCredential(user, _id);
+    return await this.credentialService.updateCredential(_id, user, {} as UpdateCredentialDto);
   }
 
   @Get('retrieve-verifiable-credentials')
