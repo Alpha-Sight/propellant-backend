@@ -1,5 +1,4 @@
 import { PartialType } from '@nestjs/mapped-types';
-import { Transform } from 'class-transformer';
 import {
   IsBooleanString,
   IsEnum,
@@ -9,7 +8,6 @@ import {
   IsString,
 } from 'class-validator';
 import { PaymentProvidersEnum } from 'src/common/enums/payment.enum';
-import { BaseHelper } from 'src/common/utils/helper/helper.util';
 
 export class CreatePaymentDto {
   @IsNotEmpty()
@@ -28,12 +26,6 @@ export class CreatePaymentDto {
   @IsBooleanString()
   active: boolean;
 
-  @IsOptional()
-  @IsString()
-  @Transform((data) => {
-    return BaseHelper.encryptData(data.value);
-  })
-  apiKey: string;
 }
 
 export class UpdatePaymentDto extends PartialType(CreatePaymentDto) {}

@@ -5,7 +5,6 @@ import {
   UserRoleEnum,
   UserVisibilityEnum,
 } from '../../../../common/enums/user.enum';
-import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
 import { OrganizationSocialDto } from '../dto/user.dto';
 
 export type UserDocument = User & Document;
@@ -118,8 +117,8 @@ export class User {
   @Prop({ required: false })
   location?: string;
 
-  @Prop({ enum: SubscriptionTypeEnum, default: SubscriptionTypeEnum.FREE })
-  plan: SubscriptionTypeEnum;
+  @Prop({ default: 'FREE' })
+  plan: string;
 
   @Prop({ required: false })
   totalCredentialUploads: number;

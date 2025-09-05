@@ -15,7 +15,6 @@ export class PaystackController {
     @Body() payload: IPaystackPaymentWebhook,
   ) {
     console.log('paystack webhook payload', payload);
-    this.paystackService.paymentWebhook(req, payload);
-    return;
+    return await this.paystackService.paymentWebhook(req, payload);
   }
 }

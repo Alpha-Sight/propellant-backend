@@ -20,6 +20,8 @@ import { BaseHelper } from 'src/common/utils/helper/helper.util';
 
 @Injectable()
 export class PaystackService {
+  private readonly apiKey = ENVIRONMENT.PAYSTACK.API_KEY;
+
   constructor(
     @Inject(forwardRef(() => PaymentService))
     private paymentService: PaymentService,
@@ -36,13 +38,11 @@ export class PaystackService {
 
     console.log('paystackPaymentMethod', paystackPaymentMethod);
 
-    if (!paystackPaymentMethod || !paystackPaymentMethod.apiKey) {
+    if (!paystackPaymentMethod || !this.apiKey) {
       throw new NotFoundException('Payment method not found');
     }
 
-    const decryptedSecret = BaseHelper.decryptData(
-      paystackPaymentMethod.apiKey,
-    );
+    const decryptedSecret = BaseHelper.decryptData(this.apiKey);
 
     try {
       const res = await this.httpService.axiosRef.post(
@@ -74,13 +74,11 @@ export class PaystackService {
         PaymentProvidersEnum.PAYSTACK,
       );
 
-    if (!paystackPaymentMethod || !paystackPaymentMethod.apiKey) {
+    if (!paystackPaymentMethod || !this.apiKey) {
       throw new NotFoundException('Payment method not found');
     }
 
-    const decryptedSecret = BaseHelper.decryptData(
-      paystackPaymentMethod.apiKey,
-    );
+    const decryptedSecret = BaseHelper.decryptData(this.apiKey);
 
     console.log('paymentWebhook check 2');
 
@@ -104,6 +102,8 @@ export class PaystackService {
           plan: payload.data.metadata.plan,
         };
       }
+      console.log('constructedPayload', constructedPayload);
+      console.log('paymentWebhook check success');
 
       return await this.paymentService.processPremiumPayment(
         constructedPayload,

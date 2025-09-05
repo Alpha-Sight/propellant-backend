@@ -16,6 +16,8 @@ import { BaseHelper } from 'src/common/utils/helper/helper.util';
 
 @Injectable()
 export class FlutterwaveService {
+  private readonly apiKey = ENVIRONMENT.FLUTTERWAVE.API_KEY;
+
   constructor(
     @Inject(forwardRef(() => PaymentService))
     private paymentService: PaymentService,
@@ -118,13 +120,11 @@ export class FlutterwaveService {
         PaymentProvidersEnum.FLUTTERWAVE,
       );
 
-    if (!flutterwavePaymentMethod?.apiKey) {
+    if (!flutterwavePaymentMethod || !this?.apiKey) {
       throw new NotFoundException('Payment method not found');
     }
 
-    const decryptedSecret = BaseHelper.decryptData(
-      flutterwavePaymentMethod.apiKey,
-    );
+    const decryptedSecret = BaseHelper.decryptData(this.apiKey);
 
     return decryptedSecret;
   }

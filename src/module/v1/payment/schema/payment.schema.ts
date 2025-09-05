@@ -20,9 +20,6 @@ export class Payment {
   @Prop({ default: true })
   active: boolean;
 
-  @Prop({ select: false })
-  apiKey: string;
-
   @Prop({ default: false })
   isDeleted: boolean;
 }

@@ -1,6 +1,5 @@
-import { SubscriptionTypeEnum } from '../enums/premium.enum';
-
 export interface ISubscriptionPlan {
+  name: string;
   price: number;
   features: string[];
   description?: string[];
@@ -12,9 +11,7 @@ export interface ISettings {
 export interface App {
   name: string;
   supportEmail: string;
-  subscriptionPrice: {
-    [key in SubscriptionTypeEnum]: ISubscriptionPlan;
-  };
+  subscriptionPlans: ISubscriptionPlan[];
   urls: {
     webHomepage: string;
     waitlistPage: string;

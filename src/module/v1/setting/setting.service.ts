@@ -58,14 +58,11 @@ export class SettingService implements OnModuleInit {
       CACHE_KEYS.appSettings,
     )) as any;
 
-    const subscriptionPlans = Object.fromEntries(
-      Object.entries(settings.app.subscriptionPrice).map(([plan, details]) => [
-        plan,
-        {
-          ...(details as ISubscriptionPlan),
-          isCurrentPlan: plan === user.plan,
-        },
-      ]),
+    const subscriptionPlans = (settings?.app?.subscriptionPlans || []).map(
+      (plan: ISubscriptionPlan) => ({
+        ...plan,
+        isCurrentPlan: plan.name === user.plan,
+      }),
     );
 
     return subscriptionPlans;
