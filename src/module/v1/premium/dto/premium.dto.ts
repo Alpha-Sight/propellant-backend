@@ -1,11 +1,9 @@
-import { IsEnum, IsNotEmpty, IsString } from 'class-validator';
-import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
+import { IsNotEmpty, IsString } from 'class-validator';
 
 export class SelectPlanDto {
   @IsString()
   @IsNotEmpty()
-  @IsEnum(SubscriptionTypeEnum)
-  plan: SubscriptionTypeEnum;
+  plan: string;
 
   // @IsString()
   // @IsNotEmpty()

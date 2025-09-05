@@ -20,6 +20,8 @@ import { BaseHelper } from 'src/common/utils/helper/helper.util';
 
 @Injectable()
 export class VpayService {
+  private readonly apiKey = ENVIRONMENT.VPAY.API_KEY;
+
   constructor(
     @Inject(forwardRef(() => PaymentService))
     private paymentService: PaymentService,
@@ -33,11 +35,11 @@ export class VpayService {
       PaymentProvidersEnum.VPAY,
     );
 
-    if (!paymentMethod || !paymentMethod.apiKey) {
+    if (!paymentMethod || !this.apiKey) {
       throw new NotFoundException('Payment method not found');
     }
 
-    const decryptedSecret = BaseHelper.decryptData(paymentMethod.apiKey);
+    const decryptedSecret = BaseHelper.decryptData(this.apiKey);
 
     try {
       const res = await this.httpService.axiosRef.post(
@@ -68,11 +70,11 @@ export class VpayService {
       PaymentProvidersEnum.PAYSTACK,
     );
 
-    if (!paymentMethod || !paymentMethod.apiKey) {
+    if (!paymentMethod || !this.apiKey) {
       throw new NotFoundException('Payment method not found');
     }
 
-    const decryptedSecret = BaseHelper.decryptData(paymentMethod.apiKey);
+    const decryptedSecret = BaseHelper.decryptData(this.apiKey);
 
     console.log('paymentWebhook check 2');
 

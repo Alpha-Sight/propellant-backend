@@ -1,13 +1,13 @@
 import { ISettings } from '../interfaces/setting.interface';
 import { isDevEnvironment } from '../configs/environment';
-import { SubscriptionTypeEnum } from '../enums/premium.enum';
 
 export const SETTINGS: ISettings = {
   app: {
     name: 'Propellant HR',
     supportEmail: 'support@Propellanthr.com',
-    subscriptionPrice: {
-      [SubscriptionTypeEnum.FREE]: {
+    subscriptionPlans: [
+      {
+        name: 'FREE',
         price: 0,
         features: [
           'Basic profile creation',
@@ -16,11 +16,13 @@ export const SETTINGS: ISettings = {
           'Email support',
         ],
       },
-      [SubscriptionTypeEnum.BASIC]: {
+      {
+        name: 'BASIC',
         price: 1500,
         features: ['Access to HR management tools', 'Email support'],
       },
-      [SubscriptionTypeEnum.PROFESSIONAL]: {
+      {
+        name: 'PROFESSIONAL',
         price: 5000,
         features: [
           'Enhanced profile with portfolio',
@@ -33,7 +35,8 @@ export const SETTINGS: ISettings = {
           'Priority support',
         ],
       },
-      [SubscriptionTypeEnum.ENTERPRISE]: {
+      {
+        name: 'ENTERPRISE',
         price: 15000,
         features: [
           'All PROFESSIONAL features',
@@ -41,7 +44,8 @@ export const SETTINGS: ISettings = {
           'Dedicated account manager',
         ],
       },
-      [SubscriptionTypeEnum.PREMIUM]: {
+      {
+        name: 'PREMIUM',
         price: 10000,
         features: [
           'All PROFESSIONAL features',
@@ -54,7 +58,7 @@ export const SETTINGS: ISettings = {
           'API access',
         ],
       },
-    },
+    ],
     urls: {
       webHomepage: isDevEnvironment
         ? 'https://propellanthr.com'

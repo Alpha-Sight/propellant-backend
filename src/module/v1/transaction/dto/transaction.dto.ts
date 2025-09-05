@@ -11,7 +11,6 @@ import {
   TransactionStatusEnum,
   TransactionTypeEnum,
 } from '../../../../common/enums/transaction.enum';
-import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
 
 export class CreateTransactionDto {
   @IsNotEmpty()
@@ -23,8 +22,8 @@ export class CreateTransactionDto {
   type: TransactionTypeEnum;
 
   @IsNotEmpty()
-  @IsEnum(SubscriptionTypeEnum)
-  plan: SubscriptionTypeEnum;
+  @IsString()
+  plan: string;
 
   @IsOptional()
   @IsString()

@@ -42,7 +42,7 @@ export class BaseHelper {
       /^[a-zA-Z0-9_\-/]+\/[a-zA-Z0-9_-]+(?:-\d+)?\.(jpg|png|jpeg|webp)$/;
     return regex.test(fileName);
   };
-
+  
   static encryptData(
     data: string,
     encryptionKey: string = encryptionKeyFromEnv,

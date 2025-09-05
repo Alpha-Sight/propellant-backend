@@ -33,6 +33,9 @@ export class PointsDto {
 }
 
 export class SubscriptionPlanDto {
+  @IsString()
+  name: string;
+
   @IsNumber()
   @IsOptional()
   price: number;
@@ -77,10 +80,10 @@ export class AppSettingsDto {
   @IsEmail()
   supportEmail: string;
 
-  @IsObject()
-  @ValidateNested()
-  @Type(() => SubscriptionDto)
-  subscriptionPrice: SubscriptionDto;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SubscriptionPlanDto)
+  subscriptionPlans: SubscriptionPlanDto[];
 
   @IsObject()
   @ValidateNested()

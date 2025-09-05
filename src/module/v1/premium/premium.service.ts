@@ -20,13 +20,13 @@ import {
 import { UserDocument } from '../user/schemas/user.schema';
 import { PaymentService } from '../payment/services/payment.service';
 import { PaymentProvidersEnum } from 'src/common/enums/payment.enum';
-import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
 import { MailService } from '../mail/mail.service';
 import { premiumPlanNotificationEmailTemplate } from '../mail/templates/premium.email';
 import { SelectPlanDto } from './dto/premium.dto';
 import { SettingService } from '../setting/setting.service';
 import { ISettings } from 'src/common/interfaces/setting.interface';
 import { SETTINGS } from 'src/common/constants/setting.constant';
+import { BaseHelper } from 'src/common/utils/helper/helper.util';
 
 @Injectable()
 export class PremiumService {
@@ -43,122 +43,70 @@ export class PremiumService {
     userId: string,
     amountPaid: number,
     paymentObject: any,
-    plan: SubscriptionTypeEnum,
+    plan: string,
   ) {
     const user = await this.userService.findOneById(userId);
+    if (!user) throw new BadRequestException('Invalid user metadata');
 
-    if (!user) {
-      throw new BadRequestException(
-        'Invalid payment metadata: missing user or plan',
-      );
-    }
-
-    console.log('Processing upgrade for:', { user, plan, amountPaid });
-
-    // Create or find a pending transaction for the premium upgrade
-    let transaction = await this.transactionService.findOneQuery({
-      options: {
-        user: userId,
-        plan,
-        type: TransactionTypeEnum.SUBSCRIPTION,
-        status: TransactionStatusEnum.PENDING,
-      },
-    });
-
-    // if (!transaction) {
-    //   throw new BadRequestException(
-    //     'User does not have a premium subscription',
-    //   );
-    // }
-
-    if (!transaction) {
-      transaction = await this.transactionService.create({
-        user: userId,
-        status: TransactionStatusEnum.PENDING,
-        totalAmount: paymentObject.amount,
-        description: 'subscription plan subscription payment',
-        type: TransactionTypeEnum.SUBSCRIPTION,
-        plan: plan,
-        metadata: paymentObject,
-        settlement: 0,
-        paymentMethod: paymentObject?.provider,
-        reference: `upgrade-${user._id}-${Date.now()}`,
-      });
-      if (!transaction) {
-        return;
-      }
-    }
-    console.log('transaction', transaction);
-    let sessionCommitted = false;
     const session = await this.transactionService.startSession();
     session.startTransaction();
 
     try {
-      await this.userService.update(
-        user._id.toString(),
-        {
-          plan,
-        },
-        // session,
-      );
-      await this.transactionService.updateQuery(
-        { _id: transaction._id },
-        {
-          status: TransactionStatusEnum.COMPLETED,
-        },
-        session,
-      );
+      // 1. Update user plan
+      await this.userService.updateQuery({ _id: user._id }, { plan }, session);
 
-      await session.commitTransaction();
-      sessionCommitted = true;
-
+      // 2. Award points
       const { premium: premiumPoint } = SETTINGS.app.points;
-
       await this.userService.updateQuery(
         { _id: user._id },
-        {
-          $inc: {
-            premiumPoint: premiumPoint,
-          },
-        },
+        { $inc: { premiumPoint } },
+        session, // ✅ use same session
       );
 
-      // Send email notifications for successful upgrade
-      await Promise.all([
-        this.mailService.sendEmail(
-          user.email,
-          'Subscription plan Successfully upgraded',
-          premiumPlanNotificationEmailTemplate({
-            user: [user.email.split('@')[0]],
-            reference: transaction._id.toString(),
-            upgradeDate: new Date().toLocaleDateString(),
-            totalAmount: amountPaid,
-            currencySymbol: '₦',
-            plan,
-          }),
-        ),
-        this.mailService.sendEmail(
-          'propellant@gmail.com',
-          'New Plan Subscription',
-          premiumPlanNotificationEmailTemplate({
-            user: [user.email.split('@')[0]],
-            reference: transaction._id.toString(),
-            upgradeDate: new Date().toLocaleDateString(),
-            totalAmount: amountPaid,
-            currencySymbol: '₦',
-            plan,
-          }),
-        ),
-      ]);
-
-      return transaction;
+      // 3. Commit
+      await session.commitTransaction();
     } catch (error) {
-      if (!sessionCommitted) {
+      if (session.inTransaction()) {
         await session.abortTransaction();
       }
+      throw error;
     } finally {
       await session.endSession();
     }
+
+    // ✅ Non-transactional things should be outside
+    await Promise.all([
+      this.mailService.sendEmail(
+        user.email,
+        'Subscription upgraded successfully',
+        premiumPlanNotificationEmailTemplate({
+          user: [user.email.split('@')[0]],
+          reference: paymentObject.data.reference || 'N/A',
+          upgradeDate: new Date().toLocaleDateString(),
+          totalAmount: paymentObject.data.amount,
+          currencySymbol: paymentObject.data.currency,
+          plan,
+        }),
+      ),
+      this.mailService.sendEmail(
+        'propellant@gmail.com',
+        'New Plan Subscription',
+        premiumPlanNotificationEmailTemplate({
+          user: [user.email.split('@')[0]],
+          reference: paymentObject.data.reference || 'N/A',
+          upgradeDate: new Date().toLocaleDateString(),
+          totalAmount: paymentObject.data.amount,
+          currencySymbol: paymentObject.data.currency,
+          plan,
+        }),
+      ),
+    ]);
+    return {
+      message: 'User upgraded successfully',
+      plan,
+      amountPaid,
+      reference: paymentObject?.data?.reference || 'N/A',
+    };
   }
 
   async selectPlan(user: UserDocument, payload: SelectPlanDto) {
@@ -166,23 +114,30 @@ export class PremiumService {
       throw new NotFoundException('User not found');
     }
 
-    if (payload.plan === SubscriptionTypeEnum.FREE) {
+    if (payload.plan === 'FREE') {
       // If the user selects the free plan, update their plan and return
       await this.userService.update(user._id.toString(), {
-        plan: SubscriptionTypeEnum.FREE,
+        plan: 'FREE',
       });
       return {
         message: 'You have successfully selected the free plan.',
-        plan: SubscriptionTypeEnum.FREE,
+        plan: 'FREE',
       };
+    }
+
+    if (user.plan === payload.plan) {
+      throw new BadRequestException(
+        `You are already on the ${payload.plan} plan.`,
+      );
     }
     // If the user selects a paid plan, proceed with payment initialization
 
     const settings = (await this.settingService.getSettings()) as ISettings;
     const subscriptionPriceMap = Object.fromEntries(
-      Object.entries(settings?.app?.subscriptionPrice || {}).map(
-        ([plan, details]) => [plan, details.price],
-      ),
+      (settings?.app?.subscriptionPlans || []).map((plan) => [
+        plan.name,
+        plan.price,
+      ]),
     );
 
     const selectedPlan = payload.plan;
@@ -191,7 +146,7 @@ export class PremiumService {
 
     if (planAmount === undefined) {
       throw new NotFoundException(
-        `${selectedPlan} pricing not configured. Please contact support.`,
+        `${selectedPlan} pricing not configured for this plan. Please contact support.`,
       );
     }
 
@@ -202,7 +157,7 @@ export class PremiumService {
       description: `Upgrade to ${selectedPlan}`,
       type: TransactionTypeEnum.SUBSCRIPTION,
       paymentMethod: 'paystack',
-      reference: `upgrade-${user._id}-${Date.now()}`,
+      reference: BaseHelper.generateRandomString(),
       plan: selectedPlan,
     });
 
@@ -217,7 +172,7 @@ export class PremiumService {
   async constructPaymentPayloadForUpgrade(
     user: UserDocument,
     amount: number,
-    plan: SubscriptionTypeEnum,
+    plan: string,
     reference: string,
   ) {
     const activePaymentProvider = await this.paymentService.findOneQuery({
@@ -237,13 +192,13 @@ export class PremiumService {
           await this.paymentService.initializePaymentByPaymentProvider(
             activePaymentProvider.name as PaymentProvidersEnum,
             {
-              reference: `upgrade-${user._id}-${Date.now()}`,
+              reference,
               amount,
               email: user.email,
               metadata: {
                 userId: user._id.toString(),
                 plan,
-                upgradeType: 'premium',
+                upgradeType: plan,
                 transactionId: `txn-${user._id}-${Date.now()}`, // optional
               },
             } as IBaseInitializePayment,

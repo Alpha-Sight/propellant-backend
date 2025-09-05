@@ -17,7 +17,6 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { HttpService } from '@nestjs/axios';
 import axios from 'axios';
-import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
 import { UserService } from '../user/services/user.service';
 
 @Injectable()
@@ -119,7 +118,7 @@ export class CvService {
     const { jobDescription, ...payload } = userCvData;
     try {
       // Step 1: Premium check
-      if (user.plan === SubscriptionTypeEnum.FREE && !user.totalCreditPoint)
+      if (user.plan === 'FREE' && !user.totalCreditPoint)
         throw new BadRequestException(
           'You have no points left. Earn points by completing tasks or upgrade your plan to download more CVs.',
         );
@@ -217,7 +216,7 @@ export class CvService {
       throw new BadRequestException('Missing required fields');
     }
 
-    if (user.plan === SubscriptionTypeEnum.FREE && !user.totalCreditPoint)
+    if (user.plan === 'FREE' && !user.totalCreditPoint)
       throw new BadRequestException(
         'You have no points left. Earn points by completing tasks or upgrade your plan to download more CVs.',
       );

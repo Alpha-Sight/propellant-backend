@@ -22,7 +22,8 @@ import {
 } from 'src/common/interfaces/payment.interface';
 import { BaseRepositoryService } from '../../repository/base.service';
 import { PremiumService } from '../../premium/premium.service';
-import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
+import { TransactionStatusEnum } from 'src/common/enums/transaction.enum';
+import { TransactionService } from '../../transaction/transaction.service';
 
 @Injectable()
 export class PaymentService extends BaseRepositoryService<PaymentDocument> {
@@ -32,6 +33,7 @@ export class PaymentService extends BaseRepositoryService<PaymentDocument> {
     private flutterwaveService: FlutterwaveService,
     private repositoryService: RepositoryService,
     private premiumService: PremiumService,
+    private transactionService: TransactionService,
   ) {
     super(paymentModel);
   }
@@ -151,12 +153,10 @@ export class PaymentService extends BaseRepositoryService<PaymentDocument> {
   }
 
   async getPaymentMethodByName(name: string) {
-    return this.paymentModel
-      .findOne({
-        name,
-        active: true,
-      })
-      .populate('apiKey');
+    return this.paymentModel.findOne({
+      name,
+      active: true,
+    });
   }
 
   async initializePaymentByActiveProvider(
@@ -194,14 +194,53 @@ export class PaymentService extends BaseRepositoryService<PaymentDocument> {
     }
   }
 
+  // async processPremiumPayment(payload: {
+  //   reference: string;
+  //   transactionId: string;
+  //   paymentObject: object;
+  //   amountPaid: number;
+  //   userIdFromMetadata?: string;
+  //   plan: string;
+  // }) {
+  //   return await this.premiumService.upgradeToPremium(
+  //     payload.userIdFromMetadata,
+  //     payload.amountPaid,
+  //     payload.paymentObject,
+  //     payload.plan,
+  //   );
+  // }
+
   async processPremiumPayment(payload: {
     reference: string;
     transactionId: string;
     paymentObject: object;
     amountPaid: number;
     userIdFromMetadata?: string;
-    plan: SubscriptionTypeEnum;
+    plan: string;
   }) {
+    // 1. Find the original transaction created in selectPlan()
+    const transaction = await this.transactionService.findOneQuery({
+      options: { reference: payload.reference },
+    });
+    console.log('paymentWebhook transaction', transaction);
+
+    if (!transaction) {
+      throw new NotFoundException(
+        `Transaction with reference ${payload.reference} not found`,
+      );
+    }
+
+    // 2. Update the transaction status and details
+    await this.transactionService.updateQuery(
+      { _id: transaction._id },
+      {
+        status: TransactionStatusEnum.COMPLETED,
+        amountPaid: payload.amountPaid,
+        metadata: payload.paymentObject,
+      },
+    );
+
+    // 3. Upgrade the user’s plan
     return await this.premiumService.upgradeToPremium(
       payload.userIdFromMetadata,
       payload.amountPaid,

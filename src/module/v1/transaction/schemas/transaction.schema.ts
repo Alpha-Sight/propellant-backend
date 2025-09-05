@@ -5,7 +5,6 @@ import {
   TransactionStatusEnum,
   TransactionTypeEnum,
 } from '../../../../common/enums/transaction.enum';
-import { SubscriptionTypeEnum } from 'src/common/enums/premium.enum';
 
 export type TransactionDocument = Transaction & Document;
 
@@ -23,8 +22,8 @@ export class Transaction {
   @Prop({ enum: TransactionTypeEnum, required: true })
   type: TransactionTypeEnum;
 
-  @Prop({ enum: SubscriptionTypeEnum, required: true })
-  plan: SubscriptionTypeEnum;
+  @Prop({ required: true })
+  plan: string;
 
   @Prop()
   description: string;
