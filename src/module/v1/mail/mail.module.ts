@@ -11,7 +11,7 @@ import { ENVIRONMENT } from 'src/common/configs/environment';
       transport: {
         host: ENVIRONMENT.SMTP.HOST,
         port: +ENVIRONMENT.SMTP.PORT || 465,
-        secure: true,
+        secure: false,  // Changed from true to false for port 587 STARTTLS
         auth: {
           user: ENVIRONMENT.SMTP.USER,
           pass: ENVIRONMENT.SMTP.PASSWORD,
