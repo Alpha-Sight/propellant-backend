@@ -867,6 +867,17 @@ export class CredentialService {
         }
       );
 
+      // Send error notification email to the organization
+      try {
+        const credential = await this.credentialModel.findById(credentialId).populate('user');
+        if (credential && credential.user && credential.verifyingEmail) {
+          await this.sendWorkflowErrorEmail(credential, credential.user as UserDocument, error.message);
+          this.logger.log(`Error notification sent to organization (${credential.verifyingEmail}) for credential ${credentialId}`);
+        }
+      } catch (emailError) {
+        this.logger.warn(`Failed to send workflow error email for credential ${credentialId}: ${emailError.message}`);
+      }
+
       throw error;
     }
   }
@@ -874,7 +885,7 @@ export class CredentialService {
   /**
    * Step 2: Verify existing credential on-chain
    */
-  private async verifyCredentialOnBlockchain(
+  private async  verifyCredentialOnBlockchain(
     blockchainCredentialId: number,
     verifierAddress: string,
   ): Promise<{ transactionId: string }> {
@@ -1129,22 +1140,23 @@ export class CredentialService {
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
         <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
           <div style="text-align: center; margin-bottom: 30px;">
-            <h1 style="color: #ffc107; margin: 0;">⚠️ Credential Approved - NFT Pending</h1>
+            <h1 style="color: #ffc107; margin: 0;">⚠️ Verification Action Failed</h1>
           </div>
           
-          <p>Dear ${data.userName},</p>
+          <p>Dear Verification Team,</p>
           
-          <p>Your credential "<strong>${data.credentialTitle}</strong>" has been successfully approved! However, there was a temporary issue creating your NFT on the blockchain.</p>
+          <p>We encountered an issue while processing the credential "<strong>${data.credentialTitle}</strong>" on the blockchain. Your verification request has been recorded, but the blockchain transaction failed.</p>
           
           <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #ffc107;">
             <h4 style="margin: 0 0 10px 0; color: #856404;">Technical Details:</h4>
             <p style="margin: 0; color: #856404; font-family: monospace; font-size: 12px;">${data.error}</p>
           </div>
           
-          <p>Don't worry! Your credential approval is confirmed. You can retry the NFT minting process from your dashboard, or our team will automatically retry shortly.</p>
+          <p>This is likely due to a blockchain permission issue. As an organization verifying credentials, your wallet address needs to have the "issuer" role on the blockchain contract. Our technical team has been notified and will assist in resolving this issue.</p>
           
           <div style="text-align: center; margin: 30px 0;">
             <p style="color: #666; font-style: italic;">Credential ID: ${data.credentialId}</p>
+            <p style="color: #666; font-style: italic;">Credential Owner: ${data.userName}</p>
           </div>
           
           <p>Best regards,<br>The PropellantBD Team</p>
@@ -1348,21 +1360,28 @@ export class CredentialService {
    */
   private async sendWorkflowErrorEmail(credential: TalentCredentialDocument, user: UserDocument, errorMessage: string): Promise<void> {
     try {
-      const emailSubject = `⚠️ Credential Processing Issue - ${credential.title}`;
+      // Check if this credential has a verifying organization email
+      if (!credential.verifyingEmail) {
+        this.logger.warn(`Cannot send workflow error email - no verifying organization email for credential ${credential._id}`);
+        return;
+      }
+      
+      const emailSubject = `⚠️ Verification Action Failed - ${credential.title}`;
       const emailTemplate = this.createMintingErrorEmailTemplate({
-        userName: user.fullname || user.email.split('@')[0],
+        userName: user.fullname || user.email.split('@')[0], // This is the talent's name, shown in the email
         credentialTitle: credential.title,
         error: errorMessage,
         credentialId: credential._id.toString(),
       });
 
+      // Send the email to the organization's email instead of the talent
       await this.mailService.sendEmail(
-        user.email,
+        credential.verifyingEmail, // Send to the verifying organization
         emailSubject,
         emailTemplate,
       );
 
-      this.logger.log(`Workflow error email sent to ${user.email} for credential ${credential._id}`);
+      this.logger.log(`Workflow error email sent to organization (${credential.verifyingEmail}) for credential ${credential._id}`);
     } catch (error) {
       this.logger.error(`Failed to send workflow error email: ${error.message}`);
     }

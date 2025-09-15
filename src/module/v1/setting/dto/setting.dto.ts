@@ -48,16 +48,31 @@ export class SubscriptionPlanDto {
   @IsString({ each: true })
   @IsOptional()
   features: string[];
+  
+  @IsOptional()
+  forOrganization?: boolean;
 }
 
 export class SubscriptionDto {
   @ValidateNested()
   @Type(() => SubscriptionPlanDto)
   FREE: SubscriptionPlanDto;
+  
+  @ValidateNested()
+  @Type(() => SubscriptionPlanDto)
+  FREEMIUM: SubscriptionPlanDto;
 
   @ValidateNested()
   @Type(() => SubscriptionPlanDto)
   BASIC: SubscriptionPlanDto;
+  
+  @ValidateNested()
+  @Type(() => SubscriptionPlanDto)
+  INTERMEDIATE: SubscriptionPlanDto;
+  
+  @ValidateNested()
+  @Type(() => SubscriptionPlanDto)
+  ADVANCED: SubscriptionPlanDto;
 
   @ValidateNested()
   @Type(() => SubscriptionPlanDto)

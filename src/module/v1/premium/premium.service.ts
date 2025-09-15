@@ -114,14 +114,14 @@ export class PremiumService {
       throw new NotFoundException('User not found');
     }
 
-    if (payload.plan === 'FREE') {
-      // If the user selects the free plan, update their plan and return
+    if (payload.plan === 'FREE' || payload.plan === 'FREEMIUM') {
+      // If the user selects a free plan, update their plan and return
       await this.userService.update(user._id.toString(), {
-        plan: 'FREE',
+        plan: payload.plan,
       });
       return {
-        message: 'You have successfully selected the free plan.',
-        plan: 'FREE',
+        message: `You have successfully selected the ${payload.plan.toLowerCase()} plan.`,
+        plan: payload.plan,
       };
     }
 
