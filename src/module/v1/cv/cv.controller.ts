@@ -51,7 +51,14 @@ export class CvController {
     @LoggedInUserDecorator() user: UserDocument,
     @Body() payload: any,
   ) {
-    return this.cvService.optimizeCV(user, payload);
+    try {
+      const result = await this.cvService.optimizeCV(user, payload);
+      return result;
+    } catch (error) {
+      // Log the error but let the exception filter handle the response
+      console.error('[CvController] CV optimization error:', error);
+      throw error;
+    }
   }
 
   @Post('download/:template')

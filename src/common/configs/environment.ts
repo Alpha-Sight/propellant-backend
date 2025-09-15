@@ -149,7 +149,7 @@ export const ENVIRONMENT: IEnvironment = {
     URL: process.env.AI_URL,
   },
   FRONTEND: {
-    URL: process.env.FRONTEND_URL || 'https://propellant.fly.dev',
+    URL: process.env.FRONTEND_URL || 'https://propellant-ls.fly.dev',
   },
 };
 
