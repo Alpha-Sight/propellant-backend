@@ -33,7 +33,14 @@ export class PaystackService {
     private transactionService: TransactionService,
     @Inject(forwardRef(() => PremiumService))
     private premiumService: PremiumService,
-  ) {}
+  ) {
+    console.log('PaystackService initialized with:');
+    console.log('- PaymentService:', !!paymentService);
+    console.log('- HttpService:', !!httpService);
+    console.log('- TransactionService:', !!transactionService);
+    console.log('- PremiumService:', !!premiumService);
+    console.log('- API Key exists:', !!this.apiKey);
+  }
 
   async initializePayment(
     payload: IBaseInitializePayment,
@@ -80,6 +87,7 @@ export class PaystackService {
   }
 
   async verifyPayment(reference: string) {
+    console.log('verifyPayment called for reference:', reference);
     try {
       const paystackPaymentMethod =
         await this.paymentService.getPaymentMethodByName(
@@ -87,11 +95,13 @@ export class PaystackService {
         );
 
       if (!paystackPaymentMethod || !this.apiKey) {
+        console.error('Payment method not found or API key missing');
         throw new NotFoundException('Payment method not found');
       }
 
       const decryptedSecret = BaseHelper.decryptData(this.apiKey);
       
+      console.log('Making API call to Paystack to verify payment');
       const response = await this.httpService.axiosRef.get(
         `${ENVIRONMENT.PAYSTACK.HOST}/transaction/verify/${reference}`,
         {
@@ -102,30 +112,51 @@ export class PaystackService {
         },
       );
       
+      console.log('Paystack verification response status:', response.data.status);
+      console.log('Payment status:', response.data.data.status);
+      
       if (response.data.status && response.data.data.status === 'success') {
         // Find the transaction by reference
+        console.log('Looking for transaction with reference:', reference);
         const transaction = await this.transactionService.findOneQuery({
           options: { reference },
         });
         
+        console.log('Transaction found:', !!transaction);
+        
         if (transaction) {
+          console.log('Updating transaction status to COMPLETED');
           // Update transaction status
           await this.transactionService.updateQuery(
             { reference },
-            { status: TransactionStatusEnum.COMPLETED },
+            { 
+              status: TransactionStatusEnum.COMPLETED,
+              approvedAt: new Date(),
+              metadata: response.data,
+            },
           );
           
           // If this is a premium subscription, upgrade the user
+          console.log('Transaction type:', transaction.type);
+          console.log('Has plan?', !!transaction.plan);
+          
           if (
             transaction.type === TransactionTypeEnum.SUBSCRIPTION &&
             transaction.plan
           ) {
-            await this.premiumService.upgradeToPremium(
-              transaction.user.toString(),
-              transaction.totalAmount,
-              response.data,
-              transaction.plan,
-            );
+            console.log('Upgrading user to premium');
+            try {
+              await this.premiumService.upgradeToPremium(
+                transaction.user.toString(),
+                transaction.totalAmount,
+                response.data,
+                transaction.plan,
+              );
+              console.log('User successfully upgraded to premium');
+            } catch (upgradeError) {
+              console.error('Error upgrading user to premium:', upgradeError);
+              throw new BadRequestException('Error upgrading user plan: ' + upgradeError.message);
+            }
           }
           
           return {
@@ -134,6 +165,7 @@ export class PaystackService {
             data: response.data.data,
           };
         } else {
+          console.error('Transaction not found for reference:', reference);
           return {
             success: false,
             message: 'No transaction found with this reference',
@@ -192,11 +224,17 @@ export class PaystackService {
       console.log('constructedPayload', constructedPayload);
       console.log('paymentWebhook check success');
 
-      return await this.paymentService.processPremiumPayment(
-        constructedPayload,
-      );
+      try {
+        return await this.paymentService.processPremiumPayment(
+          constructedPayload,
+        );
+      } catch (error) {
+        console.error('Error processing premium payment webhook:', error);
+        throw new BadRequestException('Failed to process payment webhook: ' + error.message);
+      }
     } else {
       console.error('Invalid x-paystack-signature');
+      throw new BadRequestException('Invalid webhook signature');
     }
   }
 }

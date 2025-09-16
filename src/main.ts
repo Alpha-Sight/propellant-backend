@@ -21,6 +21,7 @@ async function bootstrap() {
         'https://propellanthr.com',
         'https://propellant-ls.vercel.app',
         'https://propellant-hr.fly.dev',
+        'https://propellant-ls.fly.dev',
       ],
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization'],

@@ -14,7 +14,18 @@ export class PaystackController {
     @Req() req: Request,
     @Body() payload: IPaystackPaymentWebhook,
   ) {
-    console.log('paystack webhook payload', payload);
-    return await this.paystackService.paymentWebhook(req, payload);
+    console.log('=== WEBHOOK RECEIVED ===');
+    console.log('Headers:', req.headers['x-paystack-signature']);
+    console.log('Paystack webhook event:', payload?.event);
+    
+    try {
+      const result = await this.paystackService.paymentWebhook(req, payload);
+      console.log('Webhook processed successfully:', result);
+      return result;
+    } catch (error) {
+      console.error('Webhook processing error:', error.message);
+      console.error('Error stack:', error.stack);
+      throw error;
+    }
   }
 }
