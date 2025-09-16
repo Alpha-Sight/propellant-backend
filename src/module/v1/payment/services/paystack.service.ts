@@ -11,6 +11,9 @@ import { ENVIRONMENT } from '../../../../common/configs/environment';
 import { createHmac } from 'crypto';
 import { Request } from 'express';
 import { PaymentProvidersEnum } from 'src/common/enums/payment.enum';
+import { TransactionStatusEnum, TransactionTypeEnum } from 'src/common/enums/transaction.enum';
+import { TransactionService } from '../../transaction/transaction.service';
+import { PremiumService } from '../../premium/premium.service';
 import {
   IBaseInitializePayment,
   IInitializePaymentResponse,
@@ -26,6 +29,10 @@ export class PaystackService {
     @Inject(forwardRef(() => PaymentService))
     private paymentService: PaymentService,
     private httpService: HttpService,
+    @Inject(forwardRef(() => TransactionService))
+    private transactionService: TransactionService,
+    @Inject(forwardRef(() => PremiumService))
+    private premiumService: PremiumService,
   ) {}
 
   async initializePayment(
@@ -68,6 +75,81 @@ export class PaystackService {
       console.error('initialize paystack payment error', error);
       throw new BadRequestException(
         'Unable to initialize payment, kindly try again',
+      );
+    }
+  }
+
+  async verifyPayment(reference: string) {
+    try {
+      const paystackPaymentMethod =
+        await this.paymentService.getPaymentMethodByName(
+          PaymentProvidersEnum.PAYSTACK,
+        );
+
+      if (!paystackPaymentMethod || !this.apiKey) {
+        throw new NotFoundException('Payment method not found');
+      }
+
+      const decryptedSecret = BaseHelper.decryptData(this.apiKey);
+      
+      const response = await this.httpService.axiosRef.get(
+        `${ENVIRONMENT.PAYSTACK.HOST}/transaction/verify/${reference}`,
+        {
+          headers: {
+            Authorization: `Bearer ${decryptedSecret}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+      
+      if (response.data.status && response.data.data.status === 'success') {
+        // Find the transaction by reference
+        const transaction = await this.transactionService.findOneQuery({
+          options: { reference },
+        });
+        
+        if (transaction) {
+          // Update transaction status
+          await this.transactionService.updateQuery(
+            { reference },
+            { status: TransactionStatusEnum.COMPLETED },
+          );
+          
+          // If this is a premium subscription, upgrade the user
+          if (
+            transaction.type === TransactionTypeEnum.SUBSCRIPTION &&
+            transaction.plan
+          ) {
+            await this.premiumService.upgradeToPremium(
+              transaction.user.toString(),
+              transaction.totalAmount,
+              response.data,
+              transaction.plan,
+            );
+          }
+          
+          return {
+            success: true,
+            message: 'Payment verification successful',
+            data: response.data.data,
+          };
+        } else {
+          return {
+            success: false,
+            message: 'No transaction found with this reference',
+          };
+        }
+      } else {
+        return {
+          success: false,
+          message: 'Payment verification failed',
+          data: response.data,
+        };
+      }
+    } catch (error) {
+      console.error('verifyPayment error:', error);
+      throw new BadRequestException(
+        error?.message ?? 'Unable to verify payment',
       );
     }
   }

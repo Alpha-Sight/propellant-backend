@@ -21,10 +21,14 @@ import { CacheExpiry } from '../../../../common/decorators/cache.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { PaginationDto } from '../../repository/dto/repository.dto';
 import { CACHE_EXPIRY } from 'src/common/constants/cache.constant';
+import { PaystackService } from '../services/paystack.service';
 
 @Controller('payment')
 export class PaymentController {
-  constructor(private readonly paymentService: PaymentService) {}
+  constructor(
+    private readonly paymentService: PaymentService,
+    private readonly paystackService: PaystackService,
+  ) {}
 
   @Public()
   @CacheExpiry(CACHE_EXPIRY.ONE_HOUR)
@@ -68,5 +72,11 @@ export class PaymentController {
   @Delete(':id')
   async deletePayment(@Param('id') id: string) {
     return await this.paymentService.delete(id);
+  }
+
+  @Public()
+  @Get('verify/:reference')
+  async verifyPayment(@Param('reference') reference: string) {
+    return await this.paystackService.verifyPayment(reference);
   }
 }

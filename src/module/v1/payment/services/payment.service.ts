@@ -39,8 +39,11 @@ export class PaymentService extends BaseRepositoryService<PaymentDocument> {
   }
 
   async create(payload: CreatePaymentDto) {
-    const { name } = payload;
-
+    console.log('Create Payment payload', payload);
+    
+    // Ensure the name is properly formatted for consistency
+    const name = typeof payload.name === 'string' ? payload.name.toLowerCase() : payload.name;
+    
     const paymentWithNameExist = await this.paymentModel.countDocuments({
       name,
     });
@@ -51,6 +54,22 @@ export class PaymentService extends BaseRepositoryService<PaymentDocument> {
       );
     }
 
+    // Format the payload consistently
+    const formattedPayload = {
+      ...payload,
+      name,
+      // Ensure fee is a number
+      fee: typeof payload.fee === 'string' ? parseFloat(payload.fee) : payload.fee,
+      // Ensure active is a boolean
+      active: typeof payload.active === 'string' 
+        ? payload.active === 'true' 
+        : typeof payload.active === 'boolean' 
+          ? payload.active 
+          : true, // Default to true if undefined
+    };
+
+    console.log('Formatted payment payload for creation:', formattedPayload);
+    
     const uploadedImageUrl = null;
     // if (file) {
     //   const { mimetype, buffer } = file;
@@ -66,7 +85,7 @@ export class PaymentService extends BaseRepositoryService<PaymentDocument> {
     // }
 
     return await this.paymentModel.create({
-      ...payload,
+      ...formattedPayload,
       ...(uploadedImageUrl && { imageUrl: uploadedImageUrl }),
     });
   }
@@ -76,7 +95,30 @@ export class PaymentService extends BaseRepositoryService<PaymentDocument> {
     payload: UpdatePaymentDto,
     file?: Express.Multer.File,
   ) {
-    console.log('payload', payload);
+    console.log('Update Payment payload', payload);
+
+    // Format the payload consistently
+    const formattedPayload = {
+      ...payload,
+      // Handle name if present
+      ...(payload.name && { 
+        name: typeof payload.name === 'string' ? payload.name.toLowerCase() : payload.name 
+      }),
+      // Ensure fee is a number if present
+      ...(payload.fee !== undefined && { 
+        fee: typeof payload.fee === 'string' ? parseFloat(payload.fee) : payload.fee 
+      }),
+      // Ensure active is a boolean if present
+      ...(payload.active !== undefined && { 
+        active: typeof payload.active === 'string' 
+          ? payload.active === 'true' 
+          : typeof payload.active === 'boolean' 
+            ? payload.active 
+            : true  
+      }),
+    };
+
+    console.log('Formatted update payload:', formattedPayload);
 
     const uploadedImageUrl = null;
 
@@ -93,7 +135,7 @@ export class PaymentService extends BaseRepositoryService<PaymentDocument> {
 
     const updatedPayment = await this.paymentModel.findByIdAndUpdate(
       id,
-      { ...payload, ...(uploadedImageUrl && { imageUrl: uploadedImageUrl }) },
+      { ...formattedPayload, ...(uploadedImageUrl && { imageUrl: uploadedImageUrl }) },
       {
         new: true,
       },
