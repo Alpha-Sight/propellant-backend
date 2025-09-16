@@ -83,8 +83,8 @@ export class PremiumService {
           user: [user.email.split('@')[0]],
           reference: paymentObject.data.reference || 'N/A',
           upgradeDate: new Date().toLocaleDateString(),
-          totalAmount: paymentObject.data.amount,
-          currencySymbol: paymentObject.data.currency,
+          totalAmount: paymentObject.data.amount / 100, // Convert from kobo to Naira
+          currencySymbol: paymentObject.data.currency === 'NGN' ? '₦' : paymentObject.data.currency,
           plan,
         }),
       ),
@@ -95,8 +95,8 @@ export class PremiumService {
           user: [user.email.split('@')[0]],
           reference: paymentObject.data.reference || 'N/A',
           upgradeDate: new Date().toLocaleDateString(),
-          totalAmount: paymentObject.data.amount,
-          currencySymbol: paymentObject.data.currency,
+          totalAmount: paymentObject.data.amount / 100, // Convert from kobo to Naira
+          currencySymbol: paymentObject.data.currency === 'NGN' ? '₦' : paymentObject.data.currency,
           plan,
         }),
       ),
