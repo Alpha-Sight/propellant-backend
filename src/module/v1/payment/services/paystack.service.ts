@@ -45,11 +45,16 @@ export class PaystackService {
     const decryptedSecret = BaseHelper.decryptData(this.apiKey);
 
     try {
+      // Set default callback_url if not provided
+      const frontendUrl = ENVIRONMENT.FRONTEND.URL || 'https://propellanthr.com';
+      const callback_url = payload.callback_url || `${frontendUrl}/payment/success`;
+      
       const res = await this.httpService.axiosRef.post(
         `${ENVIRONMENT.PAYSTACK.HOST}/transaction/initialize`,
         {
           ...payload,
           amount: payload.amount * 100,
+          callback_url, // Ensure callback_url is included in the request
         },
         {
           headers: {

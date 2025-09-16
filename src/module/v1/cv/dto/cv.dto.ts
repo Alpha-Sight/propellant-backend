@@ -41,6 +41,11 @@ export class ExperienceDto {
   @IsOptional()
   @IsBoolean()
   isCurrentRole?: boolean;
+  
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  achievements?: string[];
 }
 
 export class EducationDto {

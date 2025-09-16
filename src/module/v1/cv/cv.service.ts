@@ -372,6 +372,11 @@ export class CvService {
           'AI service request timed out. Please try again later.',
           { cause: error, description: error.message }
         );
+      } else if (error instanceof BadRequestException && 
+                 error.message && 
+                 error.message.includes('no points left')) {
+        // Preserve the original credit-related error message
+        throw error;
       } else {
         throw new BadRequestException(
           'AI Optimization Failed. Our optimization service is temporarily unavailable. Please try again in a few minutes.',

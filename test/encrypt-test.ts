@@ -13,7 +13,7 @@ if (!encryptionKeyFromEnv) {
 
 // change 12345 to any string you want to encrypt
 const encrypted = BaseHelper.encryptData(
-  'sk_test_6ce39f58963d5613c20827a161c879bbaf789dfc',
+  'sk_test_39fe2ccf7217ec9927e531e12526dd80e004f4c1',
   encryptionKeyFromEnv,
 );
 

@@ -30,6 +30,9 @@ export class Experience {
 
   @Prop({ default: false })
   isCurrentRole?: boolean;
+  
+  @Prop([String])
+  achievements?: string[];
 }
 
 @Schema({ _id: false })
