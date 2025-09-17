@@ -68,11 +68,15 @@ export class RelayerService implements OnModuleInit {
   private async initializeProvider() {
     try {
       const rpcUrl = this.configService.get<string>('BLOCKCHAIN_RPC_URL');
-      const relayerPrivateKey = this.configService.get<string>('RELAYER_PRIVATE_KEY');
+      const encryptedRelayerPrivateKey = this.configService.get<string>('RELAYER_PRIVATE_KEY');
       const entryPointAddress = this.configService.get<string>('ENTRY_POINT_ADDRESS');
       const credentialModuleAddress = this.configService.get<string>('CREDENTIAL_VERIFICATION_MODULE_ADDRESS');
       const accountFactoryAddress = this.configService.get<string>('ACCOUNT_FACTORY_ADDRESS');
       const paymasterAddress = this.configService.get<string>('PAYMASTER_ADDRESS');
+      
+      // Decrypt the private key, just like we do with the Paystack API key
+      const { BaseHelper } = await import('../../../../common/utils/helper/helper.util');
+      const relayerPrivateKey = BaseHelper.decryptData(encryptedRelayerPrivateKey);
 
       this.provider = new ethers.JsonRpcProvider(rpcUrl);
       // Force disable ENS to avoid resolution errors
@@ -278,10 +282,14 @@ private buildExplorerLinks(txHash: string, tokenId?: string) {
       }
       this.logger.log(`Processing transaction ${transaction.transactionId}: ${transaction.description}`);
 
-      const relayerPrivateKey = this.configService.get<string>('RELAYER_PRIVATE_KEY');
-      if (!relayerPrivateKey) {
+      const encryptedRelayerPrivateKey = this.configService.get<string>('RELAYER_PRIVATE_KEY');
+      if (!encryptedRelayerPrivateKey) {
         throw new Error('RELAYER_PRIVATE_KEY not configured');
       }
+      
+      // Decrypt the private key, just like we do with the Paystack API key
+      const { BaseHelper } = await import('../../../../common/utils/helper/helper.util');
+      const relayerPrivateKey = BaseHelper.decryptData(encryptedRelayerPrivateKey);
 
       const provider = new ethers.JsonRpcProvider(this.configService.get<string>('BLOCKCHAIN_RPC_URL'));
       // Force disable ENS to avoid resolution errors

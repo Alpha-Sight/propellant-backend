@@ -140,7 +140,7 @@ curl -X POST http://localhost:3000/api/v1/blockchain/credentials \
 ```bash
 curl -X POST http://localhost:3000/api/v1/blockchain/credentials/verify/68add9273211bdce6b2ccf83 \
   -H "Content-Type: application/json" \
-  -d '{"verifierAddress":"0x2Ed32Af34d80ADB200592e7e0bD6a3F761677591","notes":"Verified by relayer"}'
+  -d '{"verifierAddress":"0x44D4204781F489EAb18cb71F3b1B3c0003012349","notes":"Verified by relayer"}'
 ```
 
 - Quick DB check (confirm canonical id):
