@@ -68,6 +68,7 @@ export class PaystackService {
         {
           ...payload,
           amount: payload.amount * 100,
+          currency: "NGN", // Always use NGN (Naira) currency
           callback_url, // Ensure callback_url is included in the request
         },
         {

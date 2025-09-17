@@ -84,7 +84,7 @@ export class PremiumService {
           reference: paymentObject.data.reference || 'N/A',
           upgradeDate: new Date().toLocaleDateString(),
           totalAmount: paymentObject.data.amount / 100, // Convert from kobo to Naira
-          currencySymbol: paymentObject.data.currency === 'NGN' ? '₦' : paymentObject.data.currency,
+          currencySymbol: '₦', // Always use Naira symbol
           plan,
         }),
       ),
@@ -96,7 +96,7 @@ export class PremiumService {
           reference: paymentObject.data.reference || 'N/A',
           upgradeDate: new Date().toLocaleDateString(),
           totalAmount: paymentObject.data.amount / 100, // Convert from kobo to Naira
-          currencySymbol: paymentObject.data.currency === 'NGN' ? '₦' : paymentObject.data.currency,
+          currencySymbol: '₦', // Always use Naira symbol
           plan,
         }),
       ),
