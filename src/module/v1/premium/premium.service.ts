@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
+  Logger,
 } from '@nestjs/common';
 import { UserService } from '../user/services/user.service';
 import {
@@ -30,6 +31,8 @@ import { BaseHelper } from 'src/common/utils/helper/helper.util';
 
 @Injectable()
 export class PremiumService {
+  private readonly logger = new Logger(PremiumService.name);
+
   constructor(
     private userService: UserService,
     private mailService: MailService,
@@ -271,5 +274,134 @@ export class PremiumService {
     }
 
     return paymentUrl;
+  }
+
+  /**
+   * Deduct credit from user account and check if they need to be downgraded
+   * @param userId The user ID
+   * @param points Number of points to deduct (default: 1)
+   */
+  async deductUserCredit(userId: string, points: number = 1) {
+    this.logger.log(`[deductUserCredit] Deducting ${points} credit(s) from user ${userId}`);
+    
+    try {
+      if (typeof userId !== 'string' || userId.includes('{')) {
+        this.logger.error(`[deductUserCredit] Invalid userId format: ${userId}`);
+        throw new BadRequestException('Invalid user ID format');
+      }
+      
+      const user = await this.userService.findOneById(userId);
+      if (!user) {
+        this.logger.error(`[deductUserCredit] User not found: ${userId}`);
+        throw new BadRequestException('User not found');
+      }
+      
+      const currentCredits = user.totalCreditPoint || 0;
+      this.logger.log(`[deductUserCredit] User ${userId} current credits: ${currentCredits}`);
+      
+      if (currentCredits < points) {
+        this.logger.warn(`[deductUserCredit] User ${userId} doesn't have enough credits. Has: ${currentCredits}, needed: ${points}`);
+        await this.checkAndDowngradeUserIfCreditsDepleted(userId);
+        return false; // Not enough credits
+      }
+      
+      // Deduct the points
+      await this.userService.updateQuery(
+        { _id: user._id },
+        { $inc: { totalCreditPoint: -points } }
+      );
+      
+      this.logger.log(`[deductUserCredit] Successfully deducted ${points} credit(s) from user ${userId}`);
+      
+      // After deducting, check if we need to downgrade
+      await this.checkAndDowngradeUserIfCreditsDepleted(userId);
+      
+      return true;
+    } catch (error) {
+      this.logger.error(`[deductUserCredit] Error: ${error.message}`);
+      throw error;
+    }
+  }
+  
+  /**
+   * Check if a user's credits are depleted and downgrade to free plan if needed
+   * @param userId The user ID
+   */
+  async checkAndDowngradeUserIfCreditsDepleted(userId: string) {
+    this.logger.log(`[checkAndDowngradeUserIfCreditsDepleted] Checking credits for user ${userId}`);
+    
+    try {
+      const user = await this.userService.findOneById(userId);
+      if (!user) {
+        this.logger.error(`[checkAndDowngradeUserIfCreditsDepleted] User not found: ${userId}`);
+        throw new BadRequestException('User not found');
+      }
+      
+      // Check if user is on a premium plan and has no credits
+      const currentCredits = user.totalCreditPoint || 0;
+      const currentPlan = user.plan;
+      
+      this.logger.log(`[checkAndDowngradeUserIfCreditsDepleted] User ${userId} has plan: ${currentPlan}, credits: ${currentCredits}`);
+      
+      // If user has a premium plan but no credits left, downgrade to FREE
+      if (currentPlan !== 'FREE' && currentCredits <= 0) {
+        this.logger.log(`[checkAndDowngradeUserIfCreditsDepleted] Downgrading user ${userId} from ${currentPlan} to FREE plan`);
+        
+        const session = await this.transactionService.startSession();
+        session.startTransaction();
+        
+        try {
+          // Update the user's plan
+          await this.userService.updateQuery(
+            { _id: user._id },
+            { plan: 'FREE' },
+            session
+          );
+          
+          // Create a transaction record for the downgrade
+          await this.transactionService.create({
+            user: user._id.toString(),
+            totalAmount: 0, // No money involved in downgrade
+            status: TransactionStatusEnum.COMPLETED,
+            description: `Downgraded from ${currentPlan} to FREE due to depleted credits`,
+            type: TransactionTypeEnum.PLAN_DOWNGRADE, // Using our newly added enum value
+            paymentMethod: 'system',
+            reference: `downgrade-${user._id}-${Date.now()}`,
+            plan: 'FREE',
+            metadata: {
+              previousPlan: currentPlan,
+              reason: 'Credits depleted'
+            }
+          }, session);
+          
+          await session.commitTransaction();
+          
+          // Send email notification about the downgrade
+          await this.mailService.sendEmail(
+            user.email,
+            'Account Downgraded to Free Plan',
+            `<p>Hello,</p>
+            <p>Your account has been downgraded to the Free plan because you've run out of credits.</p>
+            <p>To continue using premium features, please upgrade your plan again.</p>
+            <p>Thank you for using our service!</p>`
+          );
+          
+          this.logger.log(`[checkAndDowngradeUserIfCreditsDepleted] Successfully downgraded user ${userId} to FREE plan and sent email notification`);
+          
+          return true; // User was downgraded
+        } catch (error) {
+          await session.abortTransaction();
+          this.logger.error(`[checkAndDowngradeUserIfCreditsDepleted] Transaction error: ${error.message}`);
+          throw error;
+        } finally {
+          await session.endSession();
+        }
+      }
+      
+      return false; // No need to downgrade
+    } catch (error) {
+      this.logger.error(`[checkAndDowngradeUserIfCreditsDepleted] Error: ${error.message}`);
+      throw error;
+    }
   }
 }

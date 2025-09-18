@@ -11,6 +11,7 @@ import { FlutterwaveService } from './services/flutterwave.service';
 import { RepositoryModule } from '../repository/repository.module';
 import { PremiumModule } from '../premium/premium.module';
 import { TransactionModule } from '../transaction/transaction.module';
+import { UserModule } from '../user/user.module';
 
 @Global()
 @Module({
@@ -27,6 +28,7 @@ import { TransactionModule } from '../transaction/transaction.module';
     RepositoryModule,
     TransactionModule,
     forwardRef(() => PremiumModule),
+    forwardRef(() => UserModule),
   ],
   controllers: [PaymentController, PaystackController, FlutterwaveController],
   providers: [PaymentService, PaystackService, FlutterwaveService],

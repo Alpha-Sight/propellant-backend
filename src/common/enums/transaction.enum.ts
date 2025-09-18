@@ -19,4 +19,5 @@ export enum TransactionTypeEnum {
   CredentialVerification = 'CREDENTIAL_VERIFICATION',
   CredentialRevocation = 'CREDENTIAL_REVOCATION',
   SUBSCRIPTION = 'SUBSCRIPTION',
+  PLAN_DOWNGRADE = 'PLAN_DOWNGRADE',
 }
