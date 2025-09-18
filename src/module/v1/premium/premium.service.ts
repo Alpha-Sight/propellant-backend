@@ -45,8 +45,12 @@ export class PremiumService {
     paymentObject: any,
     plan: string,
   ) {
+    console.log(`[PremiumService] Upgrading user ${userId} to ${plan} plan`);
+    
     const user = await this.userService.findOneById(userId);
     if (!user) throw new BadRequestException('Invalid user metadata');
+    
+    console.log(`[PremiumService] User found: ${user.email}, current plan: ${user.plan}, current credits: ${user.totalCreditPoint || 0}`);
 
     const session = await this.transactionService.startSession();
     session.startTransaction();
@@ -59,16 +63,24 @@ export class PremiumService {
       const { premium: premiumPoint } = SETTINGS.app.points;
       await this.userService.updateQuery(
         { _id: user._id },
-        { $inc: { premiumPoint } },
+        { $inc: { totalCreditPoint: premiumPoint } },
         session, // ✅ use same session
       );
 
       // 3. Commit
       await session.commitTransaction();
+      
+      // Fetch updated user to verify changes
+      const updatedUser = await this.userService.findOneById(userId);
+      console.log(`[PremiumService] User upgraded successfully: ${updatedUser.email}`);
+      console.log(`[PremiumService] New plan: ${updatedUser.plan}, new credits: ${updatedUser.totalCreditPoint || 0}`);
+      console.log(`[PremiumService] Added ${premiumPoint} credits to user account`);
     } catch (error) {
       if (session.inTransaction()) {
         await session.abortTransaction();
       }
+      console.error(`[PremiumService] Error upgrading user: ${error.message}`);
+      console.error(error.stack);
       throw error;
     } finally {
       await session.endSession();
@@ -89,7 +101,7 @@ export class PremiumService {
         }),
       ),
       this.mailService.sendEmail(
-        'propellant@gmail.com',
+        'hrpropellant@gmail.com',
         'New Plan Subscription',
         premiumPlanNotificationEmailTemplate({
           user: [user.email.split('@')[0]],

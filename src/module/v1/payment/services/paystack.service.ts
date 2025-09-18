@@ -188,19 +188,22 @@ export class PaystackService {
   }
 
   async paymentWebhook(req: Request, payload: IPaystackPaymentWebhook) {
-    console.log('paymentWebhook check 1 ');
+    console.log('[PaystackService] Payment webhook received');
+    console.log(`[PaystackService] Event type: ${payload.event}`);
+    
     const paystackPaymentMethod =
       await this.paymentService.getPaymentMethodByName(
         PaymentProvidersEnum.PAYSTACK,
       );
 
     if (!paystackPaymentMethod || !this.apiKey) {
+      console.error('[PaystackService] Payment method not found or API key missing');
       throw new NotFoundException('Payment method not found');
     }
 
     const decryptedSecret = BaseHelper.decryptData(this.apiKey);
 
-    console.log('paymentWebhook check 2');
+    console.log('[PaystackService] Validating webhook signature');
 
     //validate event
     const hash = createHmac('sha512', decryptedSecret)
@@ -210,8 +213,13 @@ export class PaystackService {
     let constructedPayload: any;
 
     if (hash == req.headers['x-paystack-signature']) {
+      console.log('[PaystackService] Webhook signature valid');
+      
       if (payload.event === 'charge.success') {
-        console.log('paymentWebhook check 3');
+        console.log('[PaystackService] Processing successful charge');
+        console.log(`[PaystackService] Customer email: ${payload.data?.customer?.email}`);
+        console.log(`[PaystackService] Amount: ${payload.data.amount/100} ${payload.data.currency}`);
+        console.log(`[PaystackService] Reference: ${payload.data.reference}`);
 
         constructedPayload = {
           transactionId: payload.data.metadata.transactionId,
@@ -221,17 +229,27 @@ export class PaystackService {
           userIdFromMetadata: payload.data.metadata.userId,
           plan: payload.data.metadata.plan,
         };
+        
+        console.log('[PaystackService] User ID from metadata:', payload.data.metadata.userId);
+        console.log('[PaystackService] Plan from metadata:', payload.data.metadata.plan);
       }
-      console.log('constructedPayload', constructedPayload);
-      console.log('paymentWebhook check success');
-
-      try {
-        return await this.paymentService.processPremiumPayment(
-          constructedPayload,
-        );
-      } catch (error) {
-        console.error('Error processing premium payment webhook:', error);
-        throw new BadRequestException('Failed to process payment webhook: ' + error.message);
+      
+      if (constructedPayload) {
+        try {
+          console.log('[PaystackService] Forwarding to premium payment processor');
+          const result = await this.paymentService.processPremiumPayment(
+            constructedPayload,
+          );
+          console.log('[PaystackService] Premium payment process completed:', result);
+          return result;
+        } catch (error) {
+          console.error('[PaystackService] Error processing premium payment webhook:', error);
+          console.error(error.stack);
+          throw new BadRequestException('Failed to process payment webhook: ' + error.message);
+        }
+      } else {
+        console.log('[PaystackService] No payload constructed, event not handled');
+        return { message: 'Event received but not processed' };
       }
     } else {
       console.error('Invalid x-paystack-signature');
