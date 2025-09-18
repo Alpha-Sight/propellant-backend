@@ -299,8 +299,41 @@ export class UserService {
     await this.updateQuery({ _id: user._id }, { password: hashedPassword });
   }
 
-  async findOneById(userId: string) {
-    return this.userModel.findById(userId);
+  async findOneById(userId: string | any) {
+    try {
+      // If userId is not a string or is an object, handle it
+      if (typeof userId === 'object') {
+        console.log('[UserService] Converting user object to string ID');
+        if (userId._id) {
+          userId = userId._id.toString();
+        } else if (userId.toString) {
+          userId = userId.toString();
+        } else {
+          throw new BadRequestException('Invalid user ID format (object without _id)');
+        }
+      } else if (typeof userId !== 'string') {
+        console.log('[UserService] Non-string userId type:', typeof userId);
+        userId = String(userId);
+      }
+      
+      // Clean up the userId if it contains unwanted characters
+      if (userId.includes('{') || userId.includes('"') || userId.includes("'")) {
+        console.log('[UserService] Cleaning malformed user ID');
+        // Extract just the hex ID if it's in a complex string
+        const matches = userId.match(/([0-9a-f]{24})/i);
+        if (matches && matches[1]) {
+          userId = matches[1];
+        } else {
+          throw new BadRequestException('Unable to extract valid ObjectId from user ID');
+        }
+      }
+      
+      console.log('[UserService] Finding user by ID:', userId);
+      return this.userModel.findById(userId);
+    } catch (error) {
+      console.error('[UserService] Error finding user by ID:', error);
+      throw new BadRequestException(`Invalid user ID format: ${error.message}`);
+    }
   }
 
   async updateProfile(

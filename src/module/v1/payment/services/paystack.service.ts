@@ -14,6 +14,7 @@ import { PaymentProvidersEnum } from 'src/common/enums/payment.enum';
 import { TransactionStatusEnum, TransactionTypeEnum } from 'src/common/enums/transaction.enum';
 import { TransactionService } from '../../transaction/transaction.service';
 import { PremiumService } from '../../premium/premium.service';
+import { UserService } from '../../user/services/user.service';
 import {
   IBaseInitializePayment,
   IInitializePaymentResponse,
@@ -33,12 +34,15 @@ export class PaystackService {
     private transactionService: TransactionService,
     @Inject(forwardRef(() => PremiumService))
     private premiumService: PremiumService,
+    @Inject(forwardRef(() => UserService))
+    private userService: UserService,
   ) {
     console.log('PaystackService initialized with:');
     console.log('- PaymentService:', !!paymentService);
     console.log('- HttpService:', !!httpService);
     console.log('- TransactionService:', !!transactionService);
     console.log('- PremiumService:', !!premiumService);
+    console.log('- UserService:', !!userService);
     console.log('- API Key exists:', !!this.apiKey);
   }
 
@@ -137,7 +141,7 @@ export class PaystackService {
             },
           );
           
-          // If this is a premium subscription, upgrade the user
+          // If this is a premium subscription, check if we need to upgrade the user
           console.log('Transaction type:', transaction.type);
           console.log('Has plan?', !!transaction.plan);
           
@@ -145,17 +149,37 @@ export class PaystackService {
             transaction.type === TransactionTypeEnum.SUBSCRIPTION &&
             transaction.plan
           ) {
-            console.log('Upgrading user to premium');
+            // Get the user to check their current plan
+            const userId = typeof transaction.user === 'object' ? transaction.user.toString() : transaction.user;
+            console.log('Checking user plan status for ID:', userId);
+            
             try {
-              await this.premiumService.upgradeToPremium(
-                transaction.user.toString(),
-                transaction.totalAmount,
-                response.data,
-                transaction.plan,
-              );
-              console.log('User successfully upgraded to premium');
+              // First check if the user already has the plan (was upgraded by webhook)
+              const user = await this.userService.findOneById(userId);
+              
+              if (!user) {
+                console.error('User not found for ID:', userId);
+                throw new BadRequestException('User not found');
+              }
+              
+              console.log('Current user plan:', user.plan, 'Target plan:', transaction.plan);
+              
+              // Only upgrade if the plan hasn't been already changed
+              if (user.plan !== transaction.plan) {
+                console.log('User needs plan upgrade - upgrading now');
+                // Make sure we're only passing the ID string
+                await this.premiumService.upgradeToPremium(
+                  userId,
+                  transaction.totalAmount,
+                  response.data,
+                  transaction.plan,
+                );
+                console.log('User successfully upgraded to premium');
+              } else {
+                console.log('User already has the correct plan - skipping upgrade');
+              }
             } catch (upgradeError) {
-              console.error('Error upgrading user to premium:', upgradeError);
+              console.error('Error during plan upgrade check:', upgradeError);
               throw new BadRequestException('Error upgrading user plan: ' + upgradeError.message);
             }
           }
@@ -237,6 +261,13 @@ export class PaystackService {
       if (constructedPayload) {
         try {
           console.log('[PaystackService] Forwarding to premium payment processor');
+          
+          // Ensure userIdFromMetadata is a string, not an object
+          if (typeof constructedPayload.userIdFromMetadata === 'object') {
+            console.log('[PaystackService] Converting user object to string ID');
+            constructedPayload.userIdFromMetadata = constructedPayload.userIdFromMetadata.toString();
+          }
+          
           const result = await this.paymentService.processPremiumPayment(
             constructedPayload,
           );

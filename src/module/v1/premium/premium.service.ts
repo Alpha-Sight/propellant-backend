@@ -47,11 +47,39 @@ export class PremiumService {
   ) {
     console.log(`[PremiumService] Upgrading user ${userId} to ${plan} plan`);
     
+    // Handle case where userId might be an object or string representation of an object
+    if (typeof userId !== 'string' || userId.includes('{')) {
+      console.error(`[PremiumService] Invalid userId format received:`, userId);
+      throw new BadRequestException('Invalid user ID format');
+    }
+    
+    // Remove any unwanted characters if userId is malformed
+    if (userId.includes('"') || userId.includes("'")) {
+      console.log('[PremiumService] Cleaning malformed user ID');
+      userId = userId.replace(/['"]/g, '');
+    }
+    
     const user = await this.userService.findOneById(userId);
     if (!user) throw new BadRequestException('Invalid user metadata');
     
     console.log(`[PremiumService] User found: ${user.email}, current plan: ${user.plan}, current credits: ${user.totalCreditPoint || 0}`);
 
+    // Check if user already has the plan and premium points
+    if (user.plan === plan) {
+      console.log(`[PremiumService] User already has plan ${plan} - checking if credits were added`);
+      
+      // If user already has 8 points (3 signup + 5 premium), they were already upgraded
+      if (user.totalCreditPoint >= 8) {
+        console.log(`[PremiumService] User already has ${user.totalCreditPoint} credits - skipping upgrade`);
+        return {
+          message: 'User already upgraded',
+          plan,
+          amountPaid,
+          reference: paymentObject?.data?.reference || 'N/A',
+        };
+      }
+    }
+    
     const session = await this.transactionService.startSession();
     session.startTransaction();
 
