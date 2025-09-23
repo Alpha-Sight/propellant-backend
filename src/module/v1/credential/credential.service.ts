@@ -817,7 +817,8 @@ export class CredentialService {
             
           const verifyResult = await this.verifyCredentialOnBlockchain(
             blockchainId,
-            verifierId || '0x44D4204781F489EAb18cb71F3b1B3c0003012349'
+            verifierId || '0x25c34D9877427843305F4b06A6bD31E46D496274'
+            // verifierId || '0x44D4204781F489EAb18cb71F3b1B3c0003012349'
           );
           
           const mintResult = await this.mintNFTOnBlockchain(credentialWithId, user);
@@ -900,7 +901,8 @@ export class CredentialService {
     ]);
 
     const result = await this.relayerService.queueTransaction({
-      userAddress: '0x44D4204781F489EAb18cb71F3b1B3c0003012349', // Admin address with verification permissions
+      userAddress: '0x25c34D9877427843305F4b06A6bD31E46D496274', // Admin address with verification permissions
+      // userAddress: '0x44D4204781F489EAb18cb71F3b1B3c0003012349', // Admin address with verification permissions
       target: this.configService.get<string>('CREDENTIAL_VERIFICATION_MODULE_ADDRESS'),
       value: "0",
       data: encodedData,
@@ -1269,7 +1271,8 @@ export class CredentialService {
       // Step 2: Verify the credential on-chain
       const verifyResult = await this.verifyCredentialOnBlockchain(
         Number(credential.blockchainCredentialId),
-        '0x44D4204781F489EAb18cb71F3b1B3c0003012349' // Admin address
+        '0x25c34D9877427843305F4b06A6bD31E46D496274' // Admin address
+        // '0x44D4204781F489EAb18cb71F3b1B3c0003012349' // Admin address
       );
 
       // Step 3: Mint NFT on-chain

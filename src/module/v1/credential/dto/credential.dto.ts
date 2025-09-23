@@ -107,8 +107,9 @@ export class UploadCredentialDto {
   @IsString()
   description?: string;
 
-  @IsOptional()
+  // File is now required
   @IsString()
+  @IsOptional() // We'll handle the file validation in the controller since it's not part of the DTO
   file?: string;
 
   // Enhanced fields for verification

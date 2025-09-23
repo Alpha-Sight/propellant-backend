@@ -300,7 +300,8 @@ export class CredentialService implements OnModuleInit {
       let transactionResult;
       try {
         transactionResult = await this.relayerService.queueTransaction({
-          userAddress: '0x44D4204781F489EAb18cb71F3b1B3c0003012349', // Admin address that has DEFAULT_ADMIN_ROLE
+          // userAddress: '0x44D4204781F489EAb18cb71F3b1B3c0003012349', // Admin address that has DEFAULT_ADMIN_ROLE
+          userAddress: '0x25c34D9877427843305F4b06A6bD31E46D496274', // Admin address that has DEFAULT_ADMIN_ROLE
           target: this.credentialModuleAddress,
           value: '0',
           data: encodedData,

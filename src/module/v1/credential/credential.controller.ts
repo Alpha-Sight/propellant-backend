@@ -61,6 +61,13 @@ export class CredentialController {
         'Title is too long. Maximum 500 characters allowed.',
       );
     }
+    
+    // Make file upload mandatory for talent credentials
+    if (!file) {
+      throw new BadRequestException(
+        'Document upload is required for credential verification.',
+      );
+    }
 
     return await this.credentialService.createCredential(user, payload, file);
   }
